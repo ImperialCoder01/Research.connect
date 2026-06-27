@@ -35,6 +35,10 @@ const publicationSchema = new mongoose.Schema(
       trim: true,
       unique: true,
       sparse: true, // Allow multiple null/undefined values
+      match: [
+        /^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i,
+        'Please provide a valid DOI',
+      ],
     },
     publicationDate: {
       type: Date,
@@ -58,7 +62,7 @@ const publicationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const Publication = mongoose.model('Publication', publicationSchema);
