@@ -54,6 +54,15 @@ const scholarPublicationSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    researchArea: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    keywords: {
+      type: [String],
+      default: [],
+    },
     abstract: {
       type: String,
       trim: true,

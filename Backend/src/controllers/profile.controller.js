@@ -4,6 +4,7 @@ import * as uploadService from '../services/upload.service.js';
 import * as followService from '../services/follow.service.js';
 import ManualProfile from '../models/ManualProfile.js';
 import GoogleScholarProfile from '../models/GoogleScholarProfile.js';
+import GoogleScholarCoAuthor from '../models/GoogleScholarCoAuthor.js';
 import ScholarPublication from '../models/ScholarPublication.js';
 import ResearchMetrics from '../models/ResearchMetrics.js';
 import SyncLog from '../models/SyncLog.js';
@@ -15,6 +16,14 @@ import ResearchIdentity from '../models/ResearchIdentity.js';
 import AcademicProfile from '../models/AcademicProfile.js';
 import ProfileView from '../models/ProfileView.js';
 import User from '../models/User.js';
+import Project from '../models/Project.js';
+import Publication from '../models/Publication.js';
+import ResearchArea from '../models/ResearchArea.js';
+import Keyword from '../models/Keyword.js';
+import UserResearchArea from '../models/UserResearchArea.js';
+import UserKeyword from '../models/UserKeyword.js';
+import KeywordHistory from '../models/KeywordHistory.js';
+import ActivityLog from '../models/ActivityLog.js';
 import AppError from '../utils/AppError.js';
 
 /**
@@ -414,12 +423,57 @@ export const connectGoogleScholar = async (req, res, next) => {
       { upsert: true }
     );
 
+    // Link in AcademicProfile
+    await AcademicProfile.findOneAndUpdate(
+      { user: userId },
+      { googleScholar: scholarId },
+      { upsert: true }
+    );
+
     // Trigger sync
     const syncResults = await scholarService.syncGoogleScholarData(userId, scholarId);
 
     res.status(200).json({
       status: 'success',
       message: 'Google Scholar connected and synced successfully',
+      data: syncResults,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const linkGoogleScholar = async (req, res, next) => {
+  try {
+    const { url, scholarId, scholarUrl, input } = req.body;
+    const inputId = scholarId || url || scholarUrl || input;
+    if (!inputId) {
+      return next(new AppError('Google Scholar ID or URL is required', 400));
+    }
+
+    const extractedId = scholarService.extractScholarId(inputId) || inputId;
+    const userId = req.user._id;
+
+    // Link in ResearchIdentity
+    await ResearchIdentity.findOneAndUpdate(
+      { user: userId },
+      { googleScholar: extractedId },
+      { upsert: true }
+    );
+
+    // Link in AcademicProfile
+    await AcademicProfile.findOneAndUpdate(
+      { user: userId },
+      { googleScholar: extractedId },
+      { upsert: true }
+    );
+
+    // Trigger sync
+    const syncResults = await scholarService.syncGoogleScholarData(userId, extractedId);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Google Scholar linked and synced successfully',
       data: syncResults,
     });
   } catch (error) {
@@ -435,6 +489,13 @@ export const syncGoogleScholar = async (req, res, next) => {
     if (!identity || !identity.googleScholar) {
       return next(new AppError('No Google Scholar ID linked to this account', 400));
     }
+
+    // Ensure AcademicProfile also has it
+    await AcademicProfile.findOneAndUpdate(
+      { user: userId },
+      { googleScholar: identity.googleScholar },
+      { upsert: true }
+    );
 
     const syncResults = await scholarService.syncGoogleScholarData(userId, identity.googleScholar);
 
@@ -458,9 +519,13 @@ export const getGoogleScholarStatus = async (req, res, next) => {
       status: 'success',
       data: {
         isConnected: !!scholarProfile,
+        connected: !!scholarProfile,
         scholarId: scholarProfile?.scholarId || '',
+        providerUserId: scholarProfile?.scholarId || '',
         lastSync: scholarProfile?.lastSync || null,
+        lastSyncedAt: scholarProfile?.lastSync || null,
         lastSyncStatus: lastSyncLog?.status || 'never',
+        syncStatus: lastSyncLog?.status || 'never',
         lastSyncRecords: lastSyncLog?.recordsSynced || 0,
         lastSyncError: lastSyncLog?.errorMessage || '',
       },
@@ -845,6 +910,270 @@ export const shareProfileDirect = async (req, res, next) => {
       data: {
         shareUrl: `http://localhost:5173/profile/user/${profileId || userId}`
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Compare local data with Google Scholar before merge
+ */
+export const compareGoogleScholar = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const identity = await ResearchIdentity.findOne({ user: userId });
+
+    if (!identity || !identity.googleScholar) {
+      return next(new AppError('No Google Scholar ID linked to this account', 400));
+    }
+
+    const comparison = await scholarService.compareScholarData(userId, identity.googleScholar);
+
+    res.status(200).json({
+      status: 'success',
+      data: comparison,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Disconnect/Unlink Google Scholar profile
+ */
+export const disconnectGoogleScholar = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+
+    // 1. Clear Scholar ID in ResearchIdentity
+    await ResearchIdentity.findOneAndUpdate(
+      { user: userId },
+      { googleScholar: '' }
+    );
+
+    // 2. Clear Scholar ID in AcademicProfile if present
+    await AcademicProfile.findOneAndUpdate(
+      { user: userId },
+      { googleScholar: '' }
+    );
+
+    // 3. Delete GoogleScholarProfile document
+    await GoogleScholarProfile.findOneAndDelete({ user: userId });
+
+    // 4. Soft delete synced publications from ScholarPublication
+    await ScholarPublication.updateMany({ user: userId }, { isDeleted: true });
+
+    // 5. Recompile merged profile
+    await profileService.compileAndSaveMergedProfile(userId);
+
+    // 6. Get full updated profile details to return
+    const profileDetails = await profileService.getFullProfileDetails(userId);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Google Scholar profile disconnected successfully',
+      data: profileDetails,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Validate Scholar ID format and check preview capability
+ */
+export const validateScholarId = async (req, res, next) => {
+  try {
+    const { scholarId } = req.body;
+    if (!scholarId) {
+      return next(new AppError('Scholar ID is required', 400));
+    }
+
+    const cleanId = scholarService.extractScholarId(scholarId) || scholarId;
+    
+    if (cleanId.length === 12 && /^[a-zA-Z0-9-_]+$/.test(cleanId)) {
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          isValid: true,
+          scholarId: cleanId
+        }
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        isValid: false,
+        message: 'Invalid Google Scholar ID format'
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH handler for Profile (supports EditProfileModal)
+ */
+export const patchProfile = async (req, res, next) => {
+  return updateProfile(req, res, next);
+};
+
+/**
+ * PATCH handler for Education adding (supports EditProfileModal)
+ */
+export const patchEducation = async (req, res, next) => {
+  return addEducation(req, res, next);
+};
+
+/**
+ * PATCH handler for Experience adding (supports EditProfileModal)
+ */
+export const patchExperience = async (req, res, next) => {
+  return addExperience(req, res, next);
+};
+
+/**
+ * PATCH handler for Publications (supports EditProfileModal)
+ */
+export const patchPublications = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { id, ...pubData } = req.body;
+
+    let publication;
+    if (id) {
+      // Update existing publication
+      publication = await Publication.findOneAndUpdate(
+        { _id: id, user: userId },
+        pubData,
+        { new: true, runValidators: true }
+      );
+      if (!publication) {
+        return next(new AppError('Publication not found', 404));
+      }
+    } else {
+      // Create new publication
+      const authorList = pubData.authors 
+        ? pubData.authors.split(',').map((name, index) => ({
+            name: name.trim(),
+            authorName: name.trim(),
+            user: index === 0 ? userId : null,
+            authorOrder: index + 1
+          })) 
+        : [{ name: req.user.fullName || 'Author', authorName: req.user.fullName || 'Author', user: userId, authorOrder: 1 }];
+
+      publication = await Publication.create({
+        user: userId,
+        ...pubData,
+        authors: authorList
+      });
+    }
+
+    // Recompile
+    await profileService.compileAndSaveMergedProfile(userId);
+
+    res.status(200).json({
+      status: 'success',
+      data: publication,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH handler for Research Areas & Keywords (supports EditProfileModal)
+ */
+export const patchResearch = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { researchAreas = [], keywords = [] } = req.body;
+
+    // 1. Process Research Areas
+    const areaLinks = [];
+    for (const name of researchAreas) {
+      if (!name) continue;
+      const slug = name.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/[\s-]+/g, '-');
+      let area = await ResearchArea.findOne({ slug });
+      if (!area) {
+        area = await ResearchArea.create({ areaName: name.trim() });
+      }
+      areaLinks.push(area._id);
+    }
+
+    // Replace current user research areas
+    await UserResearchArea.deleteMany({ user: userId });
+    if (areaLinks.length > 0) {
+      await UserResearchArea.insertMany(
+        areaLinks.map(areaId => ({
+          user: userId,
+          researchArea: areaId,
+          source: 'manual',
+        }))
+      );
+    }
+
+    // 2. Process Keywords
+    const keywordLinks = [];
+    for (const name of keywords) {
+      if (!name) continue;
+      const slug = name.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/[\s-]+/g, '-');
+      let kw = await Keyword.findOne({ slug });
+      if (!kw) {
+        kw = await Keyword.create({ keyword: name.trim() });
+      }
+      keywordLinks.push(kw);
+    }
+
+    // Replace current user keywords
+    await UserKeyword.deleteMany({ user: userId });
+    if (keywordLinks.length > 0) {
+      await UserKeyword.insertMany(
+        keywordLinks.map(kw => ({
+          user: userId,
+          keyword: kw._id,
+          source: 'manual',
+        }))
+      );
+
+      // Log keyword history
+      for (const kw of keywordLinks) {
+        const existing = await KeywordHistory.findOne({ user: userId, keyword: kw.keyword, action: 'added' });
+        if (!existing) {
+          await KeywordHistory.create({
+            user: userId,
+            keyword: kw.keyword,
+            action: 'added',
+          });
+        }
+      }
+    }
+
+    // Compile profile
+    const merged = await profileService.compileAndSaveMergedProfile(userId);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Research interests and keywords updated successfully',
+      data: merged,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET Co-authors
+ */
+export const getCoAuthors = async (req, res, next) => {
+  try {
+    const coauthors = await GoogleScholarCoAuthor.find({ user: req.user._id });
+    res.status(200).json({
+      status: 'success',
+      data: coauthors,
     });
   } catch (error) {
     next(error);

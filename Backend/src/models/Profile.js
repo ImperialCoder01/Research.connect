@@ -187,7 +187,7 @@ const profileSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-    collection: 'researcherProfiles',
+    collection: 'researcher_profiles',
   }
 );
 
@@ -238,6 +238,21 @@ profileSchema.virtual('experienceList', {
   foreignField: 'user',
   localField: 'user',
   options: { sort: { sortOrder: 1, startYear: -1 } }
+});
+
+// Virtual populate for Project List
+profileSchema.virtual('projectList', {
+  ref: 'Project',
+  foreignField: 'owner',
+  localField: 'user',
+});
+
+// Virtual populate for Achievement List
+profileSchema.virtual('achievementList', {
+  ref: 'Award',
+  foreignField: 'user',
+  localField: 'user',
+  options: { sort: { date: -1 } }
 });
 
 // Pre-save hook to calculate Profile Completion Rate

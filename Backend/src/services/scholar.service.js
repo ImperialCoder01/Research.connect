@@ -7,7 +7,13 @@ import ResearchMetrics from '../models/ResearchMetrics.js';
 import GoogleScholarCoAuthor from '../models/GoogleScholarCoAuthor.js';
 import Notification from '../models/Notification.js';
 import { compileAndSaveMergedProfile } from './profile.service.js';
+import Profile from '../models/Profile.js';
+import ManualProfile from '../models/ManualProfile.js';
+import KeywordHistory from '../models/KeywordHistory.js';
 import AppError from '../utils/AppError.js';
+import ResearchInterest from '../models/ResearchInterest.js';
+import Keyword from '../models/Keyword.js';
+import { extractKeywordsFromPublication } from './keyword.service.js';
 
 // Helper to extract Scholar ID from a URL or validate a raw ID
 export const extractScholarId = (input) => {
@@ -257,6 +263,16 @@ export const syncGoogleScholarData = async (userId, scholarId, options = {}) => 
     const hIndex = citationTable[1]?.h_index?.all || 0;
     const i10Index = citationTable[2]?.i10_index?.all || 0;
 
+    // Helper to extract values from dynamic year keys (e.g. since_2021)
+    const getRecentValue = (obj) => {
+      if (!obj) return 0;
+      const key = Object.keys(obj).find(k => k.startsWith('since_'));
+      return key ? obj[key] : 0;
+    };
+    const citationsSinceRecentYears = getRecentValue(citationTable[0]?.citations);
+    const hIndexSinceRecentYears = getRecentValue(citationTable[1]?.h_index);
+    const i10IndexSinceRecentYears = getRecentValue(citationTable[2]?.i10_index);
+
     // 3. Save / Update GoogleScholarProfile
     const profileUpdateData = {
       scholarId,
@@ -266,8 +282,13 @@ export const syncGoogleScholarData = async (userId, scholarId, options = {}) => 
       interests: authorData.interests ? authorData.interests.map(i => i.title) : [],
       photo: authorData.thumbnail || '',
       totalCitations,
+      citationsSinceRecentYears,
       hIndex,
+      hIndexSinceRecentYears,
       i10Index,
+      i10IndexSinceRecentYears,
+      publicationsCount: articles.length,
+      scholarProfileUrl: `https://scholar.google.com/citations?user=${scholarId}`,
       website: authorData.website || '',
       lastSync: new Date(),
     };
@@ -278,24 +299,82 @@ export const syncGoogleScholarData = async (userId, scholarId, options = {}) => 
 
     const scholarProfile = await GoogleScholarProfile.findOneAndUpdate(
       { user: userId },
-      profileUpdateData,
+      { $set: profileUpdateData },
       { new: true, upsert: true }
     );
 
-    // Sync Co-authors to googleScholarCoAuthors collection
+    // Sync interests to keyword history
+    const interests = authorData.interests ? authorData.interests.map(i => i.title) : [];
+    for (const kw of interests) {
+      const existingHistory = await KeywordHistory.findOne({ user: userId, keyword: kw, action: 'imported' });
+      if (!existingHistory) {
+        await KeywordHistory.create({
+          user: userId,
+          keyword: kw,
+          action: 'imported',
+        });
+      }
+    }
+
+    // Sync interests to ResearchInterest model (collection research_interests)
+    const keywordIds = [];
+    for (const kw of interests) {
+      const normalized = kw.trim().toLowerCase();
+      if (!normalized) continue;
+      
+      let dbKeyword = await Keyword.findOne({ keyword: normalized });
+      if (!dbKeyword) {
+        dbKeyword = await Keyword.create({
+          keyword: normalized,
+          category: 'Extracted',
+          popularityScore: 1
+        });
+      } else {
+        dbKeyword.popularityScore = (dbKeyword.popularityScore || 0) + 1;
+        await dbKeyword.save();
+      }
+      keywordIds.push(dbKeyword._id);
+    }
+
+    if (keywordIds.length > 0) {
+      await ResearchInterest.findOneAndUpdate(
+        { user: userId },
+        { 
+          $addToSet: { keywords: { $each: keywordIds } },
+          lastUpdated: new Date()
+        },
+        { upsert: true }
+      );
+    }
+
+    // Sync Co-authors to googleScholarCoAuthors collection (co_authors)
     if (coAuthors.length > 0) {
-      const coAuthorOps = coAuthors.map(ca => ({
-        updateOne: {
-          filter: { user: userId, scholarId: ca.author_id },
-          update: {
-            name: ca.name,
-            affiliation: ca.affiliations || ca.link || '',
-            thumbnail: ca.thumbnail || '',
-            link: ca.link || '',
-          },
-          upsert: true
+      const coAuthorOps = coAuthors.map(ca => {
+        // Calculate shared publications
+        const sharedPublications = [];
+        const coAuthorNameLower = ca.name.toLowerCase();
+        for (const art of articles) {
+          const artAuthorsLower = (art.authors || '').toLowerCase();
+          if (artAuthorsLower.includes(coAuthorNameLower)) {
+            sharedPublications.push(art.title);
+          }
         }
-      }));
+
+        return {
+          updateOne: {
+            filter: { user: userId, scholarId: ca.author_id },
+            update: {
+              name: ca.name,
+              affiliation: ca.affiliations || ca.link || '',
+              thumbnail: ca.thumbnail || '',
+              link: ca.link || '',
+              sharedPublications,
+              collaborationCount: sharedPublications.length || 1,
+            },
+            upsert: true
+          }
+        };
+      });
       await GoogleScholarCoAuthor.bulkWrite(coAuthorOps);
     }
 
@@ -306,13 +385,18 @@ export const syncGoogleScholarData = async (userId, scholarId, options = {}) => 
     }
 
     // 4. Sync publications with incremental updates & soft-deletes
-    const fetchedArticles = articlesToSync.map(art => {
+    const fetchedArticlesRaw = await Promise.all(articlesToSync.map(async art => {
       const title = art.title || '';
       const year = art.year || 0;
       const hashSig = createHashSignature(title, year);
       
       // Parse authors list
       const authorList = (art.authors || '').split(',').map(a => a.trim()).filter(Boolean);
+
+      // Generate keywords (AI generated if unavailable)
+      const extraction = await extractKeywordsFromPublication(title, art.publication || '');
+      const keywords = extraction.keywords || [];
+      const researchArea = extraction.domains?.[0] || '';
 
       return {
         user: userId,
@@ -323,10 +407,23 @@ export const syncGoogleScholarData = async (userId, scholarId, options = {}) => 
         journal: art.publication || '',
         citationCount: art.cited_by?.value || 0,
         scholarUrl: art.link || '',
+        pdfUrl: art.pdfUrl || '', // fallback pdf
         hashSignature: hashSig,
         isDeleted: false,
+        researchArea,
+        keywords,
       };
-    });
+    }));
+
+    // Deduplicate fetched articles by hashSignature to prevent E11000 duplicate key errors
+    const uniqueFetchedMap = new Map();
+    for (const art of fetchedArticlesRaw) {
+      const existingFetched = uniqueFetchedMap.get(art.hashSignature);
+      if (!existingFetched || art.citationCount > existingFetched.citationCount) {
+        uniqueFetchedMap.set(art.hashSignature, art);
+      }
+    }
+    const fetchedArticles = Array.from(uniqueFetchedMap.values());
 
     // Fetch existing Scholar publications
     const existingPubs = await ScholarPublication.find({ user: userId });
@@ -347,6 +444,9 @@ export const syncGoogleScholarData = async (userId, scholarId, options = {}) => 
                 citationCount: fetched.citationCount,
                 isDeleted: false,
                 scholarUrl: fetched.scholarUrl,
+                pdfUrl: fetched.pdfUrl,
+                researchArea: fetched.researchArea,
+                keywords: fetched.keywords,
               }
             }
           });
@@ -404,15 +504,25 @@ export const syncGoogleScholarData = async (userId, scholarId, options = {}) => 
               citationCount: fetched.citationCount,
               status: 'Published',
               visibility: 'Public',
+              googleScholarLink: fetched.scholarUrl,
+              pdfLink: fetched.pdfUrl,
+              researchArea: fetched.researchArea,
+              keywords: fetched.keywords,
             }
           }
         });
       } else {
-        // Update citation count on existing main publication
+        // Update citation count and scholar links on existing main publication
         mainBulkOps.push({
           updateOne: {
             filter: { user: userId, title: { $regex: new RegExp(`^${fetched.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') } },
-            update: { citationCount: fetched.citationCount }
+            update: { 
+              citationCount: fetched.citationCount,
+              googleScholarLink: fetched.scholarUrl,
+              pdfLink: fetched.pdfUrl,
+              researchArea: fetched.researchArea,
+              keywords: fetched.keywords,
+            }
           }
         });
       }
@@ -435,15 +545,36 @@ export const syncGoogleScholarData = async (userId, scholarId, options = {}) => 
     // Calculate average citations
     const averageCitations = totalPubsCount > 0 ? parseFloat((totalCitations / totalPubsCount).toFixed(2)) : 0;
 
+    // Group publications by year for publicationsPerYear calculation
+    const allUserPublications = await Publication.find({ user: userId, isDeleted: false });
+    const yearCounts = {};
+    for (const pub of allUserPublications) {
+      const year = pub.publicationYear || (pub.publicationDate ? new Date(pub.publicationDate).getFullYear() : null);
+      if (year) {
+        yearCounts[year] = (yearCounts[year] || 0) + 1;
+      }
+    }
+    const publicationsPerYear = Object.entries(yearCounts).map(([yr, count]) => ({
+      year: parseInt(yr),
+      count
+    })).sort((a, b) => a.year - b.year);
+
     await ResearchMetrics.findOneAndUpdate(
       { user: userId },
       {
         totalPublications: totalPubsCount,
         totalCitations,
+        citationsSinceLastYear: citationsSinceRecentYears,
         hIndex,
+        hIndexSinceLastYear: hIndexSinceRecentYears,
         i10Index,
+        i10IndexSinceLastYear: i10IndexSinceRecentYears,
         citationsByYear,
+        citationTrend: citationsByYear,
+        averageCitations,
+        publicationsPerYear,
         collaborationScore: coAuthors.length,
+        totalCoAuthors: coAuthors.length,
         lastUpdated: new Date(),
       },
       { new: true, upsert: true }
@@ -534,6 +665,106 @@ export const runDailyBackgroundSync = async () => {
   }
 };
 
+/**
+ * Compare Google Scholar profile data with local profile data
+ * @param {string} userId
+ * @param {string} scholarId
+ * @returns {Promise<object>} - comparison details
+ */
+export const compareScholarData = async (userId, scholarId) => {
+  if (!userId || !scholarId) {
+    throw new AppError('User ID and Scholar ID are required', 400);
+  }
+
+  // 1. Fetch latest SerpAPI data
+  const latestData = await fetchScholarProfilePayload(scholarId);
+  const authorData = latestData.author || {};
+  const articles = latestData.articles || [];
+  const citationTable = authorData.cited_by?.table || [];
+
+  const latestMetrics = {
+    publications: articles.length,
+    citations: citationTable[0]?.citations?.all || 0,
+    hIndex: citationTable[1]?.h_index?.all || 0,
+    i10Index: citationTable[2]?.i10_index?.all || 0,
+  };
+
+  // 2. Fetch current local profile and metrics
+  const profile = await Profile.findOne({ user: userId });
+  const manual = await ManualProfile.findOne({ user: userId });
+
+  const currentMetrics = {
+    publications: profile?.publications || 0,
+    citations: profile?.citations || 0,
+    hIndex: profile?.hIndex || 0,
+    i10Index: profile?.i10Index || 0,
+  };
+
+  const metricsDiff = {
+    Publications: { current: currentMetrics.publications, latest: latestMetrics.publications },
+    Citations: { current: currentMetrics.citations, latest: latestMetrics.citations },
+    'h-index': { current: currentMetrics.hIndex, latest: latestMetrics.hIndex },
+    'i10-index': { current: currentMetrics.i10Index, latest: latestMetrics.i10Index },
+  };
+
+  const checkManualOverride = (field) => {
+    if (!manual) return false;
+    return manual[field] !== undefined && manual[field] !== '';
+  };
+
+  const profileDiff = {
+    displayName: {
+      current: profile?.displayName || '',
+      latest: authorData.name || '',
+      isManualOverride: checkManualOverride('displayName'),
+    },
+    institution: {
+      current: profile?.institution || '',
+      latest: authorData.affiliations || '',
+      isManualOverride: checkManualOverride('institution'),
+    },
+    department: {
+      current: profile?.department || '',
+      latest: '',
+      isManualOverride: checkManualOverride('department'),
+    },
+    bio: {
+      current: profile?.bio || '',
+      latest: authorData.interests ? authorData.interests.map(i => i.title).join(', ') : '',
+      isManualOverride: checkManualOverride('bio'),
+    },
+    website: {
+      current: profile?.website || '',
+      latest: authorData.website || '',
+      isManualOverride: checkManualOverride('website'),
+    },
+  };
+
+  // 3. Find new publications
+  const localPubs = await Publication.find({ user: userId, isDeleted: false }).select('title');
+  const localTitles = new Set(localPubs.map(p => p.title.toLowerCase().replace(/[^a-z0-9]/g, '')));
+
+  const newPublications = [];
+  for (const art of articles) {
+    const cleanTitle = art.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!localTitles.has(cleanTitle)) {
+      newPublications.push({
+        title: art.title,
+        authors: art.authors,
+        journal: art.publication || '',
+        publicationYear: art.year || null,
+        citationCount: art.cited_by?.value || 0,
+      });
+    }
+  }
+
+  return {
+    profileDiff,
+    metricsDiff,
+    newPublications,
+  };
+};
+
 // Export as a unified service object for integration tests
 export const scholarService = {
   extractScholarId,
@@ -542,5 +773,6 @@ export const scholarService = {
   syncGoogleScholarData,
   importGoogleScholarData,
   importGoogleScholarProfile,
-  runDailyBackgroundSync
+  runDailyBackgroundSync,
+  compareScholarData
 };

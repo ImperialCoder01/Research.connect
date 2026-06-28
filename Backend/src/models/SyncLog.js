@@ -36,7 +36,7 @@ const syncLogSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: 'syncLogs',
+    collection: 'sync_history',
   }
 );
 

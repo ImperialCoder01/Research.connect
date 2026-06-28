@@ -333,3 +333,29 @@ export const useShareProfile = () => {
     },
   });
 };
+
+// Disconnect Google Scholar
+export const useDisconnectScholar = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.delete('/profile/google-scholar/unlink');
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['scholarStatus'] });
+    },
+  });
+};
+
+// Compare Google Scholar
+export const useCompareScholar = () => {
+  return useQuery({
+    queryKey: ['scholarCompare'],
+    queryFn: async () => {
+      const { data } = await api.get('/profile/google-scholar/compare');
+      return data.data;
+    },
+  });
+};

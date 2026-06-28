@@ -39,13 +39,34 @@ const googleScholarProfileSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    citationsSinceRecentYears: {
+      type: Number,
+      default: 0,
+    },
     hIndex: {
+      type: Number,
+      default: 0,
+    },
+    hIndexSinceRecentYears: {
       type: Number,
       default: 0,
     },
     i10Index: {
       type: Number,
       default: 0,
+    },
+    i10IndexSinceRecentYears: {
+      type: Number,
+      default: 0,
+    },
+    publicationsCount: {
+      type: Number,
+      default: 0,
+    },
+    scholarProfileUrl: {
+      type: String,
+      trim: true,
+      default: '',
     },
     lastSync: {
       type: Date,

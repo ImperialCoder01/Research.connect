@@ -264,13 +264,13 @@ const ProfilePage = () => {
   const fetchProfileDetails = async () => {
     try {
       const response = await api.get('/profile/me');
-      setProfileData(response.data.profile);
-      setPublications(response.data.publications || []);
+      setProfileData(response.data.data.profile);
+      setPublications(response.data.data.publications || []);
 
       // Fetch Google Scholar connection status
       try {
         const statusRes = await api.get('/profile/google-scholar/status');
-        setScholarStatus(statusRes.data);
+        setScholarStatus(statusRes.data.data);
       } catch (err) {
         console.error('Failed to load Google Scholar status:', err);
       }
@@ -314,17 +314,17 @@ const ProfilePage = () => {
     );
   }
 
-  // Fallbacks mapping to Google Scholar mock data or real profiles
-  const fullName = profileData?.user?.fullName || 'Sushil Kumar kushwaha';
-  const designation = profileData?.designation || 'Associate Professor';
-  const department = profileData?.department || 'Department of Computer Science & Engineering';
-  const institution = profileData?.institution || 'Amity University';
+  // Fallbacks mapping to Google Scholar data or real profiles
+  const fullName = profileData?.user?.fullName || '';
+  const designation = profileData?.designation || 'Researcher';
+  const department = profileData?.department || '';
+  const institution = profileData?.institution || '';
   const locationText = profileData?.city && profileData?.country 
     ? `${profileData.city}, ${profileData.country}` 
-    : (profileData?.country && profileData.country !== 'Not Specified' ? profileData.country : 'Noida, India');
+    : (profileData?.country && profileData.country !== 'Not Specified' ? profileData.country : '');
   
-  const bioText = profileData?.bio || 'I am an Associate Professor specializing in Machine Learning, Deep Learning, and Natural Language Processing. My research focuses on developing intelligent systems that solve real-world problems. I have published extensively in top-tier journals and conferences and actively collaborate on interdisciplinary research projects.';
-  const emailText = profileData?.user?.email || '2304280100173@kashiit.ac.in';
+  const bioText = profileData?.bio || 'No biography added yet.';
+  const emailText = profileData?.user?.email || '';
   
   return (
     <div className="flex flex-col gap-8">
@@ -563,9 +563,22 @@ const ProfilePage = () => {
             <>
               {/* About Section */}
               <div className="glass-card rounded-3xl p-8 bg-white border border-slate-200/80 shadow-sm space-y-4">
-                <h3 className="text-base font-bold text-slate-900 font-display">About Me</h3>
-                <p className="text-sm text-slate-600 leading-relaxed font-sans">{bioText}</p>
-                <a href="#" className="text-xs font-bold text-blue-600 hover:underline inline-block">Read more</a>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-base font-bold text-slate-900 font-display">About Me</h3>
+                  <button onClick={() => setShowEditModal(true)} className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer">
+                    Edit
+                  </button>
+                </div>
+                {profileData?.bio ? (
+                  <>
+                    <p className="text-sm text-slate-600 leading-relaxed font-sans">{profileData.bio}</p>
+                    <a href="#" className="text-xs font-bold text-blue-600 hover:underline inline-block">Read more</a>
+                  </>
+                ) : (
+                  <div className="py-6 text-slate-400 text-xs font-medium">
+                    No biography added yet. Click Edit to write one.
+                  </div>
+                )}
               </div>
 
               {/* Academic & Professional Information Details */}
@@ -585,7 +598,7 @@ const ProfilePage = () => {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Full Name</span>
-                        <span className="text-sm font-semibold text-slate-800">{profileData?.user?.fullName || 'Sushil Kumar kushwaha'}</span>
+                        <span className="text-sm font-semibold text-slate-800">{profileData?.user?.fullName || 'Not Specified'}</span>
                       </div>
                     </div>
 
@@ -604,7 +617,7 @@ const ProfilePage = () => {
                         <span className="text-sm font-semibold text-slate-800">
                           {profileData?.dateOfBirth 
                             ? new Date(profileData.dateOfBirth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) 
-                            : '15 March 1985'}
+                            : 'Not Specified'}
                         </span>
                       </div>
                     </div>
@@ -616,7 +629,7 @@ const ProfilePage = () => {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Designation</span>
-                        <span className="text-sm font-semibold text-slate-800">{profileData?.designation || 'Associate Professor'}</span>
+                        <span className="text-sm font-semibold text-slate-800">{profileData?.designation || 'Not Specified'}</span>
                       </div>
                     </div>
 
@@ -627,7 +640,7 @@ const ProfilePage = () => {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Department</span>
-                        <span className="text-sm font-semibold text-slate-800">{profileData?.department || 'Department of Computer Science & Engineering'}</span>
+                        <span className="text-sm font-semibold text-slate-800">{profileData?.department || 'Not Specified'}</span>
                       </div>
                     </div>
 
@@ -639,7 +652,7 @@ const ProfilePage = () => {
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Institution</span>
                         <span className="text-sm font-semibold text-slate-800 leading-relaxed">
-                          {profileData?.institution || "World's Top 2% Scientist, 2024 @ Stanford University, Associate Professor (BBDITM Lucknow)"}
+                          {profileData?.institution || 'Not Specified'}
                         </span>
                       </div>
                     </div>
@@ -656,14 +669,14 @@ const ProfilePage = () => {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">ORCID ID</span>
-                        {profileData?.academicProfile?.orcid || '0000-0002-1234-5678' ? (
+                        {profileData?.academicProfile?.orcid ? (
                           <a 
-                            href={`https://orcid.org/${profileData?.academicProfile?.orcid || '0000-0002-1234-5678'}`} 
+                            href={`https://orcid.org/${profileData.academicProfile.orcid}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-sm font-semibold text-slate-800 hover:text-blue-600 flex items-center gap-1 group/link"
                           >
-                            {profileData?.academicProfile?.orcid || '0000-0002-1234-5678'} 
+                            {profileData.academicProfile.orcid} 
                             <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                           </a>
                         ) : (
@@ -679,14 +692,14 @@ const ProfilePage = () => {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Google Scholar</span>
-                        {profileData?.academicProfile?.googleScholar || 'dCaTOoUAAAAJ' ? (
+                        {profileData?.academicProfile?.googleScholar ? (
                           <a 
-                            href={`https://scholar.google.com/citations?user=${profileData?.academicProfile?.googleScholar || 'dCaTOoUAAAAJ'}`} 
+                            href={`https://scholar.google.com/citations?user=${profileData.academicProfile.googleScholar}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-sm font-semibold text-blue-600 hover:underline flex items-center gap-1 group/link"
                           >
-                            {profileData?.academicProfile?.googleScholar || 'dCaTOoUAAAAJ'}
+                            {profileData.academicProfile.googleScholar}
                             <ExternalLink className="w-3 h-3 text-blue-500 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                           </a>
                         ) : (
@@ -702,14 +715,14 @@ const ProfilePage = () => {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Scopus ID</span>
-                        {profileData?.academicProfile?.scopusId || '57219908847' ? (
+                        {profileData?.academicProfile?.scopusId ? (
                           <a 
-                            href={`https://www.scopus.com/authid/detail.uri?authorId=${profileData?.academicProfile?.scopusId || '57219908847'}`} 
+                            href={`https://www.scopus.com/authid/detail.uri?authorId=${profileData.academicProfile.scopusId}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-sm font-semibold text-slate-800 hover:text-blue-600 flex items-center gap-1 group/link"
                           >
-                            {profileData?.academicProfile?.scopusId || '57219908847'}
+                            {profileData.academicProfile.scopusId}
                             <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                           </a>
                         ) : (
@@ -725,9 +738,9 @@ const ProfilePage = () => {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">LinkedIn</span>
-                        {profileData?.academicProfile?.linkedIn || 'https://linkedin.com' ? (
+                        {profileData?.academicProfile?.linkedIn ? (
                           <a 
-                            href={profileData?.academicProfile?.linkedIn || 'https://linkedin.com'} 
+                            href={profileData.academicProfile.linkedIn.startsWith('http') ? profileData.academicProfile.linkedIn : `https://linkedin.com/in/${profileData.academicProfile.linkedIn}`} 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             className="text-sm font-semibold text-blue-600 hover:underline flex items-center gap-1 group/link"
@@ -748,14 +761,14 @@ const ProfilePage = () => {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">GitHub</span>
-                        {profileData?.socialLinks?.github || 'github.com/arjunsharma' ? (
+                        {profileData?.socialLinks?.github ? (
                           <a 
-                            href={profileData?.socialLinks?.github?.startsWith('http') ? profileData.socialLinks.github : `https://github.com/${profileData?.socialLinks?.github || 'arjunsharma'}`} 
+                            href={profileData.socialLinks.github.startsWith('http') ? profileData.socialLinks.github : `https://github.com/${profileData.socialLinks.github}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-sm font-semibold text-slate-800 hover:text-blue-600 flex items-center gap-1 group/link"
                           >
-                            {profileData?.socialLinks?.github || 'github.com/arjunsharma'}
+                            {profileData.socialLinks.github}
                             <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                           </a>
                         ) : (
@@ -780,9 +793,13 @@ const ProfilePage = () => {
                     </div>
                     <div className="min-w-0">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Email Address</span>
-                      <a href={`mailto:${emailText}`} className="font-semibold text-slate-750 text-slate-750 hover:text-blue-650 block truncate leading-tight">
-                        {emailText}
-                      </a>
+                      {emailText ? (
+                        <a href={`mailto:${emailText}`} className="font-semibold text-slate-750 text-slate-750 hover:text-blue-655 block truncate leading-tight">
+                          {emailText}
+                        </a>
+                      ) : (
+                        <span className="font-semibold text-slate-400 italic">Not Specified</span>
+                      )}
                     </div>
                   </div>
 
@@ -794,7 +811,7 @@ const ProfilePage = () => {
                     <div className="min-w-0">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Phone Number</span>
                       <span className="font-semibold text-slate-750 block leading-tight">
-                        +91 98765 43210
+                        {profileData?.phone || 'Not Specified'}
                       </span>
                     </div>
                   </div>
@@ -806,14 +823,18 @@ const ProfilePage = () => {
                     </div>
                     <div className="min-w-0">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Personal Website</span>
-                      <a 
-                        href="https://sushilkumar.in" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="font-semibold text-blue-600 hover:underline block truncate leading-tight"
-                      >
-                        https://sushilkumar.in
-                      </a>
+                      {profileData?.website ? (
+                        <a 
+                          href={profileData.website.startsWith('http') ? profileData.website : `https://${profileData.website}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="font-semibold text-blue-600 hover:underline block truncate leading-tight"
+                        >
+                          {profileData.website}
+                        </a>
+                      ) : (
+                        <span className="font-semibold text-slate-400 italic">Not Specified</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -851,48 +872,9 @@ const ProfilePage = () => {
                       </div>
                     ))
                   ) : (
-                    [
-                      {
-                        degree: 'Ph.D. in Computer Science & Engineering',
-                        university: 'Amity University',
-                        fieldOfStudy: 'Artificial Intelligence',
-                        startYear: 2011,
-                        endYear: 2016,
-                        description: 'Thesis on Deep Learning Optimizations and Neural Architectures.'
-                      },
-                      {
-                        degree: 'M.Tech. in Computer Science',
-                        university: 'Indian Institute of Technology, Delhi',
-                        fieldOfStudy: 'Computer Engineering',
-                        startYear: 2009,
-                        endYear: 2011,
-                      },
-                      {
-                        degree: 'B.Tech. in Computer Science',
-                        university: 'Delhi Technological University',
-                        fieldOfStudy: 'Information Technology',
-                        startYear: 2005,
-                        endYear: 2009,
-                      }
-                    ].map((edu, idx) => (
-                      <div key={idx} className="relative group transition-all duration-300">
-                        <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-blue-600 border-2 border-white ring-4 ring-blue-50 shadow-sm"></div>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <h4 className="font-extrabold text-slate-800 text-sm font-sans">{edu.degree}</h4>
-                            <p className="text-xs text-slate-500 font-semibold mt-1 font-sans">
-                              {edu.university} • {edu.fieldOfStudy}
-                            </p>
-                          </div>
-                          <span className="px-2.5 py-1 bg-slate-50 text-slate-500 border border-slate-200/50 rounded-xl text-[10px] font-bold self-start sm:self-center">
-                            {edu.startYear} - {edu.endYear || 'Present'}
-                          </span>
-                        </div>
-                        {edu.description && (
-                          <p className="text-xs text-slate-400 mt-2 font-sans italic leading-relaxed">{edu.description}</p>
-                        )}
-                      </div>
-                    ))
+                    <div className="py-6 text-slate-400 text-xs font-medium">
+                      No education details added yet.
+                    </div>
                   )}
                 </div>
               </div>
@@ -929,51 +911,9 @@ const ProfilePage = () => {
                       </div>
                     ))
                   ) : (
-                    [
-                      {
-                        role: 'Associate Professor',
-                        organization: 'Amity University',
-                        department: 'Department of Computer Science & Engineering',
-                        employmentType: 'full-time',
-                        startYear: 2016,
-                        endYear: null,
-                        description: 'Teaching graduate classes in Deep Learning and Sensor Routing. Supervising Ph.D. candidates.'
-                      },
-                      {
-                        role: 'Assistant Professor',
-                        organization: 'IIT Delhi',
-                        department: 'Department of Computer Science',
-                        employmentType: 'full-time',
-                        startYear: 2013,
-                        endYear: 2016,
-                      },
-                      {
-                        role: 'Research Scientist',
-                        organization: 'TCS Research, Bangalore',
-                        department: 'Innovation Lab',
-                        employmentType: 'full-time',
-                        startYear: 2011,
-                        endYear: 2013,
-                      }
-                    ].map((exp, idx) => (
-                      <div key={idx} className="relative group transition-all duration-300">
-                        <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-indigo-600 border-2 border-white ring-4 ring-indigo-50 shadow-sm"></div>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <h4 className="font-extrabold text-slate-800 text-sm font-sans">{exp.role}</h4>
-                            <p className="text-xs text-slate-500 font-semibold mt-1 font-sans">
-                              {exp.organization} • {exp.department || exp.employmentType}
-                            </p>
-                          </div>
-                          <span className="px-2.5 py-1 bg-slate-50 text-slate-500 border border-slate-200/50 rounded-xl text-[10px] font-bold self-start sm:self-center">
-                            {exp.startYear} - {exp.endYear || 'Present'}
-                          </span>
-                        </div>
-                        {exp.description && (
-                          <p className="text-xs text-slate-400 mt-2 font-sans italic leading-relaxed">{exp.description}</p>
-                        )}
-                      </div>
-                    ))
+                    <div className="py-6 text-slate-400 text-xs font-medium">
+                      No experience details added yet.
+                    </div>
                   )}
                 </div>
               </div>
@@ -996,11 +936,9 @@ const ProfilePage = () => {
                       </span>
                     ))
                   ) : (
-                    ['Wireless Sensor Network', 'Routing Protocol', 'Security', 'IoT', 'Artificial Intelligence', 'Deep Learning', 'Natural Language Processing'].map((area) => (
-                      <span key={area} className="px-3.5 py-2 bg-slate-50 border border-slate-200/60 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition-all">
-                        {area}
-                      </span>
-                    ))
+                    <div className="py-2 text-slate-400 text-xs font-medium">
+                      No research areas added yet.
+                    </div>
                   )}
                 </div>
               </div>
@@ -1035,38 +973,9 @@ const ProfilePage = () => {
                       </div>
                     ))
                   ) : (
-                    [
-                      {
-                        title: 'Energy-Efficient Clustering and Routing Algorithms in Wireless Sensor Networks',
-                        abstract: 'This paper proposes a hybrid cluster head selection algorithm that reduces energy dissipation in remote network setups and improves lifetime constraints.',
-                        journal: 'IEEE Transactions on Wireless Communications',
-                        publicationYear: 2022,
-                        citationCount: 45,
-                      },
-                      {
-                        title: 'An Autonomous Sensor Node Recovery Protocol for IoT-enabled Cities',
-                        abstract: 'We introduce an autogenous recovery protocol that enables fast packet re-routing in degraded network topologies under dynamic environments.',
-                        journal: 'ACM Computing Surveys',
-                        publicationYear: 2020,
-                        citationCount: 28,
-                      }
-                    ].map((pub, idx) => (
-                      <div key={idx} className="pt-5 first:pt-0 space-y-2.5">
-                        <div className="flex items-start justify-between gap-4">
-                          <h4 className="font-bold text-slate-800 text-sm hover:text-blue-650 hover:underline cursor-pointer leading-snug">
-                            {pub.title}
-                          </h4>
-                          <span className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded-lg text-[9px] font-extrabold shrink-0">
-                            {pub.citationCount} citations
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{pub.abstract}</p>
-                        <div className="flex items-center gap-4 text-[10px] text-slate-400 font-medium">
-                          {pub.journal && <span className="italic">{pub.journal}</span>}
-                          <span>Year: {pub.publicationYear}</span>
-                        </div>
-                      </div>
-                    ))
+                    <div className="py-6 text-slate-400 text-xs font-medium">
+                      No publications found.
+                    </div>
                   )}
                 </div>
               </div>
@@ -1082,33 +991,26 @@ const ProfilePage = () => {
                   </button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
-                  {[
-                    {
-                      title: 'Intelligent Routing Protocols for WSNs',
-                      desc: 'Designing energy-efficient node cluster algorithms for large-scale heterogeneous networks.',
-                      funding: '$45,000',
-                      status: 'Active',
-                    },
-                    {
-                      title: 'IoT-enabled Smart Cities Architecture',
-                      desc: 'Collaboration on mesh routing frameworks for node recovery under dense city structures.',
-                      funding: '$32,000',
-                      status: 'Completed',
-                    }
-                  ].map((proj, idx) => (
-                    <div key={idx} className="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 hover:shadow-sm transition-all duration-300">
-                      <div className="flex justify-between items-center">
-                        <span className={`px-2 py-0.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wide ${
-                          proj.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-200/30' : 'bg-slate-200/50 text-slate-600'
-                        }`}>
-                          {proj.status}
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-400">{proj.funding}</span>
+                  {profileData?.projectList && profileData.projectList.length > 0 ? (
+                    profileData.projectList.map((proj, idx) => (
+                      <div key={proj._id || idx} className="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 hover:shadow-sm transition-all duration-300">
+                        <div className="flex justify-between items-center">
+                          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wide ${
+                            proj.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-200/30' : 'bg-slate-200/50 text-slate-600'
+                          }`}>
+                            {proj.status}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">{proj.type}</span>
+                        </div>
+                        <h4 className="font-bold text-slate-800 text-xs">{proj.title}</h4>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">{proj.description}</p>
                       </div>
-                      <h4 className="font-bold text-slate-800 text-xs">{proj.title}</h4>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">{proj.desc}</p>
+                    ))
+                  ) : (
+                    <div className="col-span-2 py-6 text-center text-slate-400 text-xs font-medium">
+                      No projects added yet.
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 
@@ -1123,36 +1025,28 @@ const ProfilePage = () => {
                   </button>
                 </div>
                 <div className="space-y-4 text-left">
-                  {[
-                    {
-                      title: 'IEEE Senior Member Designation',
-                      desc: 'Awarded for significant contributions to wireless communication protocols.',
-                      year: '2023'
-                    },
-                    {
-                      title: 'Best Research Paper Award',
-                      desc: 'Honored at the IEEE International Conference on Communications (ICC 2022).',
-                      year: '2022'
-                    },
-                    {
-                      title: 'Outstanding Faculty Researcher',
-                      desc: 'Recognized by Amity University for high-impact publication metrics.',
-                      year: '2021'
-                    }
-                  ].map((ach, idx) => (
-                    <div key={idx} className="flex gap-4 items-start">
-                      <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
-                        <Award className="w-4 h-4" />
-                      </div>
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-slate-800 text-xs leading-none">{ach.title}</h4>
-                          <span className="text-[9px] font-bold text-slate-400">{ach.year}</span>
+                  {profileData?.achievementList && profileData.achievementList.length > 0 ? (
+                    profileData.achievementList.map((ach, idx) => (
+                      <div key={ach._id || idx} className="flex gap-4 items-start">
+                        <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                          <Award className="w-4 h-4" />
                         </div>
-                        <p className="text-[11px] text-slate-500 leading-relaxed mt-1">{ach.desc}</p>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-slate-800 text-xs leading-none">{ach.title}</h4>
+                            <span className="text-[9px] font-bold text-slate-400">
+                              {ach.date ? new Date(ach.date).getFullYear() : ''}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-relaxed mt-1">{ach.description}</p>
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center text-slate-400 text-xs font-medium">
+                      No achievements added yet.
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </>

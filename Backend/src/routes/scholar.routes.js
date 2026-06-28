@@ -11,5 +11,8 @@ router.post('/connect', profileController.connectGoogleScholar);
 router.post('/sync', profileController.syncGoogleScholar);
 router.get('/profile', profileController.getGoogleScholarProfileData);
 router.get('/publications', profileController.getGoogleScholarPublicationsData);
+router.get('/compare', profileController.compareGoogleScholar);
+router.post('/disconnect', profileController.disconnectGoogleScholar);
+router.post('/validate', profileController.validateScholarId);
 
 export default router;

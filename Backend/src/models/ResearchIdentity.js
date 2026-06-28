@@ -62,6 +62,7 @@ const researchIdentitySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: 'profile_links',
   }
 );
 

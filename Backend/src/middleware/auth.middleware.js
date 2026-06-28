@@ -28,6 +28,11 @@ export const protect = async (req, res, next) => {
       return next(new AppError('The user belonging to this token no longer exists.', 401));
     }
 
+    // Check if user is blocked
+    if (currentUser.status === 'blocked') {
+      return next(new AppError('Your account has been blocked. Please contact support.', 403));
+    }
+
     // 4. Check if the user changed their password after the token was issued
     if (currentUser.changedPasswordAfter && currentUser.changedPasswordAfter(decoded.iat)) {
       return next(new AppError('User recently changed their password! Please log in again.', 401));

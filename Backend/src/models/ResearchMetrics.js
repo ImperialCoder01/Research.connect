@@ -69,6 +69,22 @@ const researchMetricsSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    averageCitations: {
+      type: Number,
+      default: 0,
+    },
+    publicationsPerYear: [
+      {
+        year: { type: Number, required: true },
+        count: { type: Number, required: true },
+      },
+    ],
+    citationTrend: [
+      {
+        year: { type: Number, required: true },
+        citations: { type: Number, required: true },
+      },
+    ],
     monthlyGrowth: {
       type: Number,
       default: 0, // Percentage growth in citations/reads month-over-month
@@ -88,7 +104,7 @@ const researchMetricsSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: 'researchMetrics',
+    collection: 'research_metrics',
   }
 );
 

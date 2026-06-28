@@ -48,26 +48,36 @@ const mockSerpApiResponse = {
         { year: 2026, citations: 500 }
       ]
     },
-    publications: [
+    articles: [
       {
         title: 'Deep Learning in Health Informatics',
         link: 'https://mockscholar.org/pub1',
-        citation_id: 'mock_author_id:pub1',
         authors: 'S Kushwaha, J Doe',
         publication: 'Journal of Biomedical Informatics, 2026',
-        num_citations: {
-          count: 45
-        }
+        cited_by: {
+          value: 45
+        },
+        year: 2026
+      },
+      {
+        title: 'Deep Learning in Health Informatics',
+        link: 'https://mockscholar.org/pub1_dup',
+        authors: 'S Kushwaha, J Doe',
+        publication: 'Journal of Biomedical Informatics, 2026',
+        cited_by: {
+          value: 50
+        },
+        year: 2026
       },
       {
         title: 'A Survey of Large Language Models',
         link: 'https://mockscholar.org/pub2',
-        citation_id: 'mock_author_id:pub2',
         authors: 'S Kushwaha, A Smith',
         publication: 'IEEE Transactions on AI, 2025',
-        num_citations: {
-          count: 120
-        }
+        cited_by: {
+          value: 120
+        },
+        year: 2025
       }
     ],
     co_authors: [
@@ -80,9 +90,12 @@ const mockSerpApiResponse = {
   }
 };
 
-// Override axios.get to return mock response
-axios.get = async (url) => {
-  return mockSerpApiResponse;
+// Override global.fetch to return mock response
+global.fetch = async (url) => {
+  return {
+    ok: true,
+    json: async () => mockSerpApiResponse.data
+  };
 };
 
 async function runTests() {

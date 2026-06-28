@@ -7,6 +7,8 @@ import ResearchMetrics from '../models/ResearchMetrics.js';
 import User from '../models/User.js';
 import Profile from '../models/Profile.js';
 import Publication from '../models/Publication.js';
+import Project from '../models/Project.js';
+import Award from '../models/Award.js';
 import AppError from '../utils/AppError.js';
 
 /**
@@ -110,7 +112,7 @@ export const compileAndSaveMergedProfile = async (userId) => {
 
   // 3. Formulate merged profile
   const mergedData = {
-    bio: manual.bio || (isFieldSelected('bio') ? (scholar?.interests?.join(', ') || scholar?.affiliation) : '') || '',
+    bio: manual.bio || '',
     displayName: manual.displayName || (isFieldSelected('displayName') ? scholar?.name : '') || '',
     headline: manual.headline || (scholar?.affiliation && isFieldSelected('institution') ? `${scholar.affiliation} researcher` : '') || '',
     designation: manual.designation || '',
@@ -176,9 +178,32 @@ export const compileAndSaveMergedProfile = async (userId) => {
  * @returns {Promise<object>}
  */
 export const getFullProfileDetails = async (userId) => {
-  const mergedProfile = await compileAndSaveMergedProfile(userId);
+  // Ensure the merged profile is compiled and legacy Profile is kept in sync
+  await compileAndSaveMergedProfile(userId);
+
+  // Fetch from legacy/main Profile model and populate everything
+  const profile = await Profile.findOne({ user: userId })
+    .populate('user', 'fullName email')
+    .populate('academicProfile')
+    .populate('researchMetrics')
+    .populate({
+      path: 'researchAreas',
+      populate: { path: 'researchArea' }
+    })
+    .populate({
+      path: 'keywords',
+      populate: { path: 'keyword' }
+    })
+    .populate('educationList')
+    .populate('experienceList')
+    .populate('projectList')
+    .populate('achievementList');
+
   const educations = await Education.find({ user: userId, isDeleted: false }).sort({ sortOrder: 1, startYear: -1 });
   const experiences = await Experience.find({ user: userId, isDeleted: false }).sort({ sortOrder: 1, startYear: -1 });
+  const publications = await Publication.find({ user: userId, isDeleted: false }).sort({ publicationYear: -1 });
+  const projects = await Project.find({ owner: userId }).sort({ startDate: -1 });
+  const achievements = await Award.find({ user: userId, isDeleted: false }).sort({ date: -1 });
   
   let metrics = await ResearchMetrics.findOne({ user: userId });
   if (!metrics) {
@@ -186,9 +211,12 @@ export const getFullProfileDetails = async (userId) => {
   }
 
   return {
-    profile: mergedProfile,
+    profile,
     educations,
     experiences,
     metrics,
+    publications,
+    projects,
+    achievements,
   };
 };

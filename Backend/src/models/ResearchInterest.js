@@ -28,6 +28,7 @@ const researchInterestSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: 'research_interests',
   }
 );
 

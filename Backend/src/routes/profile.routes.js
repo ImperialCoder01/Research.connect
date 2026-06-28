@@ -39,6 +39,7 @@ router.use(protect);
 router.get('/me', profileController.getMyProfile);
 router.get('/user/:id', profileController.getProfileByUserId);
 router.put('/', profileController.updateProfile);
+router.patch('/', profileController.patchProfile);
 router.get('/completion', profileController.getProfileCompletion);
 
 // Image Uploads
@@ -47,13 +48,21 @@ router.post('/cover', upload.single('cover'), profileController.uploadPhoto);
 
 // Education
 router.post('/education', profileController.addEducation);
+router.patch('/education', profileController.patchEducation);
 router.put('/education/:id', profileController.updateEducation);
 router.delete('/education/:id', profileController.deleteEducation);
 
 // Experience
 router.post('/experience', profileController.addExperience);
+router.patch('/experience', profileController.patchExperience);
 router.put('/experience/:id', profileController.updateExperience);
 router.delete('/experience/:id', profileController.deleteExperience);
+
+// Publications PATCH (supports EditProfileModal)
+router.patch('/publications', profileController.patchPublications);
+
+// Research Interests & Keywords PATCH (supports EditProfileModal)
+router.patch('/research', profileController.patchResearch);
 
 // Awards
 router.post('/awards', profileController.addAward);
@@ -65,12 +74,19 @@ router.post('/certifications', profileController.addCertification);
 router.put('/certifications/:id', profileController.updateCertification);
 router.delete('/certifications/:id', profileController.deleteCertification);
 
-// Google Scholar Sync
+// Google Scholar Sync (/profile/scholar/... and /profile/google-scholar/...)
 router.post('/scholar/connect', profileController.connectGoogleScholar);
 router.post('/scholar/sync', profileController.syncGoogleScholar);
 router.get('/scholar/status', profileController.getGoogleScholarStatus);
+router.get('/google-scholar/status', profileController.getGoogleScholarStatus);
 router.get('/google-scholar/preview', profileController.previewGoogleScholar);
 router.post('/google-scholar/import', profileController.importGoogleScholar);
+router.get('/google-scholar/compare', profileController.compareGoogleScholar);
+router.post('/google-scholar/sync', profileController.syncGoogleScholar);
+router.put('/google-scholar/sync', profileController.syncGoogleScholar);
+router.delete('/google-scholar/unlink', profileController.disconnectGoogleScholar);
+router.post('/google-scholar/disconnect', profileController.disconnectGoogleScholar);
+router.post('/google-scholar/validate', profileController.validateScholarId);
 
 // Connect external identities
 router.post('/orcid', profileController.connectOrcid);

@@ -123,6 +123,17 @@ userSchema.index({ email: 1, isDeleted: 1 });
 // Hash password before saving
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
+
+  // If password changed on an existing user, invalidate all their device sessions
+  if (!this.isNew) {
+    try {
+      const Session = mongoose.model('Session');
+      await Session.deleteMany({ userId: this._id });
+    } catch (err) {
+      console.error('Failed to clear sessions on password change:', err);
+    }
+  }
+
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });

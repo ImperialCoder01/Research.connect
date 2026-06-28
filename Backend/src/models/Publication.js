@@ -17,6 +17,7 @@ const publicationSchema = new mongoose.Schema(
     authors: [
       {
         name: { type: String, required: true },
+        authorName: { type: String, default: '' },
         user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         authorOrder: { type: Number, default: 1 },
       }
@@ -50,6 +51,21 @@ const publicationSchema = new mongoose.Schema(
       trim: true,
       index: true,
       sparse: true,
+    },
+    googleScholarLink: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    pdfLink: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    researchArea: {
+      type: String,
+      trim: true,
+      default: '',
     },
     volume: {
       type: String,
@@ -112,6 +128,20 @@ const publicationSchema = new mongoose.Schema(
     collection: 'publications',
   }
 );
+
+// Pre-save hook to synchronize name and authorName
+publicationSchema.pre('save', function (next) {
+  if (this.authors && this.authors.length > 0) {
+    this.authors.forEach(author => {
+      if (author.name && !author.authorName) {
+        author.authorName = author.name;
+      } else if (author.authorName && !author.name) {
+        author.name = author.authorName;
+      }
+    });
+  }
+  next();
+});
 
 // Soft delete query middleware
 publicationSchema.pre(/^find/, function (next) {

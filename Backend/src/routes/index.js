@@ -19,6 +19,8 @@ import discoveryRouter from './discovery.routes.js';
 import notificationRouter from './notification.routes.js';
 import scholarRouter from './scholar.routes.js';
 import metricsRouter from './metrics.routes.js';
+import googleScholarRouter from './google-scholar.routes.js';
+import coauthorsRouter from './coauthors.routes.js';
 
 const router = express.Router();
 
@@ -42,6 +44,8 @@ router.use('/upload', uploadRouter);
 router.use('/discovery', discoveryRouter);
 router.use('/notifications', notificationRouter);
 router.use('/scholar', scholarRouter);
+router.use('/google-scholar', googleScholarRouter);
+router.use('/coauthors', coauthorsRouter);
 router.use('/research-metrics', metricsRouter);
 router.use('/', followRouter);
 

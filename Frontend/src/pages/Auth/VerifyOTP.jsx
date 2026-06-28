@@ -18,6 +18,7 @@ const VerifyOTP = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [trustDevice, setTrustDevice] = useState(true);
 
   // Resend OTP Cooldown
   const [cooldown, setCooldown] = useState(0);
@@ -85,7 +86,7 @@ const VerifyOTP = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await verifyLoginOtp(email, otpCode);
+      const res = await verifyLoginOtp(email, otpCode, trustDevice);
       if (res.success) {
         setSuccess(true);
         // Get redirect path or default to /dashboard
@@ -207,6 +208,23 @@ const VerifyOTP = () => {
                     className="w-12 h-12 text-center text-lg font-bold bg-white border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl focus:outline-none transition-all"
                   />
                 ))}
+              </div>
+
+              {/* Remember This Device Checkbox */}
+              <div className="flex items-center gap-2.5 px-1 py-1 text-left">
+                <input
+                  type="checkbox"
+                  id="trustDevice"
+                  checked={trustDevice}
+                  onChange={(e) => setTrustDevice(e.target.checked)}
+                  className="w-4.5 h-4.5 text-blue-600 border-slate-300 rounded focus:ring-blue-500 focus:ring-opacity-20 transition-all cursor-pointer accent-blue-600"
+                />
+                <label 
+                  htmlFor="trustDevice" 
+                  className="text-xs font-semibold text-slate-600 select-none cursor-pointer hover:text-slate-800 transition-colors"
+                >
+                  Trust this device for 30 days
+                </label>
               </div>
 
               <button

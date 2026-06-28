@@ -34,10 +34,18 @@ const googleScholarCoAuthorSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    collaborationCount: {
+      type: Number,
+      default: 1,
+    },
+    sharedPublications: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,
-    collection: 'googleScholarCoAuthors',
+    collection: 'co_authors',
   }
 );
 
