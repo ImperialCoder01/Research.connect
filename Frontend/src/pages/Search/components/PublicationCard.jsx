@@ -105,10 +105,27 @@ export default function PublicationCard({ publication }) {
     return `${authors}. "${pub.title || 'Not Available'}." ${pub.journal || pub.publisher || 'Academic Venue'}, ${pub.publicationYear || 'n.d.'}.`;
   };
 
+  const getCardBgClass = () => {
+    const type = (pub.publicationType || '').toLowerCase();
+    if (type.includes('journal') || type.includes('article')) {
+      return 'bg-[#DBEAFE]/15 hover:bg-[#DBEAFE]/30 border-[#DBEAFE]/50 hover:border-[#2563EB]/40';
+    }
+    if (type.includes('conference') || type.includes('proceeding') || type.includes('paper')) {
+      return 'bg-[#EDE9FE]/20 hover:bg-[#EDE9FE]/35 border-[#EDE9FE]/60 hover:border-[#4F46E5]/40';
+    }
+    if (type.includes('book') || type.includes('chapter')) {
+      return 'bg-[#FEF3C7]/15 hover:bg-[#FEF3C7]/30 border-[#FEF3C7]/50 hover:border-[#F59E0B]/40';
+    }
+    if (type.includes('patent') || type.includes('thesis') || type.includes('report')) {
+      return 'bg-[#DCFCE7]/15 hover:bg-[#DCFCE7]/30 border-[#DCFCE7]/50 hover:border-[#22C55E]/40';
+    }
+    return 'bg-white hover:bg-slate-50 border-[#E2E8F0] hover:border-[#2563EB]/40';
+  };
+
   return (
     <div 
       onClick={() => navigate(`/publications/${pub._id || pub.slug}`)}
-      className="bg-white border border-[#E2E8F0] rounded-2xl p-5 hover:border-[#2563EB]/40 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 text-[#0F172A] flex flex-col justify-between relative overflow-hidden cursor-pointer"
+      className={`rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 text-[#0F172A] flex flex-col justify-between relative overflow-hidden cursor-pointer border ${getCardBgClass()}`}
     >
       <div>
         {/* Top Header Row */}

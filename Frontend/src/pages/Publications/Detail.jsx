@@ -632,9 +632,9 @@ const PublicationDetails = () => {
             <h3 className="text-sm font-bold text-[#0F172A] uppercase tracking-wider">Related Publications</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {getRelatedPublications().map((rel) => (
-                <div key={rel._id} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-slate-300 rounded-xl flex flex-col justify-between transition-all">
+                <div key={rel._id} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#2563EB]/30 rounded-2xl flex flex-col justify-between transition-all">
                   <div className="space-y-2">
-                    <span className="text-[9px] uppercase font-bold text-[#4F46E5] bg-[#EDE9FE] px-2 py-0.5 border border-[#EDE9FE] rounded-md">
+                    <span className="text-[9px] uppercase font-bold text-[#4F46E5] bg-[#EDE9FE] px-2.5 py-0.5 border border-[#EDE9FE] rounded-full inline-block">
                       Similar Paper
                     </span>
                     <h4 className="font-bold text-xs text-[#0F172A] line-clamp-2 hover:text-[#2563EB] cursor-pointer" onClick={() => navigate(`/publications/${rel._id}`)}>
