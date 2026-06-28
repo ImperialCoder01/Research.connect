@@ -149,6 +149,57 @@ const publicationSchema = new mongoose.Schema(
       default: 'public',
       index: true,
     },
+    publisherUrl: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    scholarUrl: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    doiUrl: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    downloadCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    viewCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    sourceType: {
+      type: String,
+      enum: ['google_scholar', 'user_uploaded', 'imported', 'other'],
+      default: 'user_uploaded',
+      index: true,
+    },
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    fileSize: {
+      type: Number,
+      default: 0,
+    },
+    mimeType: {
+      type: String,
+      default: '',
+    },
+    slug: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      index: true,
+    },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -167,6 +218,10 @@ const publicationSchema = new mongoose.Schema(
       default: '',
     },
     publicationUrl: {
+      type: String,
+      default: '',
+    },
+    externalUrl: {
       type: String,
       default: '',
     },
@@ -213,6 +268,31 @@ publicationSchema.virtual('researchAreas', {
 // Soft delete query middleware
 publicationSchema.pre(/^find/, function (next) {
   this.find({ isDeleted: { $ne: true } });
+  next();
+});
+
+// Pre-save hook to generate a unique slug
+publicationSchema.pre('save', async function (next) {
+  if (this.isModified('title') || !this.slug) {
+    const baseSlug = this.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+    
+    let uniqueSlug = baseSlug || 'publication';
+    let count = 0;
+    const PublicationModel = mongoose.model('Publication');
+    
+    while (true) {
+      const checkSlug = count === 0 ? uniqueSlug : `${uniqueSlug}-${count}`;
+      const existing = await PublicationModel.findOne({ slug: checkSlug, _id: { $ne: this._id } });
+      if (!existing) {
+        this.slug = checkSlug;
+        break;
+      }
+      count++;
+    }
+  }
   next();
 });
 

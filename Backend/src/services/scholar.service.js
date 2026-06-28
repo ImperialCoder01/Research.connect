@@ -213,9 +213,28 @@ export const getScholarImportPreview = async (input) => {
       citationsByYear,
     },
     publications: articles.map((art) => {
-      // Find PDF link from resources if available
-      const pdfResource = (art.resources || []).find((r) => r.file_format === 'PDF');
-      const pdfUrl = pdfResource ? pdfResource.link : '';
+      // Smart PDF Detection: Find PDF link from resources or link suffixes
+      const pdfResource = (art.resources || []).find(
+        (r) => 
+          r.file_format === 'PDF' || 
+          (r.title && r.title.toLowerCase().includes('[pdf]')) || 
+          (r.link && r.link.toLowerCase().endsWith('.pdf'))
+      );
+      let pdfUrl = pdfResource ? pdfResource.link : '';
+      if (!pdfUrl && art.link && art.link.toLowerCase().endsWith('.pdf')) {
+        pdfUrl = art.link;
+      }
+      if (!pdfUrl && art.title && art.title.toLowerCase().includes('[pdf]')) {
+        if (art.resources && art.resources.length > 0) {
+          pdfUrl = art.resources[0].link;
+        }
+      }
+
+      // Distinguish Google Scholar Link vs Publisher Link
+      const linkStr = art.link || '';
+      const isScholarLink = linkStr.includes('scholar.google.com');
+      const scholarUrl = isScholarLink ? linkStr : (art.cited_by?.link || '');
+      const publisherUrl = !isScholarLink ? linkStr : '';
 
       return {
         title: art.title,
@@ -225,13 +244,16 @@ export const getScholarImportPreview = async (input) => {
         publicationYear: art.year ? parseInt(art.year, 10) : null,
         citationCount: art.cited_by?.value || 0,
         pdfUrl,
-        publicationUrl: art.link || '',
+        scholarUrl,
+        publisherUrl,
+        publicationUrl: linkStr,
         abstract: art.description || `${art.title}. Published in ${art.publication || 'Academic Journal'}.`,
         doi: '', // SerpAPI doesn't return DOI directly in initial list, but can be manually updated
         volume: art.volume || '',
         issue: art.issue || '',
         pages: art.pages || '',
         publicationType: (art.publication || '').toLowerCase().includes('patent') ? 'patent' : 'journal',
+        thumbnail: art.thumbnail || '',
       };
     }),
     coAuthors: coauthors.map((ca) => ({
@@ -403,6 +425,12 @@ export const importGoogleScholarProfile = async (userId, authorId, selectedPubTi
           citationCount: pubData.citationCount,
           pdfUrl: pubData.pdfUrl,
           publicationUrl: pubData.publicationUrl,
+          publisherUrl: pubData.publisherUrl || '',
+          scholarUrl: pubData.scholarUrl || '',
+          doiUrl: pubData.doi ? `https://doi.org/${pubData.doi}` : '',
+          sourceType: 'google_scholar',
+          uploadedBy: userId,
+          thumbnail: pubData.thumbnail || '',
           volume: pubData.volume,
           issue: pubData.issue,
           pages: pubData.pages,
@@ -452,6 +480,18 @@ export const importGoogleScholarProfile = async (userId, authorId, selectedPubTi
           updated = true;
         }
         if (pubData.publicationUrl && updateFieldWithMetadata(pub, 'publicationUrl', pubData.publicationUrl, 'googleScholar', userId)) {
+          updated = true;
+        }
+        if (pubData.scholarUrl && pub.scholarUrl !== pubData.scholarUrl) {
+          pub.scholarUrl = pubData.scholarUrl;
+          updated = true;
+        }
+        if (pubData.publisherUrl && pub.publisherUrl !== pubData.publisherUrl) {
+          pub.publisherUrl = pubData.publisherUrl;
+          updated = true;
+        }
+        if (pubData.thumbnail && pub.thumbnail !== pubData.thumbnail) {
+          pub.thumbnail = pubData.thumbnail;
           updated = true;
         }
         

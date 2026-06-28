@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import path from 'path';
 import { validationResult } from 'express-validator';
 import Publication from '../models/Publication.js';
 import PublicationAuthor from '../models/PublicationAuthor.js';
@@ -9,6 +10,8 @@ import PublicationHistory from '../models/PublicationHistory.js';
 import PublicationType from '../models/PublicationType.js';
 import License from '../models/License.js';
 import Profile from '../models/Profile.js';
+import SavedPublication from '../models/SavedPublication.js';
+import DownloadAnalytics from '../models/DownloadAnalytics.js';
 import AppError from '../utils/AppError.js';
 import { uploadFile, deleteFile } from '../services/storage.service.js';
 
@@ -423,13 +426,21 @@ export const getAllPublications = async (req, res, next) => {
  */
 export const getPublicationById = async (req, res, next) => {
   try {
-    const publication = await Publication.findById(req.params.id)
+    const idOrSlug = req.params.id;
+    let query = {};
+    if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
+      query = { _id: idOrSlug };
+    } else {
+      query = { slug: idOrSlug };
+    }
+
+    const publication = await Publication.findOne(query)
       .populate('authors')
       .populate('keywords')
       .populate('researchAreas');
 
     if (!publication) {
-      return next(new AppError('No publication found with that ID', 404));
+      return next(new AppError('No publication found with that ID or Slug', 404));
     }
 
     // Fetch supplementary files
@@ -1035,5 +1046,481 @@ export const lookupDoi = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+/**
+ * Download publication PDF and track download analytics
+ * GET /api/v1/publications/download/:id
+ */
+export const getPublicationDownload = async (req, res, next) => {
+  try {
+    const idOrSlug = req.params.id;
+    let query = {};
+    if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
+      query = { _id: idOrSlug };
+    } else {
+      query = { slug: idOrSlug };
+    }
+
+    const publication = await Publication.findOne(query);
+    if (!publication) {
+      return next(new AppError('No publication found with that ID or Slug', 404));
+    }
+
+    // Security: private publications are owner-only
+    if (publication.visibility === 'private') {
+      const currentUserId = req.user?._id || req.user?.id;
+      if (!currentUserId || publication.user.toString() !== currentUserId.toString()) {
+        return next(new AppError('You do not have permission to download this publication', 403));
+      }
+    }
+
+    // Increment download counts
+    publication.downloadCount = (publication.downloadCount || 0) + 1;
+    await publication.save();
+
+    // Log daily analytics aggregate
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    await PublicationAnalytics.findOneAndUpdate(
+      { publication: publication._id, date: today },
+      { $inc: { downloads: 1 } },
+      { upsert: true }
+    );
+
+    // Store detailed download analytics
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    let browser = 'Unknown';
+    if (userAgent.includes('Chrome')) browser = 'Chrome';
+    else if (userAgent.includes('Firefox')) browser = 'Firefox';
+    else if (userAgent.includes('Safari')) browser = 'Safari';
+    else if (userAgent.includes('Edge')) browser = 'Edge';
+
+    const country = req.headers['cf-ipcountry'] || req.headers['x-country'] || 'Unknown';
+    let institution = 'Unknown';
+    
+    const userId = req.user?._id || req.user?.id;
+    if (userId) {
+      const profile = await Profile.findOne({ user: userId });
+      if (profile && profile.institution) {
+        institution = profile.institution;
+      }
+    }
+
+    await DownloadAnalytics.create({
+      user: userId || undefined,
+      publication: publication._id,
+      country,
+      institution,
+      browser,
+    });
+
+    const downloadUrl = publication.pdfUrl || publication.fileUrl || '';
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        pdfUrl: downloadUrl,
+        title: publication.title,
+        downloadCount: publication.downloadCount
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Increment view count and log daily analytics
+ * GET /api/v1/publications/read/:id
+ */
+export const getPublicationRead = async (req, res, next) => {
+  try {
+    const idOrSlug = req.params.id;
+    let query = {};
+    if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
+      query = { _id: idOrSlug };
+    } else {
+      query = { slug: idOrSlug };
+    }
+
+    const publication = await Publication.findOne(query);
+    if (!publication) {
+      return next(new AppError('No publication found with that ID or Slug', 404));
+    }
+
+    // Security: private publications are owner-only
+    if (publication.visibility === 'private') {
+      const currentUserId = req.user?._id || req.user?.id;
+      if (!currentUserId || publication.user.toString() !== currentUserId.toString()) {
+        return next(new AppError('You do not have permission to read this publication', 403));
+      }
+    }
+
+    publication.viewCount = (publication.viewCount || 0) + 1;
+    await publication.save();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    await PublicationAnalytics.findOneAndUpdate(
+      { publication: publication._id, date: today },
+      { $inc: { reads: 1, views: 1 } },
+      { upsert: true }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        pdfUrl: publication.pdfUrl || publication.fileUrl || '',
+        title: publication.title,
+        viewCount: publication.viewCount
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Resolve the original source URL for the publication
+ * GET /api/v1/publications/source/:id
+ */
+export const getPublicationSource = async (req, res, next) => {
+  try {
+    const idOrSlug = req.params.id;
+    let query = {};
+    if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
+      query = { _id: idOrSlug };
+    } else {
+      query = { slug: idOrSlug };
+    }
+
+    const publication = await Publication.findOne(query);
+    if (!publication) {
+      return next(new AppError('No publication found with that ID or Slug', 404));
+    }
+
+    let sourceUrl = '';
+    if (publication.publisherUrl) {
+      sourceUrl = publication.publisherUrl;
+    } else if (publication.doiUrl) {
+      sourceUrl = publication.doiUrl;
+    } else if (publication.doi) {
+      sourceUrl = `https://doi.org/${publication.doi}`;
+    } else if (publication.scholarUrl) {
+      sourceUrl = publication.scholarUrl;
+    } else if (publication.publicationUrl) {
+      sourceUrl = publication.publicationUrl;
+    } else if (publication.pdfUrl) {
+      sourceUrl = publication.pdfUrl;
+    } else if (publication.fileUrl) {
+      sourceUrl = publication.fileUrl;
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        sourceUrl,
+        title: publication.title
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Log view analytic event
+ * POST /api/v1/publications/views
+ */
+export const logPublicationView = async (req, res, next) => {
+  try {
+    const { publicationId } = req.body;
+    if (!publicationId) {
+      return next(new AppError('Publication ID is required', 400));
+    }
+
+    const publication = await Publication.findById(publicationId);
+    if (!publication) {
+      return next(new AppError('Publication not found', 404));
+    }
+
+    publication.viewCount = (publication.viewCount || 0) + 1;
+    await publication.save();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    await PublicationAnalytics.findOneAndUpdate(
+      { publication: publication._id, date: today },
+      { $inc: { views: 1 } },
+      { upsert: true }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        viewCount: publication.viewCount
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Log download analytic event
+ * POST /api/v1/publications/downloads
+ */
+export const logPublicationDownload = async (req, res, next) => {
+  try {
+    const { publicationId } = req.body;
+    if (!publicationId) {
+      return next(new AppError('Publication ID is required', 400));
+    }
+
+    const publication = await Publication.findById(publicationId);
+    if (!publication) {
+      return next(new AppError('Publication not found', 404));
+    }
+
+    publication.downloadCount = (publication.downloadCount || 0) + 1;
+    await publication.save();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    await PublicationAnalytics.findOneAndUpdate(
+      { publication: publication._id, date: today },
+      { $inc: { downloads: 1 } },
+      { upsert: true }
+    );
+
+    // Log detailed transaction if request metadata exists
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    let browser = 'Unknown';
+    if (userAgent.includes('Chrome')) browser = 'Chrome';
+    else if (userAgent.includes('Firefox')) browser = 'Firefox';
+    else if (userAgent.includes('Safari')) browser = 'Safari';
+
+    const country = req.headers['cf-ipcountry'] || req.headers['x-country'] || 'Unknown';
+    let institution = 'Unknown';
+    
+    const userId = req.user?._id || req.user?.id;
+    if (userId) {
+      const profile = await Profile.findOne({ user: userId });
+      if (profile && profile.institution) {
+        institution = profile.institution;
+      }
+    }
+
+    await DownloadAnalytics.create({
+      user: userId || undefined,
+      publication: publication._id,
+      country,
+      institution,
+      browser,
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        downloadCount: publication.downloadCount
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Toggle bookmark state for a publication (Save/Unsave)
+ * POST /api/v1/publications/bookmark
+ */
+export const togglePublicationBookmark = async (req, res, next) => {
+  try {
+    const { publicationId } = req.body;
+    if (!publicationId) {
+      return next(new AppError('Publication ID is required', 400));
+    }
+
+    const publication = await Publication.findById(publicationId);
+    if (!publication) {
+      return next(new AppError('Publication not found', 404));
+    }
+
+    const userId = req.user?._id || req.user?.id;
+    if (!userId) {
+      return next(new AppError('User authentication required', 401));
+    }
+
+    const existing = await SavedPublication.findOne({ user: userId, publication: publicationId });
+
+    let bookmarked = false;
+    if (existing) {
+      await SavedPublication.deleteOne({ _id: existing._id });
+    } else {
+      await SavedPublication.create({ user: userId, publication: publicationId });
+      bookmarked = true;
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        bookmarked
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Log share event for a publication
+ * POST /api/v1/publications/share
+ */
+export const logPublicationShare = async (req, res, next) => {
+  try {
+    const { publicationId } = req.body;
+    if (!publicationId) {
+      return next(new AppError('Publication ID is required', 400));
+    }
+
+    const publication = await Publication.findById(publicationId);
+    if (!publication) {
+      return next(new AppError('Publication not found', 404));
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    await PublicationAnalytics.findOneAndUpdate(
+      { publication: publication._id, date: today },
+      { $inc: { shares: 1 } },
+      { upsert: true }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        message: 'Share event logged successfully'
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Stream or redirect to the raw PDF file
+ * GET /api/v1/publications/pdf/:id
+ */
+export const getPublicationPdf = async (req, res, next) => {
+  try {
+    const idOrSlug = req.params.id;
+    let query = {};
+    if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
+      query = { _id: idOrSlug };
+    } else {
+      query = { slug: idOrSlug };
+    }
+
+    const publication = await Publication.findOne(query);
+    if (!publication) {
+      return next(new AppError('No publication found with that ID or Slug', 404));
+    }
+
+    // Security: private publications are owner-only
+    if (publication.visibility === 'private') {
+      const currentUserId = req.user?._id || req.user?.id;
+      if (!currentUserId || publication.user.toString() !== currentUserId.toString()) {
+        return next(new AppError('You do not have permission to access this PDF', 403));
+      }
+    }
+
+    const fileUrl = publication.pdfUrl || publication.fileUrl;
+    if (!fileUrl) {
+      return next(new AppError('No PDF file is associated with this publication', 404));
+    }
+
+    // Redirect to the file (either Cloudinary absolute URL or relative local path)
+    if (fileUrl.startsWith('http')) {
+      return res.redirect(fileUrl);
+    }
+
+    // For local files, resolve file path and stream it
+    const filePath = path.resolve(fileUrl.startsWith('/') ? `.${fileUrl}` : fileUrl);
+    res.sendFile(filePath);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Export citation in multiple formats (BibTeX, RIS, APA, MLA, Chicago, IEEE)
+ * GET /api/v1/publications/citation/:id
+ */
+export const getPublicationCitation = async (req, res, next) => {
+  try {
+    const idOrSlug = req.params.id;
+    let query = {};
+    if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
+      query = { _id: idOrSlug };
+    } else {
+      query = { slug: idOrSlug };
+    }
+
+    const publication = await Publication.findOne(query).populate('authors');
+    if (!publication) {
+      return next(new AppError('No publication found with that ID or Slug', 404));
+    }
+
+    const authorNames = publication.authors?.map(a => a.authorName || a.displayName).join(', ') || 'Unknown Authors';
+    const firstAuthor = publication.authors?.[0]?.authorName || 'Unknown';
+    const year = publication.publicationYear || 'n.d.';
+    const title = publication.title || 'Untitled';
+    const venue = publication.journal || publication.conference || publication.publisher || 'Academic Venue';
+    const volume = publication.volume || '';
+    const issue = publication.issue || '';
+    const pages = publication.pages || '';
+    const doi = publication.doi || '';
+
+    // APA
+    const apa = `${authorNames} (${year}). ${title}. ${venue}${volume ? `, ${volume}` : ''}${issue ? `(${issue})` : ''}${pages ? `, ${pages}` : ''}.${doi ? ` https://doi.org/${doi}` : ''}`;
+
+    // MLA
+    const mla = `${authorNames}. "${title}." ${venue}, vol. ${volume || 'n.a.'}, no. ${issue || 'n.a.'}, ${year}, pp. ${pages || 'n.a.'}.`;
+
+    // Chicago
+    const chicago = `${authorNames}. "${title}." ${venue} ${volume || ''} (${year})${pages ? `: ${pages}` : ''}.`;
+
+    // IEEE
+    const ieee = `${publication.authors?.map(a => {
+      const parts = (a.authorName || '').split(' ');
+      const lastName = parts.pop() || '';
+      const initials = parts.map(p => p[0] ? `${p[0]}.` : '').join(' ');
+      return `${initials} ${lastName}`;
+    }).join(', ')}, "${title}," ${venue}, vol. ${volume || 'n.a.'}, no. ${issue || 'n.a.'}, pp. ${pages || 'n.a.'}, ${year}.`;
+
+    // BibTeX
+    const citeKey = `${firstAuthor.toLowerCase().replace(/[^a-z]/g, '')}${year}`;
+    const bibtex = `@article{${citeKey},\n  author={${publication.authors?.map(a => a.authorName).join(' and ') || 'Unknown'}},\n  title={${title}},\n  journal={${venue}},\n  year={${year}},\n  volume={${volume || 'n.a.'}},\n  number={${issue || 'n.a.'}},\n  pages={${pages || 'n.a.'}},\n  doi={${doi || 'n.a.'}}\n}`;
+
+    // RIS
+    const ris = `TY  - JOUR\nAU  - ${publication.authors?.map(a => a.authorName).join('\nAU  - ')}\nTI  - ${title}\nJO  - ${venue}\nPY  - ${year}\nVL  - ${volume}\nIS  - ${issue}\nSP  - ${pages.split('-')[0] || ''}\nEP  - ${pages.split('-')[1] || ''}\nDO  - ${doi}\nER  - `;
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        citations: {
+          apa,
+          mla,
+          chicago,
+          ieee,
+          bibtex,
+          ris
+        }
+      }
+    });
+  } catch (err) {
+    next(err);
   }
 };

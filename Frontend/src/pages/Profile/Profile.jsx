@@ -23,9 +23,12 @@ import {
   ChevronDown,
   Trash2,
   Link2,
-  Camera
+  Camera,
+  Download
 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { useScholarImport } from '../../hooks/auth.hooks';
 import api from '../../services/api';
 import ScholarImportWizard from '../../features/profile/ScholarImportWizard.jsx';
@@ -75,7 +78,9 @@ const providerIcons = {
 };
 
 const ProfilePage = () => {
-  const { user } = useAuth();
+  const { user, syncProfile } = useAuth();
+  const { socket } = useSocket();
+  const navigate = useNavigate();
   const { importProfile, loading: importLoading, error: importError } = useScholarImport();
 
   const [profileData, setProfileData] = useState(null);
@@ -84,6 +89,16 @@ const ProfilePage = () => {
   const [scholarStatus, setScholarStatus] = useState(null);
   
   const [activeTab, setActiveTab] = useState('About');
+  const handleDownloadPub = async (e, pub) => {
+    e.stopPropagation();
+    api.post('/publications/downloads', { publicationId: pub._id }).catch(() => {});
+    const docUrl = pub.pdfUrl || pub.fileUrl;
+    if (docUrl) {
+      window.open(docUrl.startsWith('/') ? `${api.defaults.baseURL || 'http://localhost:5000'}${docUrl}` : docUrl, '_blank');
+    } else {
+      alert('PDF not available for this publication.');
+    }
+  };
   const [scholarIdInput, setScholarIdInput] = useState('');
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
@@ -99,6 +114,8 @@ const ProfilePage = () => {
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [isOwnProfile, setIsOwnProfile] = useState(true);
+  const [mutualFollowers, setMutualFollowers] = useState([]);
+  const queryId = new URLSearchParams(window.location.search).get('id') || (user?.user?._id || user?.id || user?._id);
 
   // Collaborate Modal States
   const [collabModalOpen, setCollabModalOpen] = useState(false);
@@ -319,6 +336,14 @@ const ProfilePage = () => {
         setCollaborationStatus(response.data.collaborationStatus);
         setFollowersCount(response.data.followersCount);
         setFollowingCount(response.data.followingCount);
+        
+        // Fetch mutual followers
+        try {
+          const mutualRes = await api.get(`/follow/mutual/${queryId}`);
+          setMutualFollowers(mutualRes.data.data);
+        } catch (err) {
+          console.error('Failed to load mutual followers', err);
+        }
       } else {
         setIsOwnProfile(true);
         const response = await api.get('/profile/me');
@@ -361,17 +386,27 @@ const ProfilePage = () => {
     try {
       const queryId = new URLSearchParams(window.location.search).get('id');
       if (!queryId) return;
+
+      const originalFollowing = isFollowing;
+      setIsFollowing(!isFollowing);
+      setFollowersCount(prev => isFollowing ? Math.max(0, prev - 1) : prev + 1);
+
       if (isFollowing) {
-        await api.delete(`/follows/unfollow/${queryId}`);
-        setIsFollowing(false);
-        setFollowersCount(prev => Math.max(0, prev - 1));
+        await api.post(`/unfollow/${queryId}`);
+        if (socket) {
+          socket.emit('unfollow-user', { targetUserId: queryId });
+        }
       } else {
-        await api.post(`/follows/follow/${queryId}`);
-        setIsFollowing(true);
-        setFollowersCount(prev => prev + 1);
+        await api.post(`/follow/${queryId}`);
+        if (socket) {
+          socket.emit('follow-user', { targetUserId: queryId });
+        }
       }
     } catch (err) {
       console.error('Follow action failed:', err);
+      // Revert optimistic UI on failure
+      setIsFollowing(isFollowing);
+      setFollowersCount(prev => isFollowing ? prev + 1 : Math.max(0, prev - 1));
     }
   };
 
@@ -416,6 +451,43 @@ const ProfilePage = () => {
   useEffect(() => {
     fetchProfileDetails();
   }, [user]); // Re-fetch whenever context user changes
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const queryId = new URLSearchParams(window.location.search).get('id') || user?.user?._id || user?.id || user?._id;
+    if (!queryId) return;
+
+    // Join room & fetch latest counts
+    socket.emit('request-follow-count', { targetUserId: queryId });
+    socket.emit('request-following-count', { targetUserId: queryId });
+
+    const handleFollowersUpdated = (data) => {
+      if (data.userId.toString() === queryId.toString()) {
+        setFollowersCount(data.followersCount);
+      }
+    };
+
+    const handleFollowingUpdated = (data) => {
+      if (data.userId.toString() === queryId.toString()) {
+        setFollowingCount(data.followingCount);
+      }
+    };
+
+    const handleProfileUpdatedEvent = () => {
+      fetchProfileDetails();
+    };
+
+    socket.on('followers-count-updated', handleFollowersUpdated);
+    socket.on('following-count-updated', handleFollowingUpdated);
+    socket.on('profile-updated', handleProfileUpdatedEvent);
+
+    return () => {
+      socket.off('followers-count-updated', handleFollowersUpdated);
+      socket.off('following-count-updated', handleFollowingUpdated);
+      socket.off('profile-updated', handleProfileUpdatedEvent);
+    };
+  }, [socket, window.location.search, user]);
 
   const handleScholarImport = async (e) => {
     e.preventDefault();
@@ -707,6 +779,42 @@ const ProfilePage = () => {
                 );
               })}
             </div>
+            
+            {/* Mutual Followers Section */}
+            {!isOwnProfile && mutualFollowers && mutualFollowers.length > 0 && (
+              <div className="flex items-center space-x-2.5 pt-4 text-xs font-semibold text-slate-500 font-sans border-t border-slate-100 mt-2">
+                <div className="flex -space-x-2.5 overflow-hidden">
+                  {mutualFollowers.slice(0, 3).map((m) => (
+                    <div key={m.user._id} className="inline-block h-6.5 w-6.5 rounded-full ring-2 ring-white bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-650 shrink-0 overflow-hidden">
+                      {m.profile?.profilePhoto ? (
+                        <img className="h-full w-full object-cover" src={m.profile.profilePhoto} alt={m.user.fullName} />
+                      ) : (
+                        m.user.fullName[0]
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="leading-snug">
+                  <span>Followed by </span>
+                  {mutualFollowers.slice(0, 2).map((m, idx) => (
+                    <React.Fragment key={m.user._id}>
+                      <span className="font-bold text-slate-800 hover:text-indigo-600 transition-colors hover:underline cursor-pointer" onClick={() => navigate(`/profile?id=${m.user._id}`)}>
+                        {m.user.fullName.split(' ')[0]}
+                      </span>
+                      {idx === 0 && mutualFollowers.length > 1 && ', '}
+                    </React.Fragment>
+                  ))}
+                  {mutualFollowers.length > 2 && (
+                    <>
+                      <span> and </span>
+                      <span className="font-bold text-slate-800 hover:text-indigo-600 transition-colors hover:underline cursor-pointer" onClick={() => navigate(`/followers?id=${queryId}`)}>
+                        +{mutualFollowers.length - 2} others
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1195,7 +1303,10 @@ const ProfilePage = () => {
                     publications.slice(0, 3).map((pub) => (
                       <div key={pub._id} className="pt-5 first:pt-0 space-y-2.5">
                         <div className="flex items-start justify-between gap-4">
-                          <h4 className="font-bold text-slate-800 text-sm hover:text-blue-600 hover:underline cursor-pointer leading-snug">
+                          <h4 
+                            onClick={() => navigate(`/publications/${pub._id || pub.slug}`)}
+                            className="font-bold text-slate-800 text-sm hover:text-blue-600 hover:underline cursor-pointer leading-snug"
+                          >
                             {pub.title}
                           </h4>
                           <span className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100/50 rounded-lg text-[9px] font-extrabold shrink-0">
@@ -1203,9 +1314,22 @@ const ProfilePage = () => {
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{pub.abstract}</p>
-                        <div className="flex items-center gap-4 text-[10px] text-slate-400 font-medium">
-                          {pub.journal && <span className="italic">{pub.journal}</span>}
-                          <span>Year: {pub.publicationYear}</span>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                          <div className="flex gap-4">
+                            {pub.journal && <span className="italic">{pub.journal}</span>}
+                            <span>Year: {pub.publicationYear}</span>
+                          </div>
+                          <div className="relative group/tooltip shrink-0">
+                            <button 
+                              onClick={(e) => handleDownloadPub(e, pub)}
+                              className="p-1 rounded bg-slate-100 hover:bg-blue-50 hover:scale-110 text-slate-500 hover:text-blue-600 transition-all cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover/tooltip:block bg-slate-900 text-white text-[8px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-10 font-bold">
+                              Download Publication
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -1236,9 +1360,22 @@ const ProfilePage = () => {
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{pub.abstract}</p>
-                        <div className="flex items-center gap-4 text-[10px] text-slate-400 font-medium">
-                          {pub.journal && <span className="italic">{pub.journal}</span>}
-                          <span>Year: {pub.publicationYear}</span>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                          <div className="flex gap-4">
+                            {pub.journal && <span className="italic">{pub.journal}</span>}
+                            <span>Year: {pub.publicationYear}</span>
+                          </div>
+                          <div className="relative group/tooltip shrink-0">
+                            <button 
+                              onClick={(e) => handleDownloadPub(e, pub)}
+                              className="p-1 rounded bg-slate-100 hover:bg-blue-50 hover:scale-110 text-slate-500 hover:text-blue-600 transition-all cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover/tooltip:block bg-slate-900 text-white text-[8px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-10 font-bold">
+                              Download Publication
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -1383,7 +1520,10 @@ const ProfilePage = () => {
                   {publications.map((pub, idx) => (
                     <div key={pub._id} className={`pt-6 ${idx === 0 ? 'pt-0' : ''} space-y-3 text-left group`}>
                       <div className="flex items-start justify-between gap-4">
-                        <h4 className="font-bold text-slate-800 text-sm leading-snug group-hover:text-blue-600 transition-colors">
+                        <h4 
+                          onClick={() => navigate(`/publications/${pub._id || pub.slug}`)}
+                          className="font-bold text-slate-800 text-sm leading-snug group-hover:text-blue-600 cursor-pointer transition-colors"
+                        >
                           {pub.title}
                         </h4>
                         
@@ -1417,26 +1557,39 @@ const ProfilePage = () => {
                       )}
 
                       {/* Paper details footer */}
-                      <div className="flex flex-wrap items-center gap-4 text-[10px] text-slate-400 font-medium font-sans">
-                        {pub.journal && (
-                          <span className="italic">{pub.journal}</span>
-                        )}
-                        <span>Year: {pub.publicationYear}</span>
-                        {pub.doi && (
-                          <span className="hover:text-blue-600 cursor-pointer flex items-center gap-0.5">
-                            DOI: {pub.doi} <ExternalLink className="w-2.5 h-2.5" />
-                          </span>
-                        )}
-                        {pub.pdfUrl && (
-                          <a 
-                            href={pub.pdfUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline flex items-center gap-0.5"
+                      <div className="flex flex-wrap items-center justify-between gap-4 text-[10px] text-slate-400 font-medium font-sans">
+                        <div className="flex flex-wrap items-center gap-4">
+                          {pub.journal && (
+                            <span className="italic">{pub.journal}</span>
+                          )}
+                          <span>Year: {pub.publicationYear}</span>
+                          {pub.doi && (
+                            <span className="hover:text-blue-600 cursor-pointer flex items-center gap-0.5">
+                              DOI: {pub.doi} <ExternalLink className="w-2.5 h-2.5" />
+                            </span>
+                          )}
+                          {pub.pdfUrl && (
+                            <a 
+                              href={pub.pdfUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline flex items-center gap-0.5"
+                            >
+                              View PDF <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                        <div className="relative group/tooltip shrink-0">
+                          <button 
+                            onClick={(e) => handleDownloadPub(e, pub)}
+                            className="p-1 rounded bg-slate-100 hover:bg-blue-50 hover:scale-110 text-slate-500 hover:text-blue-600 transition-all cursor-pointer"
                           >
-                            View PDF <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        )}
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover/tooltip:block bg-slate-900 text-white text-[8px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-10 font-bold">
+                            Download Publication
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1642,14 +1795,20 @@ const ProfilePage = () => {
               <Users className="w-4 h-4 text-blue-600" />
             </div>
             <div className="grid grid-cols-2 gap-3 font-sans">
-              <div className="bg-slate-50/65 border border-slate-100 p-3.5 rounded-2xl text-center">
+              <Link 
+                to={`/followers?id=${queryId}`}
+                className="bg-slate-50/65 border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/10 p-3.5 rounded-2xl text-center block transition-all"
+              >
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Followers</span>
                 <span className="text-xl font-black text-slate-900 mt-1 block">{followersCount}</span>
-              </div>
-              <div className="bg-slate-50/65 border border-slate-100 p-3.5 rounded-2xl text-center">
+              </Link>
+              <Link 
+                to={`/following?id=${queryId}`}
+                className="bg-slate-50/65 border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/10 p-3.5 rounded-2xl text-center block transition-all"
+              >
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Following</span>
                 <span className="text-xl font-black text-slate-900 mt-1 block">{followingCount}</span>
-              </div>
+              </Link>
             </div>
           </div>
 
@@ -1940,6 +2099,7 @@ const ProfilePage = () => {
         }} 
         onSaveSuccess={() => {
           fetchProfileDetails();
+          syncProfile();
         }} 
       />
       <SyncMergeModal
@@ -1948,6 +2108,7 @@ const ProfilePage = () => {
         onSyncComplete={async () => {
           setLoading(true);
           await fetchProfileDetails();
+          syncProfile();
           alert('Profile sync completed successfully!');
         }}
       />

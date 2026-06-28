@@ -4,7 +4,7 @@ import PublicationKeyword from '../models/PublicationKeyword.js';
 import PublicationResearchArea from '../models/PublicationResearchArea.js';
 import UserKeyword from '../models/UserKeyword.js';
 import UserResearchArea from '../models/UserResearchArea.js';
-import Follower from '../models/Follower.js';
+import Follow from '../models/Follow.js';
 import Profile from '../models/Profile.js';
 import User from '../models/User.js';
 import ResearchFeed from '../models/ResearchFeed.js';
@@ -129,8 +129,8 @@ export const rebuildPersonalizedFeed = async (userId) => {
   const userAreaIds = userAreas.map((a) => a.researchArea._id.toString());
 
   // 2. Get researchers followed by current user for network score
-  const followings = await Follower.find({ follower: userId }).select('following').lean();
-  const followingIds = followings.map((f) => f.following.toString());
+  const followings = await Follow.find({ followerId: userId }).select('followingId').lean();
+  const followingIds = followings.map((f) => f.followingId.toString());
 
   // 3. Fetch all active publications (excluding deleted ones)
   const query = { isDeleted: { $ne: true } };

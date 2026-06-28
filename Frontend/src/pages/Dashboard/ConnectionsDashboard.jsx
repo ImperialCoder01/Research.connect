@@ -120,9 +120,10 @@ const ConnectionsDashboard = () => {
   // Follow Actions
   const handleFollow = async (id, name) => {
     try {
-      await api.post(`/follows/follow/${id}`);
+      await api.post(`/follow/${id}`);
       triggerToast(`You are now following ${name}!`);
       fetchNetworkData();
+      if (socket) socket.emit('follow-user', { targetUserId: id });
     } catch (err) {
       triggerToast('Failed to follow user', 'error');
     }
@@ -130,9 +131,10 @@ const ConnectionsDashboard = () => {
 
   const handleUnfollow = async (id, name) => {
     try {
-      await api.delete(`/follows/unfollow/${id}`);
+      await api.post(`/unfollow/${id}`);
       triggerToast(`Unfollowed ${name}.`);
       fetchNetworkData();
+      if (socket) socket.emit('unfollow-user', { targetUserId: id });
     } catch (err) {
       triggerToast('Failed to unfollow user', 'error');
     }
@@ -569,10 +571,15 @@ const ConnectionsDashboard = () => {
                 
                 {/* Following list */}
                 <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm">
-                  <h3 className="text-lg font-bold text-slate-950 mb-4 flex items-center">
-                    <UserCheck className="h-5 w-5 mr-2 text-blue-600" />
-                    People I Follow
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-slate-950 flex items-center">
+                      <UserCheck className="h-5 w-5 mr-2 text-blue-600" />
+                      People I Follow
+                    </h3>
+                    <a href="/following" className="text-xs font-bold text-blue-600 hover:underline">
+                      View All
+                    </a>
+                  </div>
 
                   {followData.following?.length === 0 ? (
                     <p className="text-sm text-slate-400 italic py-6 text-center border border-dashed border-slate-100 rounded-xl">
@@ -609,10 +616,15 @@ const ConnectionsDashboard = () => {
 
                 {/* Followers list */}
                 <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm">
-                  <h3 className="text-lg font-bold text-slate-950 mb-4 flex items-center">
-                    <Users className="h-5 w-5 mr-2 text-emerald-600" />
-                    My Followers
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-slate-950 flex items-center">
+                      <Users className="h-5 w-5 mr-2 text-emerald-600" />
+                      My Followers
+                    </h3>
+                    <a href="/followers" className="text-xs font-bold text-blue-600 hover:underline">
+                      View All
+                    </a>
+                  </div>
 
                   {followData.followers?.length === 0 ? (
                     <p className="text-sm text-slate-400 italic py-6 text-center border border-dashed border-slate-100 rounded-xl">

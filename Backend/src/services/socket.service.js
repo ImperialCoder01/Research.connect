@@ -44,6 +44,99 @@ export const initSocket = (server) => {
     socket.join(userId.toString());
     console.log(`🔌 User connected: ${userId} (Socket ID: ${socket.id}). Total active users: ${userSockets.size}`);
 
+    // Join profile room for real-time count updates
+    socket.on('request-follow-count', async ({ targetUserId }) => {
+      try {
+        const User = (await import('../models/User.js')).default;
+        const user = await User.findById(targetUserId).select('followersCount');
+        socket.join(`profile:${targetUserId}`);
+        socket.emit('followers-count-updated', {
+          userId: targetUserId,
+          followersCount: user?.followersCount || 0,
+        });
+      } catch (err) {
+        console.error('Error on request-follow-count:', err.message);
+      }
+    });
+
+    socket.on('request-following-count', async ({ targetUserId }) => {
+      try {
+        const User = (await import('../models/User.js')).default;
+        const user = await User.findById(targetUserId).select('followingCount');
+        socket.join(`profile:${targetUserId}`);
+        socket.emit('following-count-updated', {
+          userId: targetUserId,
+          followingCount: user?.followingCount || 0,
+        });
+      } catch (err) {
+        console.error('Error on request-following-count:', err.message);
+      }
+    });
+
+    // Handle follow-user via socket
+    socket.on('follow-user', async ({ targetUserId }) => {
+      try {
+        const followService = await import('./follow.service.js');
+        const { followedUser, followerUser, notification } = await followService.followUser(userId, targetUserId);
+        
+        socket.emit('follow-success', { targetUserId });
+
+        // Broadcast counts
+        io.to(`profile:${targetUserId}`).emit('followers-count-updated', {
+          userId: targetUserId,
+          followersCount: followedUser.followersCount,
+        });
+        io.to(`profile:${userId}`).emit('following-count-updated', {
+          userId,
+          followingCount: followerUser.followingCount,
+        });
+
+        // Notify target user
+        io.to(targetUserId.toString()).emit('researcher-followed', {
+          followerId: userId,
+          followerName: followerUser.fullName,
+        });
+        io.to(targetUserId.toString()).emit('notification-created', notification);
+
+        // Broadcast profile update
+        io.to(`profile:${targetUserId}`).emit('profile-updated');
+        io.to(`profile:${userId}`).emit('profile-updated');
+      } catch (err) {
+        socket.emit('follow-error', { message: err.message });
+      }
+    });
+
+    // Handle unfollow-user via socket
+    socket.on('unfollow-user', async ({ targetUserId }) => {
+      try {
+        const followService = await import('./follow.service.js');
+        const { followedUser, followerUser } = await followService.unfollowUser(userId, targetUserId);
+
+        socket.emit('unfollow-success', { targetUserId });
+
+        // Broadcast counts
+        io.to(`profile:${targetUserId}`).emit('followers-count-updated', {
+          userId: targetUserId,
+          followersCount: followedUser.followersCount,
+        });
+        io.to(`profile:${userId}`).emit('following-count-updated', {
+          userId,
+          followingCount: followerUser.followingCount,
+        });
+
+        // Notify target user
+        io.to(targetUserId.toString()).emit('researcher-unfollowed', {
+          followerId: userId,
+        });
+
+        // Broadcast profile update
+        io.to(`profile:${targetUserId}`).emit('profile-updated');
+        io.to(`profile:${userId}`).emit('profile-updated');
+      } catch (err) {
+        socket.emit('unfollow-error', { message: err.message });
+      }
+    });
+
     socket.on('disconnect', () => {
       const userIds = userSockets.get(userId.toString());
       if (userIds) {
@@ -57,6 +150,24 @@ export const initSocket = (server) => {
   });
 
   return io;
+};
+
+/**
+ * Broadcasts follow and following count updates to room-specific clients
+ */
+export const broadcastFollowUpdate = (followerId, followingId, followersCount, followingCount) => {
+  if (io) {
+    io.to(`profile:${followingId}`).emit('followers-count-updated', {
+      userId: followingId,
+      followersCount,
+    });
+    io.to(`profile:${followerId}`).emit('following-count-updated', {
+      userId: followerId,
+      followingCount,
+    });
+    io.to(`profile:${followingId}`).emit('profile-updated');
+    io.to(`profile:${followerId}`).emit('profile-updated');
+  }
 };
 
 /**

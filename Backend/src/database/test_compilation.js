@@ -18,10 +18,11 @@ import CollaborationRequest from '../models/CollaborationRequest.js';
 import Recommendation from '../models/Recommendation.js';
 import Notification from '../models/Notification.js';
 import SavedPublication from '../models/SavedPublication.js';
-import Follower from '../models/Follower.js';
+import Follow from '../models/Follow.js';
 import SearchHistory from '../models/SearchHistory.js';
 import ActivityLog from '../models/ActivityLog.js';
 import Report from '../models/Report.js';
+import DownloadAnalytics from '../models/DownloadAnalytics.js';
 
 dotenv.config();
 
@@ -45,10 +46,11 @@ const testCompilation = () => {
     { name: 'Recommendation', model: Recommendation },
     { name: 'Notification', model: Notification },
     { name: 'SavedPublication', model: SavedPublication },
-    { name: 'Follower', model: Follower },
+    { name: 'Follow', model: Follow },
     { name: 'SearchHistory', model: SearchHistory },
     { name: 'ActivityLog', model: ActivityLog },
-    { name: 'Report', model: Report }
+    { name: 'Report', model: Report },
+    { name: 'DownloadAnalytics', model: DownloadAnalytics }
   ];
 
   let successCount = 0;

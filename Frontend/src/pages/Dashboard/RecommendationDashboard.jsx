@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Users, FileText, TrendingUp, Compass, Bookmark, Check } from 'lucide-react';
+import PublicationCard from '../Search/components/PublicationCard';
 
 export default function RecommendationDashboard() {
   const [researchers, setResearchers] = useState([]);
@@ -196,58 +197,10 @@ export default function RecommendationDashboard() {
             {publications.length === 0 ? (
               <p className="text-slate-500 text-sm py-4">No recommended publications available.</p>
             ) : (
-              <div className="space-y-4">
-                {publications.map((pub) => {
-                  const isBookmarked = bookmarkedIds.has(pub._id);
-                  return (
-                    <div 
-                      key={pub._id}
-                      className="bg-slate-950/60 border border-slate-850 hover:border-slate-750 rounded-xl p-4 flex justify-between gap-4 transition-all duration-200"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-[10px] bg-slate-900 border border-slate-850 px-2 py-0.5 rounded-md text-slate-400 capitalize">
-                            {pub.publicationType || 'Article'}
-                          </span>
-                          {pub.score && (
-                            <span className="text-[10px] text-blue-400 font-semibold bg-blue-500/5 border border-blue-500/20 px-2 py-0.5 rounded-md">
-                              {pub.score}% match
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="font-bold text-white text-sm hover:text-blue-400 cursor-pointer mb-1.5 leading-snug">
-                          {pub.title}
-                        </h3>
-                        <p className="text-xs text-slate-400 line-clamp-2 mb-3">
-                          {pub.abstract}
-                        </p>
-                        <div className="flex items-center gap-4 text-[10px] text-slate-500">
-                          <span>{pub.journal || pub.conference || 'Unknown venue'}</span>
-                          <span>•</span>
-                          <span>{pub.publicationYear || '2026'}</span>
-                          <span>•</span>
-                          <span>{pub.citationCount || 0} citations</span>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col justify-between items-end">
-                        <button
-                          onClick={() => handleBookmark(pub._id)}
-                          className={`p-2 rounded-lg transition-colors border ${
-                            isBookmarked 
-                              ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' 
-                              : 'bg-slate-900 border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                          }`}
-                        >
-                          <Bookmark className="w-4 h-4" />
-                        </button>
-                        <button className="text-xs text-blue-400 font-bold hover:underline mt-4">
-                          Read Paper &rarr;
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {publications.map((pub) => (
+                  <PublicationCard key={pub._id} publication={pub} />
+                ))}
               </div>
             )}
           </section>

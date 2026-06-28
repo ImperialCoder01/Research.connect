@@ -207,6 +207,11 @@ export const updateProfile = async (req, res, next) => {
       return next(new AppError('Profile not found.', 404));
     }
 
+    if (displayName) {
+      const User = (await import('../models/User.js')).default;
+      await User.findByIdAndUpdate(req.user._id, { fullName: displayName });
+    }
+
     // Save snapshot to history (limit history to 10 versions to optimize space)
     try {
       const latestHistory = await ProfileHistory.findOne({ user: req.user._id }).sort({ version: -1 });
@@ -959,6 +964,11 @@ export const patchProfile = async (req, res, next) => {
     }
 
     await profile.save();
+
+    if (req.body.displayName) {
+      const User = (await import('../models/User.js')).default;
+      await User.findByIdAndUpdate(req.user._id, { fullName: req.body.displayName });
+    }
 
     // Log Profile History snapshot
     try {

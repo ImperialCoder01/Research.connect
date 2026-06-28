@@ -6,7 +6,7 @@ import { dirname, join } from 'path';
 // Load models
 import User from '../models/User.js';
 import Profile from '../models/Profile.js';
-import Follower from '../models/Follower.js';
+import Follow from '../models/Follow.js';
 import ResearcherConnection from '../models/ResearcherConnection.js';
 import CollaborationStatus from '../models/CollaborationStatus.js';
 import CollaborationPreference from '../models/CollaborationPreference.js';
@@ -82,23 +82,23 @@ async function runTests() {
 
   await test('Follower & Following Flow', async () => {
     // Alice follows Bob
-    const followRecord = await Follower.create({
-      follower: userA._id,
-      following: userB._id
+    const followRecord = await Follow.create({
+      followerId: userA._id,
+      followingId: userB._id
     });
 
     if (!followRecord) throw new Error('Failed to create follow record');
 
     // Check counts
-    const followersOfBob = await Follower.countDocuments({ following: userB._id });
-    const followingByAlice = await Follower.countDocuments({ follower: userA._id });
+    const followersOfBob = await Follow.countDocuments({ followingId: userB._id });
+    const followingByAlice = await Follow.countDocuments({ followerId: userA._id });
 
     if (followersOfBob !== 1) throw new Error(`Expected Bob to have 1 follower, got ${followersOfBob}`);
     if (followingByAlice !== 1) throw new Error(`Expected Alice to follow 1 user, got ${followingByAlice}`);
 
     // Alice unfollows Bob
-    await Follower.deleteOne({ follower: userA._id, following: userB._id });
-    const followersAfterUnfollow = await Follower.countDocuments({ following: userB._id });
+    await Follow.deleteOne({ followerId: userA._id, followingId: userB._id });
+    const followersAfterUnfollow = await Follow.countDocuments({ followingId: userB._id });
     if (followersAfterUnfollow !== 0) throw new Error('Unfollow did not decrement count');
   });
 
@@ -215,7 +215,7 @@ async function runTests() {
   // Tear down
   await User.deleteMany({ email: { $in: [testEmailA, testEmailB] } });
   await Profile.deleteMany({ user: { $in: [userA._id, userB._id] } });
-  await Follower.deleteMany({ $or: [{ follower: userA._id }, { following: userB._id }] });
+  await Follow.deleteMany({ $or: [{ followerId: userA._id }, { followingId: userB._id }] });
   await ResearcherConnection.deleteMany({ $or: [{ requester: userA._id }, { receiver: userA._id }] });
   await CollaborationStatus.deleteMany({ user: { $in: [userA._id, userB._id] } });
   await CollaborationPreference.deleteMany({ user: { $in: [userA._id, userB._id] } });

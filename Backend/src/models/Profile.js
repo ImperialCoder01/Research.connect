@@ -111,6 +111,26 @@ const profileSchema = new mongoose.Schema(
       default: 'public',
       index: true,
     },
+    privacySettings: {
+      allowFollowFrom: {
+        type: String,
+        enum: ['anyone', 'researchers'],
+        default: 'anyone',
+      },
+      followersHidden: {
+        type: Boolean,
+        default: false,
+      },
+      followingHidden: {
+        type: Boolean,
+        default: false,
+      },
+      activityPrivacy: {
+        type: String,
+        enum: ['public', 'followers', 'private'],
+        default: 'public',
+      },
+    },
     socialLinks: {
       linkedin: { type: String, default: '' },
       twitter: { type: String, default: '' },

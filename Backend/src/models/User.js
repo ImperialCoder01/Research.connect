@@ -34,6 +34,16 @@ const userSchema = new mongoose.Schema(
       enum: ['researcher', 'admin', 'reviewer', 'sponsor'],
       default: 'researcher',
     },
+    followersCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+    followingCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
     twoFactorEnabled: {
       type: Boolean,
       default: true,

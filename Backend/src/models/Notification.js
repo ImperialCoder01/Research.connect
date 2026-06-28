@@ -24,7 +24,7 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['Recommendation', 'Publication', 'Collaboration', 'System', 'Profile'],
+      enum: ['Recommendation', 'Publication', 'Collaboration', 'System', 'Profile', 'Follow'],
       required: true,
       index: true,
     },
@@ -39,7 +39,7 @@ const notificationSchema = new mongoose.Schema(
     },
     onModel: {
       type: String,
-      enum: ['Publication', 'Profile', 'CollaborationRequest'],
+      enum: ['Publication', 'Profile', 'CollaborationRequest', 'Follow'],
     },
   },
   {

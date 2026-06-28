@@ -16,7 +16,7 @@ import CollaborationRequest from '../models/CollaborationRequest.js';
 import Recommendation from '../models/Recommendation.js';
 import Notification from '../models/Notification.js';
 import SavedPublication from '../models/SavedPublication.js';
-import Follower from '../models/Follower.js';
+import Follow from '../models/Follow.js';
 import SearchHistory from '../models/SearchHistory.js';
 import ActivityLog from '../models/ActivityLog.js';
 import Report from '../models/Report.js';
@@ -498,11 +498,15 @@ const seedDatabase = async () => {
 
     // 12. Seed Followers
     console.log('🌱 Seeding follower connections...');
-    await Follower.create([
-      { follower: alex._id, following: sarah._id },
-      { follower: yuki._id, following: sarah._id },
-      { follower: sarah._id, following: alex._id },
+    await Follow.create([
+      { followerId: alex._id, followingId: sarah._id },
+      { followerId: yuki._id, followingId: sarah._id },
+      { followerId: sarah._id, followingId: alex._id },
     ]);
+    // Update cached counts
+    await User.findByIdAndUpdate(alex._id, { followingCount: 1, followersCount: 1 });
+    await User.findByIdAndUpdate(sarah._id, { followingCount: 1, followersCount: 2 });
+    await User.findByIdAndUpdate(yuki._id, { followingCount: 1, followersCount: 0 });
     console.log('✅ Seeded Followers.');
 
     // 13. Seed Collaboration Request

@@ -30,6 +30,6 @@ router.use('/taxonomy', taxonomyRouter);
 router.use('/search', searchRouter);
 router.use('/collaboration', collaborationRouter);
 router.use('/connections', connectionRouter);
-router.use('/follows', followRouter);
+router.use('/', followRouter);
 
 export default router;

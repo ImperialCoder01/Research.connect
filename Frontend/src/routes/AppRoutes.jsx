@@ -27,6 +27,8 @@ import GlobalSearch from '../pages/Search/GlobalSearch.jsx';
 import RecommendationDashboard from '../pages/Dashboard/RecommendationDashboard.jsx';
 import CollaborationDashboard from '../pages/Dashboard/CollaborationDashboard.jsx';
 import ConnectionsDashboard from '../pages/Dashboard/ConnectionsDashboard.jsx';
+import FollowersPage from '../pages/Dashboard/FollowersPage.jsx';
+import FollowingPage from '../pages/Dashboard/FollowingPage.jsx';
 
 // Gate
 import ProtectedRoute from './ProtectedRoute.jsx';
@@ -125,6 +127,22 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <ConnectionsDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="followers" 
+          element={
+            <ProtectedRoute>
+              <FollowersPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="following" 
+          element={
+            <ProtectedRoute>
+              <FollowingPage />
             </ProtectedRoute>
           } 
         />

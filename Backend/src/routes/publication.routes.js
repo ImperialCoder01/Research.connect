@@ -20,6 +20,15 @@ import {
   uploadCoverImage,
   uploadSupplementaryFiles,
   publishDraft,
+  getPublicationDownload,
+  getPublicationRead,
+  getPublicationSource,
+  logPublicationView,
+  logPublicationDownload,
+  togglePublicationBookmark,
+  logPublicationShare,
+  getPublicationPdf,
+  getPublicationCitation,
 } from '../controllers/publication.controller.js';
 import {
   createPublicationValidator,
@@ -78,16 +87,31 @@ router.post('/types', protect, createPublicationType);
 router.get('/licenses', getLicenses);
 router.get('/search', searchPublications);
 
+// Analytics, bookmark, share POST routes (must come before /:id)
+router.post('/views', logPublicationView);
+router.post('/downloads', logPublicationDownload);
+router.post('/bookmark', protect, togglePublicationBookmark);
+router.post('/share', logPublicationShare);
+
+// GET routes (must come before /:id)
+router.get('/download/:id', getPublicationDownload);
+router.get('/read/:id', getPublicationRead);
+router.get('/source/:id', getPublicationSource);
+router.get('/pdf/:id', getPublicationPdf);
+router.get('/citation/:id', getPublicationCitation);
+
 // Core publications routes
 router
   .route('/')
   .get(getPublicationsValidator, getAllPublications)
   .post(protect, createPublicationValidator, createPublication);
 
+// GET publication detail allows ObjectId or Slug
+router.get('/:id', getPublicationById);
+
 router
   .route('/:id')
-  .get(mongoIdValidator, getPublicationById)
-  .put(protect, updatePublicationValidator, updatePublication)
+  .put(protect, mongoIdValidator, updatePublicationValidator, updatePublication)
   .delete(protect, mongoIdValidator, deletePublication);
 
 // Publishing draft

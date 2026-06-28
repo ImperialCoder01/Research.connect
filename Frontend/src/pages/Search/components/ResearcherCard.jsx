@@ -1,12 +1,36 @@
 import React, { useState } from 'react';
 import { UserPlus, MessageSquare, Briefcase, Award, Check } from 'lucide-react';
+import api from '../../../services/api';
+import { useSocket } from '../../../context/SocketContext';
 
 export default function ResearcherCard({ researcher }) {
+  const { socket } = useSocket();
   const [connected, setConnected] = useState(false);
-  const [following, setFollowing] = useState(false);
+  const [following, setFollowing] = useState(researcher.isFollowing || false);
 
   const profile = researcher || {};
   const userObj = researcher.user || {};
+
+  const handleFollowToggle = async () => {
+    const targetId = userObj._id || researcher._id;
+    if (!targetId) return;
+
+    const originalFollowing = following;
+    setFollowing(!following);
+
+    try {
+      if (following) {
+        await api.post(`/unfollow/${targetId}`);
+        if (socket) socket.emit('unfollow-user', { targetUserId: targetId });
+      } else {
+        await api.post(`/follow/${targetId}`);
+        if (socket) socket.emit('follow-user', { targetUserId: targetId });
+      }
+    } catch (err) {
+      console.error('Follow toggle failed in card:', err);
+      setFollowing(originalFollowing);
+    }
+  };
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-700 transition-all duration-200 shadow-lg text-white">
@@ -79,10 +103,21 @@ export default function ResearcherCard({ researcher }) {
           {connected ? 'Connected' : 'Connect'}
         </button>
         <button
-          onClick={() => setFollowing(!following)}
-          className="px-3 py-2 text-xs font-bold border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-300 rounded-xl transition-colors"
+          onClick={handleFollowToggle}
+          className={`px-3 py-2 text-xs font-bold border rounded-xl transition-all duration-200 cursor-pointer group ${
+            following 
+              ? 'border-slate-700 text-slate-400 hover:text-rose-500 hover:border-rose-900/30 hover:bg-rose-950/15' 
+              : 'border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-300'
+          }`}
         >
-          {following ? 'Following' : 'Follow'}
+          {following ? (
+            <>
+              <span className="group-hover:hidden">Following</span>
+              <span className="hidden group-hover:inline">Unfollow</span>
+            </>
+          ) : (
+            '+ Follow'
+          )}
         </button>
         <button className="p-2 border border-slate-800 hover:border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors">
           <MessageSquare className="w-4 h-4" />

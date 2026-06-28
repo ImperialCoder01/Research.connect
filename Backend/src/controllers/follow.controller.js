@@ -1,68 +1,42 @@
-import Follower from '../models/Follower.js';
-import User from '../models/User.js';
-import Profile from '../models/Profile.js';
-import BlockedUser from '../models/BlockedUser.js';
-import ResearcherSimilarity from '../models/ResearcherSimilarity.js';
-import CollaborationNotification from '../models/CollaborationNotification.js';
-import AppError from '../utils/AppError.js';
-import { sendRealTimeNotification } from '../services/socket.service.js';
+import * as followService from '../services/follow.service.js';
+import { broadcastFollowUpdate, sendRealTimeNotification } from '../services/socket.service.js';
 import { sendNewFollowerEmail } from '../services/email.service.js';
+import User from '../models/User.js';
 
+/**
+ * Follow a researcher
+ * POST /api/follow/:userId
+ */
 export const followUser = async (req, res, next) => {
   try {
-    const followerId = req.user.id;
-    const { userId } = req.params; // The user to follow (following)
+    const followerId = req.user.id || req.user._id;
+    const { userId: followingId } = req.params;
 
-    if (followerId === userId) {
-      return next(new AppError('You cannot follow yourself', 400));
-    }
-
-    // Check if blocked
-    const isBlocked = await BlockedUser.findOne({
-      $or: [
-        { blocker: followerId, blocked: userId },
-        { blocker: userId, blocked: followerId },
-      ],
-    });
-
-    if (isBlocked) {
-      return next(new AppError('Action not allowed. User is blocked.', 403));
-    }
-
-    // Check if already following
-    const existing = await Follower.findOne({ follower: followerId, following: userId });
-    if (existing) {
-      return next(new AppError('You are already following this researcher', 400));
-    }
-
-    const follow = await Follower.create({
-      follower: followerId,
-      following: userId,
-    });
-
-    const followerUser = await User.findById(followerId);
-    const followingUser = await User.findById(userId);
-
-    // Create Notification
-    const notif = await CollaborationNotification.create({
-      user: userId,
-      sender: followerId,
-      title: 'New Follower',
-      message: `${followerUser.fullName} started following you`,
-      type: 'NewFollower',
-      relatedEntity: follow._id,
-      onModel: 'User',
-    });
-
-    // Real-time
-    sendRealTimeNotification(userId, 'NEW_FOLLOWER', {
-      notification: notif,
+    const { follow, followerUser, followedUser, notification } = await followService.followUser(
       followerId,
-    });
+      followingId
+    );
 
-    // Send Email
-    if (followingUser) {
-      await sendNewFollowerEmail(followingUser.email, followerUser.fullName);
+    // Broadcast count updates to all clients in the profile rooms
+    broadcastFollowUpdate(
+      followerId,
+      followingId,
+      followedUser.followersCount,
+      followerUser.followingCount
+    );
+
+    // Send real-time events directly to the target user
+    sendRealTimeNotification(followingId, 'researcher-followed', {
+      followerId,
+      followerName: followerUser.fullName,
+    });
+    sendRealTimeNotification(followingId, 'notification-created', notification);
+
+    // Send email notification in background
+    if (followedUser.email) {
+      sendNewFollowerEmail(followedUser.email, followerUser.fullName).catch((err) =>
+        console.error('Failed to send follower email:', err.message)
+      );
     }
 
     res.status(201).json({
@@ -74,15 +48,32 @@ export const followUser = async (req, res, next) => {
   }
 };
 
+/**
+ * Unfollow a researcher
+ * POST /api/unfollow/:userId
+ */
 export const unfollowUser = async (req, res, next) => {
   try {
-    const followerId = req.user.id;
-    const { userId } = req.params; // The user to unfollow
+    const followerId = req.user.id || req.user._id;
+    const { userId: followingId } = req.params;
 
-    const follow = await Follower.findOneAndDelete({ follower: followerId, following: userId });
-    if (!follow) {
-      return next(new AppError('You are not following this user', 404));
-    }
+    const { follow, followerUser, followedUser } = await followService.unfollowUser(
+      followerId,
+      followingId
+    );
+
+    // Broadcast count updates to all clients in the profile rooms
+    broadcastFollowUpdate(
+      followerId,
+      followingId,
+      followedUser.followersCount,
+      followerUser.followingCount
+    );
+
+    // Send real-time events directly to the target user
+    sendRealTimeNotification(followingId, 'researcher-unfollowed', {
+      followerId,
+    });
 
     res.status(200).json({
       status: 'success',
@@ -93,99 +84,165 @@ export const unfollowUser = async (req, res, next) => {
   }
 };
 
+/**
+ * Get followers list for a user
+ * GET /api/followers/:userId
+ */
 export const getFollowers = async (req, res, next) => {
   try {
     const { userId } = req.params;
+    const currentUserId = req.user?.id || req.user?._id;
 
-    const followers = await Follower.find({ following: userId })
-      .populate('follower', 'fullName email')
-      .sort({ createdAt: -1 });
-
-    const list = [];
-    for (const f of followers) {
-      const profile = await Profile.findOne({ user: f.follower._id })
-        .select('profilePhoto designation institution country');
-      list.push({
-        followId: f._id,
-        user: f.follower,
-        profile,
-        followedAt: f.createdAt,
-      });
-    }
+    const { followers, total, hasMore } = await followService.getFollowers(userId, {
+      ...req.query,
+      currentUserId,
+    });
 
     res.status(200).json({
       status: 'success',
-      data: list,
+      results: followers.length,
+      total,
+      hasMore,
+      data: followers,
     });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * Get following list for a user
+ * GET /api/following/:userId
+ */
 export const getFollowing = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
-    const following = await Follower.find({ follower: userId })
-      .populate('following', 'fullName email')
-      .sort({ createdAt: -1 });
-
-    const list = [];
-    for (const f of following) {
-      const profile = await Profile.findOne({ user: f.following._id })
-        .select('profilePhoto designation institution country');
-      list.push({
-        followId: f._id,
-        user: f.following,
-        profile,
-        followedAt: f.createdAt,
-      });
-    }
+    const { following, total, hasMore } = await followService.getFollowing(userId, req.query);
 
     res.status(200).json({
       status: 'success',
-      data: list,
+      results: following.length,
+      total,
+      hasMore,
+      data: following,
     });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * Get follow status between current user and target user
+ * GET /api/follow/status/:userId
+ */
+export const getFollowStatus = async (req, res, next) => {
+  try {
+    const followerId = req.user.id || req.user._id;
+    const { userId: followingId } = req.params;
+
+    const status = await followService.getFollowStatus(followerId, followingId);
+
+    res.status(200).json({
+      status: 'success',
+      data: status,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get mutual followers
+ * GET /api/follow/mutual/:userId
+ */
+export const getMutualFollowers = async (req, res, next) => {
+  try {
+    const currentUserId = req.user.id || req.user._id;
+    const { userId: targetUserId } = req.params;
+
+    const mutual = await followService.getMutualFollowers(currentUserId, targetUserId);
+
+    res.status(200).json({
+      status: 'success',
+      results: mutual.length,
+      data: mutual,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get follow suggestions
+ * GET /api/follow/suggestions
+ */
+export const getFollowSuggestions = async (req, res, next) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const limit = parseInt(req.query.limit, 10) || 5;
+
+    const suggestions = await followService.getFollowSuggestions(userId, limit);
+
+    res.status(200).json({
+      status: 'success',
+      results: suggestions.length,
+      data: suggestions,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get follow analytics
+ * GET /api/follow/analytics
+ */
+export const getFollowAnalytics = async (req, res, next) => {
+  try {
+    const userId = req.user.id || req.user._id;
+
+    const analytics = await followService.getFollowAnalytics(userId);
+
+    res.status(200).json({
+      status: 'success',
+      data: analytics,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get follower dashboard summary
+ * GET /api/follows/dashboard
+ */
 export const getFollowerDashboard = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.id || req.user._id;
 
     // 1. Followers
-    const followers = await Follower.find({ following: userId }).populate('follower', 'fullName email');
-    const followersList = [];
-    for (const f of followers) {
-      const profile = await Profile.findOne({ user: f.follower._id })
-        .select('profilePhoto designation institution country');
-      if (profile) {
-        followersList.push({ user: f.follower, profile, followedAt: f.createdAt });
-      }
-    }
+    const { followers } = await followService.getFollowers(userId, { limit: 5 });
 
     // 2. Following
-    const following = await Follower.find({ follower: userId }).populate('following', 'fullName email');
-    const followingList = [];
-    for (const f of following) {
-      const profile = await Profile.findOne({ user: f.following._id })
-        .select('profilePhoto designation institution country');
-      if (profile) {
-        followingList.push({ user: f.following, profile, followedAt: f.createdAt });
-      }
-    }
+    const { following } = await followService.getFollowing(userId, { limit: 5 });
 
-    // 3. Popular researchers (most followers overall)
-    const popularAgg = await Follower.aggregate([
-      { $group: { _id: '$following', followerCount: { $sum: 1 } } },
+    // 3. Suggested
+    const suggested = await followService.getFollowSuggestions(userId, 5);
+
+    // 4. Popular researchers
+    const Follow = (await import('../models/Follow.js')).default;
+    const Profile = (await import('../models/Profile.js')).default;
+    const User = (await import('../models/User.js')).default;
+
+    const popularAgg = await Follow.aggregate([
+      { $group: { _id: '$followingId', followerCount: { $sum: 1 } } },
       { $sort: { followerCount: -1 } },
-      { $limit: 5 },
+      { $limit: 6 },
     ]);
     const popularList = [];
     for (const item of popularAgg) {
-      if (item._id.toString() === userId) continue;
+      if (item._id.toString() === userId.toString()) continue;
       const user = await User.findById(item._id).select('fullName email');
       const profile = await Profile.findOne({ user: item._id })
         .select('profilePhoto designation institution country');
@@ -194,18 +251,18 @@ export const getFollowerDashboard = async (req, res, next) => {
       }
     }
 
-    // 4. Trending researchers (most followed in the last 30 days)
+    // 5. Trending researchers (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const trendingAgg = await Follower.aggregate([
+    const trendingAgg = await Follow.aggregate([
       { $match: { createdAt: { $gte: thirtyDaysAgo } } },
-      { $group: { _id: '$following', followerCount: { $sum: 1 } } },
+      { $group: { _id: '$followingId', followerCount: { $sum: 1 } } },
       { $sort: { followerCount: -1 } },
-      { $limit: 5 },
+      { $limit: 6 },
     ]);
     const trendingList = [];
     for (const item of trendingAgg) {
-      if (item._id.toString() === userId) continue;
+      if (item._id.toString() === userId.toString()) continue;
       const user = await User.findById(item._id).select('fullName email');
       const profile = await Profile.findOne({ user: item._id })
         .select('profilePhoto designation institution country');
@@ -214,44 +271,14 @@ export const getFollowerDashboard = async (req, res, next) => {
       }
     }
 
-    // 5. Suggested researchers (high similarity score, not already following)
-    const followingIds = new Set(following.map(f => f.following.toString()));
-    followingIds.add(userId);
-
-    const similarities = await ResearcherSimilarity.find({
-      $or: [{ researcherA: userId }, { researcherB: userId }],
-      similarityScore: { $gte: 30 },
-    })
-      .sort({ similarityScore: -1 })
-      .limit(5);
-
-    const suggestedList = [];
-    for (const sim of similarities) {
-      const partnerId = sim.researcherA.toString() === userId ? sim.researcherB : sim.researcherA;
-      if (followingIds.has(partnerId.toString())) continue;
-
-      const user = await User.findById(partnerId).select('fullName email');
-      const profile = await Profile.findOne({ user: partnerId })
-        .select('profilePhoto designation institution country bio');
-
-      if (user && profile) {
-        suggestedList.push({
-          user,
-          profile,
-          similarityScore: sim.similarityScore,
-          matchLevel: sim.matchLevel,
-        });
-      }
-    }
-
     res.status(200).json({
       status: 'success',
       data: {
-        followers: followersList,
-        following: followingList,
-        popular: popularList,
-        trending: trendingList,
-        suggested: suggestedList,
+        followers,
+        following,
+        suggested,
+        popular: popularList.slice(0, 5),
+        trending: trendingList.slice(0, 5),
       },
     });
   } catch (error) {
