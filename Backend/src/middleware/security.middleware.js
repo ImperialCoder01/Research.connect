@@ -19,6 +19,11 @@ export const rateLimiter = (options = {}) => {
   const message = options.message || 'Too many requests from this IP. Please try again later.';
 
   return (req, res, next) => {
+    // Bypass rate limiting in development mode
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+      return next();
+    }
+
     const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || '127.0.0.1';
     const now = Date.now();
 

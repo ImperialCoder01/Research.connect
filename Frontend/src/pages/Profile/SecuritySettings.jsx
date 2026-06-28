@@ -5,26 +5,20 @@ import {
   Laptop, 
   History, 
   LogOut, 
-  Key, 
   Globe, 
-  RefreshCw, 
   Trash2, 
   CheckCircle, 
-  AlertTriangle,
-  UserCheck
+  AlertTriangle
 } from 'lucide-react';
 import api from '../../services/api';
 import Button from '@/components/common/Button.jsx';
 
 const SecuritySettings = () => {
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
   const [sessions, setSessions] = useState([]);
-  const [trustedDevices, setTrustedDevices] = useState([]);
   const [loginActivity, setLoginActivity] = useState([]);
   const [securityLogs, setSecurityLogs] = useState([]);
   
   const [isLoading, setIsLoading] = useState(true);
-  const [toggling2FA, setToggling2FA] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
 
@@ -33,17 +27,13 @@ const SecuritySettings = () => {
     try {
       setIsLoading(true);
       
-      const [meRes, sessionsRes, devicesRes, activityRes, logsRes] = await Promise.all([
-        api.get('/auth/me'),
+      const [sessionsRes, activityRes, logsRes] = await Promise.all([
         api.get('/auth/sessions'),
-        api.get('/auth/trusted-devices'),
         api.get('/auth/login-activity'),
         api.get('/auth/security-logs')
       ]);
 
-      setTwoFactorEnabled(meRes.data?.user?.twoFactorEnabled ?? true);
       setSessions(sessionsRes.data?.sessions || []);
-      setTrustedDevices(devicesRes.data?.devices || []);
       setLoginActivity(activityRes.data?.activity || []);
       setSecurityLogs(logsRes.data?.logs || []);
     } catch (err) {
@@ -60,24 +50,6 @@ const SecuritySettings = () => {
   const showMsg = (type, text) => {
     setMessage({ type, text });
     setTimeout(() => setMessage({ type: '', text: '' }), 5000);
-  };
-
-  // Toggle 2FA
-  const handleToggle2FA = async () => {
-    setToggling2FA(true);
-    try {
-      const targetState = !twoFactorEnabled;
-      const res = await api.post('/auth/two-factor', { enabled: targetState });
-      setTwoFactorEnabled(res.data.twoFactorEnabled);
-      showMsg('success', res.data.message);
-      // Refresh security logs
-      const logsRes = await api.get('/auth/security-logs');
-      setSecurityLogs(logsRes.data?.logs || []);
-    } catch (err) {
-      showMsg('error', err.response?.data?.message || 'Failed to update 2FA setting.');
-    } finally {
-      setToggling2FA(false);
-    }
   };
 
   // Terminate a session
@@ -114,20 +86,6 @@ const SecuritySettings = () => {
     }
   };
 
-  // Revoke a trusted device
-  const handleRevokeDevice = async (deviceId) => {
-    setActionLoadingId(deviceId);
-    try {
-      await api.delete(`/auth/trusted-devices/${deviceId}`);
-      setTrustedDevices(prev => prev.filter(d => d._id !== deviceId));
-      showMsg('success', 'Trusted device revoked.');
-    } catch (err) {
-      showMsg('error', 'Failed to revoke trusted device.');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
@@ -143,7 +101,7 @@ const SecuritySettings = () => {
         <h2 className="text-2xl font-bold text-slate-800 font-display flex items-center gap-2">
           <Shield className="w-7 h-7 text-blue-600" /> Security & Session Settings
         </h2>
-        <p className="text-xs text-slate-500 mt-1">Manage your active devices, trusted hardware, and account authentication protocols.</p>
+        <p className="text-xs text-slate-500 mt-1">Manage your active devices and view account authentication protocols.</p>
       </div>
 
       {message.text && (
@@ -157,39 +115,7 @@ const SecuritySettings = () => {
         </div>
       )}
 
-      {/* 1. Two Factor Authentication */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <Key className="w-4.5 h-4.5 text-blue-600" /> Two-Factor Authentication (2FA)
-            </h3>
-            <p className="text-xs text-slate-400 max-w-xl">
-              Enhance your account security. Every sign-in attempt will require a 6-digit verification code sent directly to your registered academic email.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-              twoFactorEnabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
-            }`}>
-              {twoFactorEnabled ? 'Enabled' : 'Disabled'}
-            </span>
-            <button
-              onClick={handleToggle2FA}
-              disabled={toggling2FA}
-              className={`w-12 h-6.5 rounded-full p-1 transition-all duration-300 focus:outline-none ${
-                twoFactorEnabled ? 'bg-blue-600' : 'bg-slate-300'
-              } ${toggling2FA ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-            >
-              <div className={`bg-white w-4.5 h-4.5 rounded-full shadow-md transform transition-all duration-300 ${
-                twoFactorEnabled ? 'translate-x-5.5' : 'translate-x-0'
-              }`} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Active Sessions */}
+      {/* 1. Active Sessions */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div>
@@ -253,56 +179,7 @@ const SecuritySettings = () => {
         </div>
       </div>
 
-      {/* 3. Trusted Devices */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-6">
-        <div className="border-b border-slate-100 pb-4">
-          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <Smartphone className="w-4.5 h-4.5 text-blue-600" /> Trusted Devices
-          </h3>
-          <p className="text-xs text-slate-400 mt-0.5">Devices that bypass the 6-digit email OTP check during sign-in.</p>
-        </div>
-
-        {trustedDevices.length === 0 ? (
-          <div className="py-6 text-center text-xs text-slate-400">
-            No trusted devices registered. Check "Remember this device" during login.
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {trustedDevices.map((device) => (
-              <div key={device._id} className="py-4 flex items-center justify-between first:pt-0 last:pb-0">
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50/60 border border-blue-100/50 flex items-center justify-center text-blue-600 flex-shrink-0">
-                    <UserCheck className="w-5 h-5" />
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-bold text-slate-700">
-                      {device.browser} on {device.os}
-                    </p>
-                    <p className="text-[11px] text-slate-400 flex items-center gap-3">
-                      <span>IP: {device.ipAddress}</span>
-                      <span>•</span>
-                      <span>Last used: {new Date(device.lastUsed).toLocaleDateString()}</span>
-                      <span>•</span>
-                      <span className="text-amber-600 font-medium">Expires: {new Date(device.expiresAt).toLocaleDateString()}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleRevokeDevice(device._id)}
-                  disabled={actionLoadingId === device._id}
-                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
-                  title="Revoke device trust"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 4. Login History & Security Audit Logs */}
+      {/* 2. Login History & Security Audit Logs */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Login History */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-4">

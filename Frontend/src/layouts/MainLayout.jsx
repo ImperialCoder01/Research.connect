@@ -38,6 +38,7 @@ const MainLayout = () => {
 
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'Discovery Feed', path: '/discovery', icon: Compass },
     { label: 'Profile', path: '/profile', icon: User },
     { label: 'Publications', path: '/publications', icon: BookOpen },
     { label: 'Projects', path: '/projects', icon: FolderGit2 },

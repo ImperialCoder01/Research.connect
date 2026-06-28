@@ -2,51 +2,40 @@ import mongoose from 'mongoose';
 
 const otpSchema = new mongoose.Schema(
   {
-    user: {
+    userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'OTP must belong to a user'],
+      required: true,
       index: true,
     },
-    email: {
+    otpHash: {
       type: String,
-      required: [true, 'Email is required'],
-      lowercase: true,
-      trim: true,
-    },
-    otp: {
-      type: String,
-      required: [true, 'OTP code is required'],
+      required: true,
     },
     purpose: {
       type: String,
-      enum: ['email_verification', 'login', 'password_reset'],
-      required: [true, 'OTP purpose is required'],
-    },
-    attempts: {
-      type: Number,
-      default: 0,
+      enum: ['LOGIN', 'EMAIL_VERIFICATION', 'PASSWORD_RESET'],
+      required: true,
     },
     expiresAt: {
       type: Date,
       required: true,
     },
+    attempts: {
+      type: Number,
+      default: 0,
+    },
     verified: {
       type: Boolean,
       default: false,
     },
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
   },
   {
     timestamps: true,
-    collection: 'otp_verifications',
   }
 );
 
-// Add TTL Index to automatically delete expired OTP documents
+// TTL Index for automatic deletion after expiresAt
 otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const OTP = mongoose.model('OTP', otpSchema);

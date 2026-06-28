@@ -1,12 +1,19 @@
 import { body } from 'express-validator';
 
 export const validateSignup = [
-  body('fullName')
+  body('firstName')
     .notEmpty()
-    .withMessage('Full name is required')
+    .withMessage('First name is required')
     .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Full name must be between 2 and 100 characters'),
+    .isLength({ min: 1, max: 50 })
+    .withMessage('First name must be between 1 and 50 characters'),
+
+  body('lastName')
+    .notEmpty()
+    .withMessage('Last name is required')
+    .trim()
+    .isLength({ min: 1, max: 50 })
+    .withMessage('Last name must be between 1 and 50 characters'),
 
   body('email')
     .notEmpty()

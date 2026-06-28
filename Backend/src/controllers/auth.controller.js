@@ -1,527 +1,537 @@
-import * as authService from '../services/auth.service.js';
-import Session from '../models/Session.js';
-import TrustedDevice from '../models/TrustedDevice.js';
-import LoginActivity from '../models/LoginActivity.js';
-import SecurityLog from '../models/SecurityLog.js';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import User from '../models/User.js';
-import Profile from '../models/Profile.js';
+import { createOTP, verifyOTP } from '../services/otp.service.js';
+import OTP from '../models/OTP.js';
+import {
+  sendRegistrationOTPEmail,
+  sendLoginOTPEmail,
+  sendForgotPasswordOTPEmail,
+  sendAccountActivatedEmail,
+  sendPasswordChangedEmail,
+} from '../services/email.service.js';
 import AppError from '../utils/AppError.js';
-import { validationResult } from 'express-validator';
 
-// Helper to set refresh token secure cookie
-const setRefreshTokenCookie = (res, token) => {
-  const cookieOptions = {
-    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-  };
-  res.cookie('refreshToken', token, cookieOptions);
-};
-
-// Helper to clear refresh token cookie
-const clearRefreshTokenCookie = (res) => {
-  res.clearCookie('refreshToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+/**
+ * Sign JWT Access Token
+ */
+const signToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE || '15m',
   });
 };
 
-// Helper to construct sessionData from request
-const getSessionData = (req) => {
-  return {
-    userAgent: req.headers['user-agent'] || '',
-    ipAddress: req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || '127.0.0.1',
-    location: req.headers['x-app-location'] || 'Unknown', // Custom header or geoip lookup fallback
-  };
+/**
+ * Sign JWT Refresh Token
+ */
+const signRefreshToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d',
+  });
 };
 
 /**
- * Register a new researcher
+ * Helper to set cookies and send token response
+ */
+const sendTokenResponse = (user, statusCode, res) => {
+  const token = signToken(user._id);
+  const refreshToken = signRefreshToken(user._id);
+
+  // Cookie options
+  const cookieOptions = {
+    expires: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  };
+
+  res.cookie('token', token, cookieOptions);
+  res.cookie('refreshToken', refreshToken, {
+    ...cookieOptions,
+    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+  });
+
+  // Hide password
+  user.password = undefined;
+
+  res.status(statusCode).json({
+    status: 'success',
+    token,
+    refreshToken,
+    data: {
+      user,
+    },
+  });
+};
+
+/**
+ * Register a new user
  */
 export const register = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return next(new AppError(errors.array()[0].msg, 400));
+    const { fullName, email, password, role, designation, institution, country } = req.body;
+
+    // 1. Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return next(new AppError('Email is already in use by another account.', 400));
     }
 
-    await authService.registerUser(req.body);
+    // 2. Create the user (status defaults to pending_verification, emailVerified defaults to false)
+    const user = await User.create({
+      fullName,
+      email,
+      password,
+      role: role || 'researcher',
+      designation: designation || '',
+      institution: institution || '',
+      country: country || '',
+      emailVerified: false,
+      status: 'pending_verification',
+    });
+
+    // 3. Generate and send email verification OTP
+    const otp = await createOTP(user._id, 'EMAIL_VERIFICATION');
+    await sendRegistrationOTPEmail(user.email, otp);
 
     res.status(201).json({
       status: 'success',
-      message: 'Registration successful. A verification link has been sent to your email.',
+      message: 'Registration successful. A 6-digit verification code has been sent to your email.',
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Verify Email using Token Link
+ * Verify email verification OTP
  */
 export const verifyEmail = async (req, res, next) => {
   try {
-    const { token } = req.body;
-    if (!token) {
-      return next(new AppError('Verification token is required.', 400));
+    const { email, otp } = req.body;
+
+    // 1. Find user
+    const user = await User.findOne({ email });
+    if (!user) {
+      return next(new AppError('Invalid email or verification code.', 400));
     }
 
-    await authService.verifyEmailWithLink(token);
+    if (user.emailVerified) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'Email is already verified. You can log in.',
+      });
+    }
+
+    // 2. Verify OTP (throws error if invalid/expired/attempts exceeded)
+    await verifyOTP(user._id, 'EMAIL_VERIFICATION', otp);
+
+    // 3. Activate user
+    user.emailVerified = true;
+    user.isVerified = true;
+    user.status = 'active';
+    await user.save();
+
+    // 4. Send confirmation email
+    await sendAccountActivatedEmail(user.email, user.fullName);
 
     res.status(200).json({
       status: 'success',
-      message: 'Email verified successfully! Your account is now active.',
+      message: 'Your email has been successfully verified. You can now log in.',
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Resend Email Verification Link
+ * Resend email verification OTP
  */
-export const resendVerification = async (req, res, next) => {
+export const sendEmailVerification = async (req, res, next) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return next(new AppError('Email address is required.', 400));
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return next(new AppError('User not found.', 404));
     }
 
-    await authService.resendVerificationLink(email);
+    if (user.emailVerified) {
+      return next(new AppError('Email is already verified.', 400));
+    }
+
+    // Check cooldown (60 seconds)
+    const lastOtp = await OTP.findOne({ userId: user._id, purpose: 'EMAIL_VERIFICATION' }).sort({ createdAt: -1 });
+    if (lastOtp && (Date.now() - lastOtp.createdAt.getTime() < 60000)) {
+      const secondsLeft = Math.ceil((60000 - (Date.now() - lastOtp.createdAt.getTime())) / 1000);
+      return next(new AppError(`Please wait ${secondsLeft} seconds before requesting a new code.`, 429));
+    }
+
+    const otp = await createOTP(user._id, 'EMAIL_VERIFICATION');
+    await sendRegistrationOTPEmail(user.email, otp);
 
     res.status(200).json({
       status: 'success',
-      message: 'A new email verification link has been dispatched to your inbox.',
+      message: 'A new verification code has been sent to your email.',
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Login: check password & check trusted device
+ * Login user (step 1: verify credentials, send OTP)
  */
 export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const deviceId = req.headers['x-device-id'] || req.cookies.deviceId;
 
-    if (!email || !password) {
-      return next(new AppError('Please provide email and password.', 400));
+    // 1. Find user and select password field
+    const user = await User.findOne({ email }).select('+password');
+    if (!user) {
+      return next(new AppError('Invalid email or password.', 401));
     }
 
-    const sessionData = getSessionData(req);
-    const result = await authService.loginUser(email, password, deviceId, sessionData);
+    // 2. Check if account is locked
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      const minutesLeft = Math.ceil((user.lockUntil - Date.now()) / 60000);
+      return next(
+        new AppError(`This account is temporarily locked. Please try again in ${minutesLeft} minutes.`, 401)
+      );
+    }
 
-    if (result.otpRequired) {
-      const responseData = {
-        status: 'success',
-        otpRequired: true,
-        email: result.user.email,
-        message: 'A 6-digit verification code has been sent to your email.',
-      };
-
-      if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-        responseData.otpCode = result.code;
+    // 3. Verify password
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      user.loginAttempts += 1;
+      if (user.loginAttempts >= 5) {
+        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes lockout
+        user.loginAttempts = 0;
+        await user.save();
+        return next(
+          new AppError('Too many failed login attempts. Your account has been locked for 15 minutes.', 401)
+        );
       }
-
-      return res.status(200).json(responseData);
+      await user.save();
+      return next(new AppError('Invalid email or password.', 401));
     }
 
-    // OTP Bypassed via Trusted Device or 2FA is disabled
-    setRefreshTokenCookie(res, result.refreshToken);
+    // Reset login attempts on successful credentials match
+    user.loginAttempts = 0;
+    user.lockUntil = undefined;
+    await user.save();
+
+    // 4. Check if email is verified
+    if (!user.emailVerified) {
+      // Send registration verification OTP and inform frontend
+      const otp = await createOTP(user._id, 'EMAIL_VERIFICATION');
+      await sendRegistrationOTPEmail(user.email, otp);
+
+      return res.status(200).json({
+        status: 'success',
+        emailVerified: false,
+        message: 'Your email is not verified yet. A verification code has been sent to your email.',
+      });
+    }
+
+    // 5. Generate and send Login OTP
+    const otp = await createOTP(user._id, 'LOGIN');
+    await sendLoginOTPEmail(user.email, otp);
 
     res.status(200).json({
       status: 'success',
-      otpRequired: false,
-      accessToken: result.accessToken,
-      user: {
-        id: result.user._id,
-        email: result.user.email,
-        role: result.user.role,
-        emailVerified: result.user.emailVerified,
-      },
+      emailVerified: true,
+      otpRequired: true,
+      message: 'A 2-factor verification code has been sent to your email.',
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Verify Login OTP
+ * Verify Login OTP and issue JWT
  */
-export const verifyOTP = async (req, res, next) => {
+export const verifyLoginOtp = async (req, res, next) => {
   try {
-    const { email, code, purpose, rememberDevice } = req.body;
+    const { email, otp } = req.body;
 
-    if (!email || !code || !purpose) {
-      return next(new AppError('Email, verification code, and purpose are required.', 400));
+    const user = await User.findOne({ email });
+    if (!user) {
+      return next(new AppError('Invalid email or verification code.', 401));
     }
 
-    const sessionData = getSessionData(req);
-    const result = await authService.verifyUserOTP(email, code, purpose, rememberDevice, sessionData);
+    // Verify OTP
+    await verifyOTP(user._id, 'LOGIN', otp);
 
-    setRefreshTokenCookie(res, result.refreshToken);
+    // Save last login time
+    user.lastLogin = Date.now();
+    await user.save();
 
-    const responseData = {
-      status: 'success',
-      accessToken: result.accessToken,
-      user: {
-        id: result.user._id,
-        email: result.user.email,
-        role: result.user.role,
-        emailVerified: result.user.emailVerified,
-      },
-    };
-
-    if (result.deviceId) {
-      responseData.deviceId = result.deviceId;
-    }
-
-    res.status(200).json(responseData);
-  } catch (error) {
-    next(error);
+    // Issue JWT and send response
+    sendTokenResponse(user, 200, res);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Resend OTP Code
+ * Resend login or registration OTP
  */
-export const resendOTP = async (req, res, next) => {
+export const resendLoginOtp = async (req, res, next) => {
   try {
     const { email, purpose } = req.body;
-    if (!email || !purpose) {
-      return next(new AppError('Email and purpose are required.', 400));
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return next(new AppError('User not found.', 404));
     }
 
-    await authService.resendUserOTP(email, purpose);
+    // Check cooldown (60 seconds)
+    const lastOtp = await OTP.findOne({ userId: user._id, purpose }).sort({ createdAt: -1 });
+    if (lastOtp && (Date.now() - lastOtp.createdAt.getTime() < 60000)) {
+      const secondsLeft = Math.ceil((60000 - (Date.now() - lastOtp.createdAt.getTime())) / 1000);
+      return next(new AppError(`Please wait ${secondsLeft} seconds before requesting a new code.`, 429));
+    }
+
+    // Generate new OTP
+    const otp = await createOTP(user._id, purpose);
+
+    // Send email according to purpose
+    if (purpose === 'LOGIN') {
+      await sendLoginOTPEmail(user.email, otp);
+    } else if (purpose === 'EMAIL_VERIFICATION') {
+      await sendRegistrationOTPEmail(user.email, otp);
+    } else if (purpose === 'PASSWORD_RESET') {
+      await sendForgotPasswordOTPEmail(user.email, otp);
+    }
 
     res.status(200).json({
       status: 'success',
-      message: 'A fresh verification code has been sent to your email.',
+      message: 'A new verification code has been sent to your email.',
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Google Sign-In
- */
-export const googleLogin = async (req, res, next) => {
-  try {
-    const { idToken } = req.body;
-    if (!idToken) {
-      return next(new AppError('Google ID token is required.', 400));
-    }
-
-    const sessionData = getSessionData(req);
-    const result = await authService.loginWithGoogle(idToken, sessionData);
-
-    setRefreshTokenCookie(res, result.refreshToken);
-
-    res.status(200).json({
-      status: 'success',
-      accessToken: result.accessToken,
-      user: {
-        id: result.user._id,
-        email: result.user.email,
-        role: result.user.role,
-        emailVerified: result.user.emailVerified,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Refresh Token Rotation (RTR)
- */
-export const refreshToken = async (req, res, next) => {
-  try {
-    const oldRefreshToken = req.cookies.refreshToken;
-    if (!oldRefreshToken) {
-      return next(new AppError('No refresh token provided.', 401));
-    }
-
-    const sessionData = getSessionData(req);
-    const result = await authService.refreshUserSession(oldRefreshToken, sessionData);
-
-    setRefreshTokenCookie(res, result.refreshToken);
-
-    res.status(200).json({
-      status: 'success',
-      accessToken: result.accessToken,
-    });
-  } catch (error) {
-    clearRefreshTokenCookie(res);
-    next(error);
-  }
-};
-
-/**
- * Request Password Reset Link
+ * Forgot password (step 1: send reset OTP)
  */
 export const forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return next(new AppError('Please provide an email address.', 400));
+
+    // To prevent email enumeration, we return success even if email is not found
+    const user = await User.findOne({ email });
+    if (user) {
+      const otp = await createOTP(user._id, 'PASSWORD_RESET');
+      await sendForgotPasswordOTPEmail(user.email, otp);
     }
 
-    await authService.requestPasswordResetLink(email);
-
     res.status(200).json({
       status: 'success',
-      message: 'If the email is registered, a password reset link has been sent.',
+      message: 'If the email exists in our system, a password reset code has been sent.',
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Reset Password using Link Token
+ * Verify reset password OTP and return a temporary reset token
  */
-export const resetUserPassword = async (req, res, next) => {
+export const verifyResetOtp = async (req, res, next) => {
   try {
-    const { token, password } = req.body;
-    if (!token || !password) {
-      return next(new AppError('Token and new password are required.', 400));
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return next(new AppError('Invalid email or verification code.', 400));
     }
 
-    const sessionData = getSessionData(req);
-    await authService.resetPasswordWithLink(token, password, sessionData);
+    // Verify OTP
+    await verifyOTP(user._id, 'PASSWORD_RESET', otp);
+
+    // Generate a short-lived password reset token (valid for 5 minutes)
+    const resetToken = jwt.sign(
+      { id: user._id, purpose: 'password_reset' },
+      process.env.JWT_SECRET,
+      { expiresIn: '5m' }
+    );
 
     res.status(200).json({
       status: 'success',
-      message: 'Password reset successfully. You can now log in with your new password.',
+      token: resetToken,
+      message: 'Verification code accepted. You can now reset your password.',
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Get Authenticated User Profile
+ * Reset password using the temporary reset token
  */
-export const getMe = async (req, res, next) => {
+export const resetPassword = async (req, res, next) => {
   try {
-    const user = req.user;
-    const profile = await Profile.findOne({ user: user._id });
+    const { email, token, password } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return next(new AppError('User not found.', 404));
+    }
+
+    // Verify the reset token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (jwtErr) {
+      return next(new AppError('Your reset session has expired. Please request a new code.', 400));
+    }
+
+    if (decoded.id !== user._id.toString() || decoded.purpose !== 'password_reset') {
+      return next(new AppError('Invalid reset token.', 400));
+    }
+
+    // Update password
+    user.password = password;
+    user.loginAttempts = 0;
+    user.lockUntil = undefined;
+    await user.save();
+
+    // Send confirmation email
+    await sendPasswordChangedEmail(user.email);
 
     res.status(200).json({
       status: 'success',
-      user: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        twoFactorEnabled: user.twoFactorEnabled,
-        emailVerified: user.emailVerified,
-        createdAt: user.createdAt,
-      },
-      profile,
+      message: 'Your password has been reset successfully. You can now log in.',
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Logout Current Session
+ * Logout user
  */
 export const logout = async (req, res, next) => {
   try {
-    const token = req.cookies.refreshToken;
-    if (token) {
-      await authService.logoutUser(token);
-    }
-    clearRefreshTokenCookie(res);
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
 
     res.status(200).json({
       status: 'success',
       message: 'Logged out successfully.',
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
 /**
- * Logout All Sessions / Devices
+ * Google Sign-In / Sign-Up
  */
-export const logoutAll = async (req, res, next) => {
+export const googleLogin = async (req, res, next) => {
   try {
-    const sessionData = getSessionData(req);
-    await authService.logoutUserAllDevices(req.user._id, sessionData);
-    clearRefreshTokenCookie(res);
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Successfully logged out of all devices.',
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Toggle Two-Factor Authentication
- */
-export const toggleTwoFactor = async (req, res, next) => {
-  try {
-    const { enabled } = req.body;
-    if (typeof enabled !== 'boolean') {
-      return next(new AppError('Enabled status must be a boolean value.', 400));
+    const { idToken } = req.body;
+    if (!idToken) {
+      return next(new AppError('Google ID Token is required.', 400));
     }
 
-    const user = await User.findById(req.user._id);
-    user.twoFactorEnabled = enabled;
+    // 1. Verify token with Google using built-in fetch
+    const googleVerifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`;
+    const response = await fetch(googleVerifyUrl);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Google tokeninfo verification failed:', errorText);
+      return next(new AppError('Failed to verify Google token.', 401));
+    }
+    
+    const payload = await response.json();
+
+    // Verify client ID matches
+    const expectedClientId = process.env.GOOGLE_CLIENT_ID || '959595325668-e5dlgoecao8lvo5k38plolvgv9ua2du1.apps.googleusercontent.com';
+    if (payload.aud !== expectedClientId) {
+      return next(new AppError('Invalid Google Client ID aud.', 400));
+    }
+
+    const { email, name, picture, sub, email_verified } = payload;
+    if (!email_verified) {
+      return next(new AppError('Google email is not verified.', 400));
+    }
+
+    // 2. Find or create user
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      // Create user with a secure random password
+      const randomPassword = crypto.randomBytes(16).toString('hex') + 'Aa1!';
+      user = await User.create({
+        fullName: name,
+        email,
+        password: randomPassword,
+        googleId: sub,
+        profilePhoto: picture || '',
+        emailVerified: true,
+        isVerified: true,
+        status: 'active',
+      });
+    } else {
+      // Update googleId and verify status if not set
+      let updated = false;
+      if (!user.googleId) {
+        user.googleId = sub;
+        updated = true;
+      }
+      if (!user.emailVerified) {
+        user.emailVerified = true;
+        user.isVerified = true;
+        user.status = 'active';
+        updated = true;
+      }
+      if (picture && !user.profilePhoto) {
+        user.profilePhoto = picture;
+        updated = true;
+      }
+      if (updated) {
+        await user.save();
+      }
+    }
+
+    // 3. Issue JWT directly (bypassing OTP since Google is verified)
+    user.lastLogin = Date.now();
     await user.save();
 
-    const sessionData = getSessionData(req);
-    await SecurityLog.create({
-      user: user._id,
-      action: 'two_factor_toggle',
-      ipAddress: sessionData.ipAddress,
-      userAgent: sessionData.userAgent,
-      metadata: { enabled: String(enabled) },
-    });
-
-    res.status(200).json({
-      status: 'success',
-      message: `Two-factor authentication has been ${enabled ? 'enabled' : 'disabled'}.`,
-      twoFactorEnabled: user.twoFactorEnabled,
-    });
-  } catch (error) {
-    next(error);
+    sendTokenResponse(user, 200, res);
+  } catch (err) {
+    console.error('Google Auth Error:', err.message);
+    return next(new AppError('Failed to authenticate with Google.', 401));
   }
 };
 
 /**
- * Get Active Sessions
+ * Get current logged in user details
  */
-export const getSessions = async (req, res, next) => {
+export const getMe = async (req, res, next) => {
   try {
-    const sessions = await Session.find({ user: req.user._id, expiresAt: { $gt: new Date() } })
-      .sort({ lastActive: -1 });
-
-    res.status(200).json({
-      status: 'success',
-      sessions,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Terminate Specific Session
- */
-export const deleteSession = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const session = await Session.findOne({ _id: id, user: req.user._id });
-    if (!session) {
-      return next(new AppError('Session not found or unauthorized.', 404));
-    }
-
-    // Revoke associated RefreshToken
-    await authService.logoutUser(session.refreshToken);
+    const user = await User.findById(req.user.id);
     
-    // Delete session document
-    await Session.findByIdAndDelete(id);
-
-    const sessionData = getSessionData(req);
-    await SecurityLog.create({
-      user: req.user._id,
-      action: 'session_terminated',
-      ipAddress: sessionData.ipAddress,
-      userAgent: sessionData.userAgent,
-      metadata: { sessionId: id },
-    });
-
     res.status(200).json({
       status: 'success',
-      message: 'Session terminated successfully.',
+      data: {
+        user,
+      },
     });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Get Trusted Devices
- */
-export const getTrustedDevices = async (req, res, next) => {
-  try {
-    const devices = await TrustedDevice.find({ user: req.user._id, expiresAt: { $gt: new Date() } })
-      .sort({ lastUsed: -1 });
-
-    res.status(200).json({
-      status: 'success',
-      devices,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Revoke Trusted Device
- */
-export const deleteTrustedDevice = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const device = await TrustedDevice.findOneAndDelete({ _id: id, user: req.user._id });
-    if (!device) {
-      return next(new AppError('Trusted device not found or unauthorized.', 404));
-    }
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Trusted device revoked successfully. Next login from this device will require OTP.',
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Get Login Activity Log
- */
-export const getLoginActivity = async (req, res, next) => {
-  try {
-    const activity = await LoginActivity.find({ user: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(50);
-
-    res.status(200).json({
-      status: 'success',
-      activity,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Get Security Audit Logs
- */
-export const getSecurityLogs = async (req, res, next) => {
-  try {
-    const logs = await SecurityLog.find({ user: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(50);
-
-    res.status(200).json({
-      status: 'success',
-      logs,
-    });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };

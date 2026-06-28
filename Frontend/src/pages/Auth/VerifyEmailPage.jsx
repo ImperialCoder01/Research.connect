@@ -1,108 +1,254 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle2, XCircle, AlertCircle, Microscope } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.jsx';
 import api from '../../services/api';
+import { CheckCircle2, AlertCircle, Microscope, Mail, ArrowRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const VerifyEmailPage = () => {
+  const { verifyEmail } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get('token');
+  
+  // Get email from query params
+  const email = searchParams.get('email') || '';
 
-  const [status, setStatus] = useState('verifying'); // 'verifying', 'success', 'error'
-  const [errorMessage, setErrorMessage] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  
+  // Resend OTP Cooldown
+  const [cooldown, setCooldown] = useState(0);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
 
+  const inputRefs = useRef([]);
+
+  // Focus the first input on mount
   useEffect(() => {
-    const performVerification = async () => {
-      if (!token) {
-        setStatus('error');
-        setErrorMessage('Verification token is missing. Please check your verification email link.');
-        return;
-      }
+    if (inputRefs.current[0]) {
+      inputRefs.current[0].focus();
+    }
+  }, []);
 
-      try {
-        const response = await api.post('/auth/verify-email', { token });
-        if (response.data?.status === 'success' || response.status === 200) {
-          setStatus('success');
-        } else {
-          setStatus('error');
-          setErrorMessage(response.data?.message || 'Verification failed. Token may be invalid or expired.');
-        }
-      } catch (err) {
-        setStatus('error');
-        setErrorMessage(err.response?.data?.message || 'Verification link is invalid or has expired.');
-      }
-    };
+  // Cooldown Timer
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
-    performVerification();
-  }, [token]);
+  const handleChange = (element, index) => {
+    const value = element.value;
+    if (isNaN(Number(value))) return; // Only allow numbers
+
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    // Focus next input
+    if (value !== '' && index < 5) {
+      inputRefs.current[index + 1].focus();
+    }
+  };
+
+  const handleKeyDown = (e, index) => {
+    if (e.key === 'Backspace') {
+      if (otp[index] === '' && index > 0) {
+        // Focus previous input on backspace
+        inputRefs.current[index - 1].focus();
+      }
+    }
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData('text').trim();
+    if (pasteData.length === 6 && !isNaN(Number(pasteData))) {
+      const pasteArray = pasteData.split('');
+      setOtp(pasteArray);
+      inputRefs.current[5].focus();
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const otpCode = otp.join('');
+    if (otpCode.length < 6) {
+      setError('Please enter all 6 digits of the verification code.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const res = await verifyEmail(email, otpCode);
+      if (res.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || 'Invalid or expired verification code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (cooldown > 0) return;
+
+    setResendLoading(true);
+    setError('');
+    setResendMessage('');
+    try {
+      await api.post('/auth/send-email-verification', { 
+        email, 
+        purpose: 'EMAIL_VERIFICATION' 
+      });
+      setResendMessage('A new verification code has been sent to your email.');
+      setCooldown(60); // 60 seconds cooldown
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || 'Failed to resend verification code.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="glass-card rounded-3xl p-8 bg-white border border-slate-200/80 shadow-md max-w-md w-full text-center space-y-6">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center">
-            <Microscope className="w-4 h-4" />
-          </div>
-          <span className="text-base font-bold text-slate-800 font-display">ResearchConnect</span>
-        </div>
-
-        {status === 'verifying' && (
-          <div className="space-y-4 py-6">
-            <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-            <h3 className="text-lg font-bold text-slate-800">Verifying your email address</h3>
-            <p className="text-xs text-slate-400">Please wait while we activate your academic account...</p>
-          </div>
-        )}
-
-        {status === 'success' && (
-          <div className="space-y-6 py-6">
-            <div className="w-16 h-16 rounded-full bg-green-50 text-green-600 flex items-center justify-center mx-auto shadow-sm">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-slate-800">Account Activated!</h3>
-              <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                Thank you for verifying your email address. Your professional researcher profile is now active.
-              </p>
-            </div>
-            <button
-              onClick={() => navigate('/login')}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
-            >
-              Sign In to Your Account
-            </button>
-          </div>
-        )}
-
-        {status === 'error' && (
-          <div className="space-y-6 py-6">
-            <div className="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto shadow-sm">
-              <XCircle className="w-8 h-8" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-slate-800">Verification Failed</h3>
-              <p className="text-xs text-red-500 font-medium max-w-xs mx-auto">
-                {errorMessage}
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Link
-                to="/register"
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition-colors block"
-              >
-                Return to Registration
-              </Link>
-              <Link
-                to="/login"
-                className="text-xs text-blue-600 hover:underline font-semibold"
-              >
-                Back to Sign In
-              </Link>
-            </div>
-          </div>
-        )}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <div className="space-y-2 text-center">
+        <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight font-display">
+          Verify your email
+        </h2>
+        <p className="text-sm text-slate-500">
+          We sent a 6-digit verification code to <span className="font-semibold text-slate-700">{email || 'your email'}</span>.
+        </p>
       </div>
-    </div>
+
+      <AnimatePresence mode="wait">
+        {success ? (
+          <motion.div
+            key="success-container"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="p-6 bg-green-50 border border-green-200 rounded-2xl text-center space-y-3"
+          >
+            <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto shadow-sm">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-green-800">Email Verified Successfully!</h3>
+            <p className="text-xs text-green-600">
+              Your account is now active. Redirecting you to the sign-in page...
+            </p>
+          </motion.div>
+        ) : (
+          <div className="space-y-6">
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm flex items-start gap-2.5 overflow-hidden"
+                >
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </motion.div>
+              )}
+              {resendMessage && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-sm flex items-start gap-2.5 overflow-hidden"
+                >
+                  <Mail className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{resendMessage}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Digit Inputs */}
+              <div className="flex justify-between gap-2" onPaste={handlePaste}>
+                {otp.map((data, index) => (
+                  <input
+                    key={index}
+                    type="text"
+                    maxLength="1"
+                    ref={(el) => (inputRefs.current[index] = el)}
+                    value={data}
+                    onChange={(e) => handleChange(e.target, index)}
+                    onKeyDown={(e) => handleKeyDown(e, index)}
+                    className="w-12 h-12 text-center text-lg font-bold bg-white border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl focus:outline-none transition-all"
+                  />
+                ))}
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-sm font-semibold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/25 border-t-white rounded-full animate-spin"></div>
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <span>Verify Email</span>
+                )}
+              </button>
+            </form>
+
+            {/* Resend Cooldown */}
+            <div className="text-center">
+              <button
+                type="button"
+                disabled={cooldown > 0 || resendLoading}
+                onClick={handleResend}
+                className={`text-sm font-semibold transition-colors ${
+                  cooldown > 0
+                    ? 'text-slate-400 cursor-not-allowed'
+                    : 'text-blue-600 hover:text-blue-700 cursor-pointer'
+                }`}
+              >
+                {resendLoading ? (
+                  <span className="flex items-center gap-1.5 justify-center">
+                    <div className="w-3.5 h-3.5 border-2 border-blue-600/25 border-t-blue-600 rounded-full animate-spin"></div>
+                    Resending...
+                  </span>
+                ) : cooldown > 0 ? (
+                  `Resend code in ${cooldown}s`
+                ) : (
+                  'Resend verification code'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <div className="text-center text-sm text-slate-500 border-t border-slate-100 pt-4">
+        <Link
+          to="/login"
+          className="font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+        >
+          Back to Sign In
+        </Link>
+      </div>
+    </motion.div>
   );
 };
 

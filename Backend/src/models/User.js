@@ -44,10 +44,6 @@ const userSchema = new mongoose.Schema(
       default: 0,
       index: true,
     },
-    twoFactorEnabled: {
-      type: Boolean,
-      default: true,
-    },
     status: {
       type: String,
       enum: ['pending_verification', 'active', 'blocked', 'deleted'],
@@ -62,6 +58,42 @@ const userSchema = new mongoose.Schema(
     emailVerified: {
       type: Boolean,
       default: false,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    isProfileComplete: {
+      type: Boolean,
+      default: false,
+    },
+    researcherType: {
+      type: String,
+      enum: ['Student', 'Research Scholar', 'Professor', 'Scientist', 'Industry Researcher', 'Independent Researcher'],
+    },
+    profilePhoto: {
+      type: String,
+      default: '',
+    },
+    designation: {
+      type: String,
+      default: '',
+    },
+    institution: {
+      type: String,
+      default: '',
+    },
+    country: {
+      type: String,
+      default: '',
+    },
+    loginAttempts: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    lockUntil: {
+      type: Date,
     },
     verificationToken: String,
     resetPasswordToken: String,

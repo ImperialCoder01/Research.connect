@@ -1,50 +1,41 @@
-import express from 'express';
-import * as authController from '../controllers/auth.controller.js';
+import { Router } from 'express';
+import {
+  register,
+  login,
+  googleLogin,
+  verifyEmail,
+  sendEmailVerification,
+  verifyLoginOtp,
+  resendLoginOtp,
+  forgotPassword,
+  verifyResetOtp,
+  resetPassword,
+  logout,
+  getMe,
+} from '../controllers/auth.controller.js';
+import {
+  validateRegister,
+  validateLogin,
+  validateOTP,
+  validateForgotPassword,
+  validateResetPassword,
+  validateResendOTP,
+} from '../validations/auth.validation.js';
 import { protect } from '../middleware/auth.middleware.js';
-import { validateSignup } from '../validations/user.validation.js';
-import { rateLimiter } from '../middleware/security.middleware.js';
 
-const router = express.Router();
+const router = Router();
 
-// Strict rate limiter for sensitive authentication endpoints
-const authLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // Max 15 requests per 15 minutes
-  message: 'Too many authentication attempts from this IP. Please try again after 15 minutes.',
-});
-
-// Public auth endpoints
-router.post('/register', authLimiter, validateSignup, authController.register);
-router.post('/verify-email', authLimiter, authController.verifyEmail);
-router.post('/resend-verification', authLimiter, authController.resendVerification);
-
-router.post('/login', authLimiter, authController.login);
-router.post('/verify-otp', authLimiter, authController.verifyOTP);
-router.post('/resend-otp', authLimiter, authController.resendOTP);
-
-router.post('/google', authController.googleLogin);
-router.post('/google-login', authController.googleLogin); // Alias for compatibility
-
-router.post('/forgot-password', authController.forgotPassword);
-router.post('/reset-password', authController.resetUserPassword);
-
-router.post('/refresh-token', authController.refreshToken);
-router.post('/logout', authController.logout);
-
-// Protected endpoints
-router.use(protect);
-
-router.get('/me', authController.getMe);
-router.post('/logout-all', authController.logoutAll);
-router.post('/two-factor', authController.toggleTwoFactor);
-
-router.get('/sessions', authController.getSessions);
-router.delete('/sessions/:id', authController.deleteSession);
-
-router.get('/trusted-devices', authController.getTrustedDevices);
-router.delete('/trusted-devices/:id', authController.deleteTrustedDevice);
-
-router.get('/login-activity', authController.getLoginActivity);
-router.get('/security-logs', authController.getSecurityLogs);
+router.post('/register', validateRegister, register);
+router.post('/login', validateLogin, login);
+router.post('/google-login', googleLogin);
+router.post('/verify-email', validateOTP, verifyEmail);
+router.post('/send-email-verification', validateResendOTP, sendEmailVerification);
+router.post('/verify-login-otp', validateOTP, verifyLoginOtp);
+router.post('/resend-login-otp', validateResendOTP, resendLoginOtp);
+router.post('/forgot-password', validateForgotPassword, forgotPassword);
+router.post('/verify-reset-otp', validateOTP, verifyResetOtp);
+router.post('/reset-password', validateResetPassword, resetPassword);
+router.post('/logout', logout);
+router.get('/me', protect, getMe);
 
 export default router;

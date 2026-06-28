@@ -80,6 +80,16 @@ const profileSchema = new mongoose.Schema(
       type: Number,
       default: 0, // In years
     },
+    academicLevel: {
+      type: String,
+      enum: ['Undergraduate', 'Graduate', 'Ph.D. Candidate', 'Postdoctoral Researcher', 'Professor', 'Other'],
+      default: 'Other',
+    },
+    employmentType: {
+      type: String,
+      enum: ['Full-time', 'Part-time', 'Contract', 'Self-employed', 'Unemployed', 'Other'],
+      default: 'Other',
+    },
     phone: {
       type: String,
       trim: true,
@@ -88,6 +98,10 @@ const profileSchema = new mongoose.Schema(
     website: {
       type: String,
       trim: true,
+      default: '',
+    },
+    cvUrl: {
+      type: String,
       default: '',
     },
     gender: {
@@ -227,29 +241,33 @@ profileSchema.virtual('experienceList', {
 
 // Pre-save hook to calculate Profile Completion Rate
 profileSchema.pre('save', function (next) {
-  let fieldsCount = 0;
-  let filledFields = 0;
-
   const weights = {
     bio: 10,
-    designation: 10,
-    institution: 15,
-    country: 10,
+    designation: 5,
+    institution: 10,
+    country: 5,
     state: 5,
     city: 5,
-    highestQualification: 10,
-    experience: 10,
+    highestQualification: 5,
+    academicLevel: 5,
+    employmentType: 5,
+    experience: 5,
     phone: 5,
     website: 5,
     profilePhoto: 10,
-    coverPhoto: 5
+    coverPhoto: 5,
+    github: 5,
+    cvUrl: 5
   };
 
-  let totalWeight = Object.values(weights).reduce((a, b) => a + b, 0); // 100
   let score = 0;
 
   for (const [field, weight] of Object.entries(weights)) {
-    if (this[field] && this[field] !== '') {
+    if (field === 'github') {
+      if (this.socialLinks && this.socialLinks.github && this.socialLinks.github !== '') {
+        score += weight;
+      }
+    } else if (this[field] && this[field] !== '') {
       score += weight;
     }
   }

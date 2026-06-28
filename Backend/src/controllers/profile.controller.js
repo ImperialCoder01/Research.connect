@@ -27,7 +27,7 @@ import { uploadFileToCloudinary, deleteFileFromCloudinary } from '../services/up
 export const getMyProfile = async (req, res, next) => {
   try {
     const profile = await Profile.findOne({ user: req.user._id })
-      .populate('user', 'fullName email role status emailVerified')
+      .populate('user', 'fullName email role status emailVerified isVerified isProfileComplete')
       .populate('academicProfile')
       .populate('researchMetrics')
       .populate('educationList')
@@ -71,7 +71,7 @@ export const getProfileByUserId = async (req, res, next) => {
     const currentUserId = req.user.id || req.user._id;
 
     const profile = await Profile.findOne({ user: targetUserId })
-      .populate('user', 'fullName email role status emailVerified')
+      .populate('user', 'fullName email role status emailVerified isVerified isProfileComplete')
       .populate('academicProfile')
       .populate('researchMetrics')
       .populate('educationList')
@@ -210,8 +210,13 @@ export const updateProfile = async (req, res, next) => {
       return next(new AppError('Profile not found.', 404));
     }
 
+    const User = (await import('../models/User.js')).default;
+
+    if (req.body.isWizardSubmit) {
+      await User.findByIdAndUpdate(req.user._id, { isProfileComplete: true });
+    }
+
     if (displayName) {
-      const User = (await import('../models/User.js')).default;
       await User.findByIdAndUpdate(req.user._id, { fullName: displayName });
     }
 
@@ -379,6 +384,57 @@ export const uploadPhoto = async (req, res, next) => {
     res.status(200).json({
       status: 'success',
       message: `${isCover ? 'Cover' : 'Profile'} photo updated successfully.`,
+      profile: updatedProfile,
+      data: {
+        secureUrl: fileRecord.secureUrl,
+        publicId: fileRecord.publicId,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Upload CV Document
+ */
+export const uploadCV = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return next(new AppError('No CV file uploaded.', 400));
+    }
+
+    const profile = await Profile.findOne({ user: req.user._id });
+    if (!profile) {
+      return next(new AppError('Profile not found for this user.', 404));
+    }
+
+    // Clean up old CV if it exists
+    if (profile.cvUrl) {
+      const FileModel = (await import('../models/File.js')).default;
+      const oldFile = await FileModel.findOne({ secureUrl: profile.cvUrl, uploadType: 'project-file' });
+      if (oldFile) {
+        await deleteFileFromCloudinary(oldFile.publicId);
+      }
+    }
+
+    // Upload to Cloudinary using central service (using 'project-file' type for PDFs/documents)
+    const fileRecord = await uploadFileToCloudinary(
+      req.file,
+      'project-file',
+      { profileId: profile._id },
+      req.user._id
+    );
+
+    const updatedProfile = await Profile.findOneAndUpdate(
+      { user: req.user._id },
+      { cvUrl: fileRecord.secureUrl },
+      { new: true }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      message: 'CV uploaded successfully.',
       profile: updatedProfile,
       data: {
         secureUrl: fileRecord.secureUrl,

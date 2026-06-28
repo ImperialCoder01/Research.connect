@@ -20,6 +20,7 @@ import {
   updateCollaborationProgress,
   getCollaborationAnalytics,
   getSuggestedCollaborators,
+  getCollaborationPanelInfo,
 } from '../controllers/collaboration.controller.js';
 
 const router = express.Router();
@@ -38,6 +39,9 @@ const upload = multer({ storage });
 
 // All routes are protected
 router.use(protect);
+
+// Collaboration Panel Widget Info
+router.get('/', getCollaborationPanelInfo);
 
 // Collaboration Status
 router.route('/status')

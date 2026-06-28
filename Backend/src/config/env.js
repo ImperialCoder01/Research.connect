@@ -37,7 +37,8 @@ if (process.env.NODE_ENV === 'production') {
     'CLOUDINARY_API_KEY',
     'CLOUDINARY_API_SECRET',
     'SERP_API_KEY',
-    'RESEND_API_KEY',
+    'EMAIL_USER',
+    'EMAIL_PASS',
     'GEMINI_API_KEY',
   ];
 

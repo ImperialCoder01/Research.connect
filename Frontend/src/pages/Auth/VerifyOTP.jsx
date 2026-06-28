@@ -1,257 +1,267 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { ShieldCheck, RefreshCcw, AlertCircle, CheckCircle2 } from 'lucide-react';
-import Button from '@/components/common/Button.jsx';
-import api from '@/services/api.js';
+import { useSearchParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import api from '../../services/api';
+import { CheckCircle2, AlertCircle, Microscope, ShieldCheck, Mail } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const VerifyOTP = () => {
-  const navigate = useNavigate();
+  const { verifyLoginOtp } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get email from query params
   const email = searchParams.get('email') || '';
-  const purpose = searchParams.get('purpose') || 'email_verification';
-  const devOtp = searchParams.get('devOtp') || '';
-  const { syncProfile } = useAuth();
 
-  const [otpValues, setOtpValues] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [cooldown, setCooldown] = useState(60);
-  const [canResend, setCanResend] = useState(false);
-  const [rememberDevice, setRememberDevice] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-  // Auto-fill devOtp in development mode
+  // Resend OTP Cooldown
+  const [cooldown, setCooldown] = useState(0);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+
+  const inputRefs = useRef([]);
+
+  // Focus the first input on mount
   useEffect(() => {
-    if (devOtp && devOtp.length === 6) {
-      setOtpValues(devOtp.split(''));
+    if (inputRefs.current[0]) {
+      inputRefs.current[0].focus();
     }
-  }, [devOtp]);
+  }, []);
 
-
-  const inputRefs = [
-    useRef(null),
-    useRef(null),
-    useRef(null),
-    useRef(null),
-    useRef(null),
-    useRef(null)
-  ];
-
-  // Cooldown countdown timer effect
+  // Cooldown Timer
   useEffect(() => {
     if (cooldown > 0) {
       const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
       return () => clearTimeout(timer);
-    } else {
-      setCanResend(true);
     }
   }, [cooldown]);
 
-  const handleChange = (index, value) => {
-    // Only accept numeric values
-    if (value && !/^\d+$/.test(value)) return;
+  const handleChange = (element, index) => {
+    const value = element.value;
+    if (isNaN(Number(value))) return; // Only allow numbers
 
-    const newValues = [...otpValues];
-    newValues[index] = value.substring(value.length - 1); // Keep last char
-    setOtpValues(newValues);
-    setError('');
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
 
-    // Auto-focus next input
-    if (value && index < 5) {
-      inputRefs[index + 1].current.focus();
+    // Focus next input
+    if (value !== '' && index < 5) {
+      inputRefs.current[index + 1].focus();
     }
   };
 
-  const handleKeyDown = (index, e) => {
-    // Backspace: focus previous input if empty
-    if (e.key === 'Backspace' && !otpValues[index] && index > 0) {
-      inputRefs[index - 1].current.focus();
+  const handleKeyDown = (e, index) => {
+    if (e.key === 'Backspace') {
+      if (otp[index] === '' && index > 0) {
+        // Focus previous input on backspace
+        inputRefs.current[index - 1].focus();
+      }
     }
   };
 
   const handlePaste = (e) => {
     e.preventDefault();
     const pasteData = e.clipboardData.getData('text').trim();
-    if (!/^\d{6}$/.test(pasteData)) return;
-
-    const values = pasteData.split('');
-    setOtpValues(values);
-    inputRefs[5].current.focus();
+    if (pasteData.length === 6 && !isNaN(Number(pasteData))) {
+      const pasteArray = pasteData.split('');
+      setOtp(pasteArray);
+      inputRefs.current[5].focus();
+    }
   };
 
-  const handleVerify = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const otpCode = otpValues.join('');
-
-    if (otpCode.length !== 6) {
+    const otpCode = otp.join('');
+    if (otpCode.length < 6) {
       setError('Please enter all 6 digits of the verification code.');
       return;
     }
 
+    setLoading(true);
     setError('');
-    setIsLoading(true);
-
     try {
-      const response = await api.post('/auth/verify-otp', {
-        email,
-        code: otpCode,
-        purpose,
-        rememberDevice
-      });
-
-      const { accessToken, deviceId } = response.data;
-      
-      if (deviceId) {
-        localStorage.setItem('deviceId', deviceId);
-      }
-      
-      if (purpose === 'password_reset') {
-        setSuccessMsg('OTP verified successfully. Redirecting to reset password...');
+      const res = await verifyLoginOtp(email, otpCode);
+      if (res.success) {
+        setSuccess(true);
+        // Get redirect path or default to /dashboard
+        const origin = location.state?.from?.pathname || '/dashboard';
         setTimeout(() => {
-          navigate(`/reset-password?email=${encodeURIComponent(email)}&code=${otpCode}`);
-        }, 1500);
-      } else {
-        localStorage.setItem('accessToken', accessToken);
-        setSuccessMsg('Account verified successfully. Logging in...');
-        
-        // Synchronize authenticated session globally
-        await syncProfile();
-        
-        setTimeout(() => {
-          navigate('/dashboard');
+          navigate(origin, { replace: true });
         }, 1500);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'OTP verification failed. Please try again.');
-      setIsLoading(false);
+      console.error(err);
+      setError(err.response?.data?.message || 'Invalid or expired verification code.');
+      
+      // If error indicates too many attempts, redirect back to login
+      if (err.response?.data?.message?.includes('too many') || err.response?.data?.message?.includes('attempts')) {
+        setTimeout(() => {
+          navigate('/login');
+        }, 2500);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Auto-submit when all 6 digits are entered
-  useEffect(() => {
-    const code = otpValues.join('');
-    if (code.length === 6 && !isLoading && !successMsg) {
-      const timer = setTimeout(() => {
-        handleVerify({ preventDefault: () => {} });
-      }, 300); // 300ms delay so the user sees the filled digits
-      return () => clearTimeout(timer);
-    }
-  }, [otpValues, isLoading, successMsg]);
-
   const handleResend = async () => {
-    if (!canResend) return;
+    if (cooldown > 0) return;
 
+    setResendLoading(true);
     setError('');
-    setSuccessMsg('');
-    setIsLoading(true);
-
+    setResendMessage('');
     try {
-      await api.post('/auth/resend-otp', {
-        email,
-        purpose
+      await api.post('/auth/resend-login-otp', { 
+        email, 
+        purpose: 'LOGIN' 
       });
-      setSuccessMsg('A new verification code has been sent to your email.');
-      setCooldown(60);
-      setCanResend(false);
-      setOtpValues(['', '', '', '', '', '']);
-      inputRefs[0].current.focus();
+      setResendMessage('A new login verification code has been sent.');
+      setCooldown(60); // 60 seconds cooldown
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to resend OTP code.');
+      console.error(err);
+      setError(err.response?.data?.message || 'Failed to resend login code.');
     } finally {
-      setIsLoading(false);
+      setResendLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col gap-6 text-left max-w-md mx-auto p-4">
-      <div className="text-center sm:text-left">
-        <h3 className="text-xl font-bold font-display text-[var(--color-brand-text-primary)]">
-          Security Verification
-        </h3>
-        <p className="text-xs text-[var(--color-brand-text-secondary)] mt-2 leading-relaxed">
-          We sent a 6-digit One-Time Password (OTP) code to <strong className="text-slate-700">{email}</strong>. Entering it below allows us to verify your request.
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <div className="space-y-2 text-center">
+        <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-2">
+          <ShieldCheck className="w-6 h-6" />
+        </div>
+        <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight font-display">
+          2-Factor Verification
+        </h2>
+        <p className="text-sm text-slate-500">
+          For your security, enter the 6-digit code sent to <span className="font-semibold text-slate-700">{email || 'your email'}</span>.
         </p>
       </div>
 
-      {error && (
-        <div className="flex items-center gap-2 p-3 rounded-xl border text-xs bg-[var(--color-brand-red)]/10 border-[var(--color-brand-red)]/30 text-[var(--color-brand-red)] animate-shake">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="flex items-center gap-2 p-3 rounded-xl border text-xs bg-green-50 border-green-200 text-green-700">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      <form onSubmit={handleVerify} className="flex flex-col gap-6">
-        <div className="flex justify-between gap-2" onPaste={handlePaste}>
-          {otpValues.map((val, idx) => (
-            <input
-              key={idx}
-              ref={inputRefs[idx]}
-              type="text"
-              inputMode="numeric"
-              maxLength={1}
-              value={val}
-              onChange={(e) => handleChange(idx, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(idx, e)}
-              className="w-12 h-12 text-center text-lg font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white transition-all shadow-sm"
-              autoFocus={idx === 0}
-            />
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="rememberDevice"
-            checked={rememberDevice}
-            onChange={(e) => setRememberDevice(e.target.checked)}
-            className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 h-4 w-4 cursor-pointer"
-          />
-          <label htmlFor="rememberDevice" className="text-xs font-semibold text-slate-600 select-none cursor-pointer">
-            Remember this device for 30 days (skips verification)
-          </label>
-        </div>
-
-        <Button type="submit" isLoading={isLoading} className="w-full">
-          Confirm Code <ShieldCheck className="w-4 h-4 ml-2" />
-        </Button>
-
-        <div className="flex items-center justify-between text-xs mt-2 border-t border-slate-100 pt-4">
-          <span className="text-[var(--color-brand-text-secondary)]">
-            {!canResend ? `Resend code in ${cooldown}s` : 'Did not receive code?'}
-          </span>
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={!canResend}
-            className={`flex items-center gap-1.5 font-bold transition-all cursor-pointer ${
-              canResend 
-                ? 'text-[var(--color-brand-blue)] hover:underline' 
-                : 'text-slate-300 cursor-not-allowed'
-            }`}
+      <AnimatePresence mode="wait">
+        {success ? (
+          <motion.div
+            key="success-container"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="p-6 bg-green-50 border border-green-200 rounded-2xl text-center space-y-3"
           >
-            <RefreshCcw className="w-3.5 h-3.5" />
-            Resend OTP
-          </button>
-        </div>
-      </form>
+            <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto shadow-sm">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-green-800">Verification Successful</h3>
+            <p className="text-xs text-green-600">
+              Access granted. Signing you in...
+            </p>
+          </motion.div>
+        ) : (
+          <div className="space-y-6">
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm flex items-start gap-2.5 overflow-hidden"
+                >
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </motion.div>
+              )}
+              {resendMessage && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-sm flex items-start gap-2.5 overflow-hidden"
+                >
+                  <Mail className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{resendMessage}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-      <div className="text-center text-xs mt-2">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Digit Inputs */}
+              <div className="flex justify-between gap-2" onPaste={handlePaste}>
+                {otp.map((data, index) => (
+                  <input
+                    key={index}
+                    type="text"
+                    maxLength="1"
+                    ref={(el) => (inputRefs.current[index] = el)}
+                    value={data}
+                    onChange={(e) => handleChange(e.target, index)}
+                    onKeyDown={(e) => handleKeyDown(e, index)}
+                    className="w-12 h-12 text-center text-lg font-bold bg-white border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl focus:outline-none transition-all"
+                  />
+                ))}
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-sm font-semibold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/25 border-t-white rounded-full animate-spin"></div>
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <span>Verify & Login</span>
+                )}
+              </button>
+            </form>
+
+            {/* Resend Cooldown */}
+            <div className="text-center">
+              <button
+                type="button"
+                disabled={cooldown > 0 || resendLoading}
+                onClick={handleResend}
+                className={`text-sm font-semibold transition-colors ${
+                  cooldown > 0
+                    ? 'text-slate-400 cursor-not-allowed'
+                    : 'text-blue-600 hover:text-blue-700 cursor-pointer'
+                }`}
+              >
+                {resendLoading ? (
+                  <span className="flex items-center gap-1.5 justify-center">
+                    <div className="w-3.5 h-3.5 border-2 border-blue-600/25 border-t-blue-600 rounded-full animate-spin"></div>
+                    Resending...
+                  </span>
+                ) : cooldown > 0 ? (
+                  `Resend code in ${cooldown}s`
+                ) : (
+                  'Resend verification code'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <div className="text-center text-sm text-slate-500 border-t border-slate-100 pt-4">
         <Link
           to="/login"
-          className="text-[var(--color-brand-blue)] hover:underline font-semibold"
+          className="font-semibold text-slate-600 hover:text-slate-800 transition-colors"
         >
-          Cancel and return to Login
+          Back to Sign In
         </Link>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

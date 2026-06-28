@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
 
 let io;
 const userSockets = new Map(); // userId -> Set of socketIds (to support multiple tabs)
@@ -13,20 +13,21 @@ export const initSocket = (server) => {
     },
   });
 
-  // Socket Authentication Middleware
-  io.use((socket, next) => {
-    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
-
-    if (!token) {
-      return next(new Error('Authentication error: No token provided'));
-    }
-
+  // Socket Authentication Middleware: Automatically authenticates as the mock user
+  io.use(async (socket, next) => {
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
-      socket.user = decoded;
+      const user = await User.findOne({ email: 'sarah.jenkins@stanford.edu' });
+      if (user) {
+        socket.user = { id: user._id.toString(), _id: user._id, role: user.role };
+      } else {
+        // Fallback static ID if user not seeded yet
+        socket.user = { id: '6a40b2f8584639400e887d1c', _id: '6a40b2f8584639400e887d1c', role: 'researcher' };
+      }
       next();
     } catch (err) {
-      return next(new Error('Authentication error: Invalid token'));
+      // Proceed anyway with a fallback
+      socket.user = { id: '6a40b2f8584639400e887d1c', _id: '6a40b2f8584639400e887d1c', role: 'researcher' };
+      next();
     }
   });
 

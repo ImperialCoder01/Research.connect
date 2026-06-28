@@ -14,6 +14,8 @@ import {
   sendCollaborationRequestAcceptedEmail,
   sendCollaborationStatusChangedEmail,
 } from '../services/email.service.js';
+import * as feedService from '../services/feed.service.js';
+
 
 // ==========================================
 // 1. COLLABORATION STATUS
@@ -894,3 +896,72 @@ export const getSuggestedCollaborators = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * GET /api/collaborations
+ * Retrieve aggregated information for collaboration widget panel
+ */
+export const getCollaborationPanelInfo = async (req, res, next) => {
+  try {
+    const userId = req.user._id || req.user.id;
+
+    // Requests list
+    const pendingReceived = await CollaborationRequest.find({ receiver: userId, status: 'Pending' })
+      .populate('sender', 'fullName email role')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const pendingSent = await CollaborationRequest.find({ sender: userId, status: 'Pending' })
+      .populate('receiver', 'fullName email role')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const accepted = await CollaborationRequest.find({
+      $or: [{ sender: userId }, { receiver: userId }],
+      status: 'Accepted'
+    })
+      .populate('sender receiver', 'fullName email role')
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    const rejected = await CollaborationRequest.find({
+      $or: [{ sender: userId }, { receiver: userId }],
+      status: 'Rejected'
+    })
+      .populate('sender receiver', 'fullName email role')
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    // Active collaborations list
+    const projects = await Collaboration.find({ members: userId })
+      .populate('members', 'fullName email role')
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    // AI suggestions using feed service
+    const suggestedCollaborators = await feedService.getRecommendedResearchers(userId, 1, 5);
+
+    // Collaboration Score calculation (0-100)
+    // Formula: activeProjects * 15 + acceptedRequests * 10 + suggestedCollaborators.length * 5
+    const collaborationScore = Math.min(
+      projects.length * 15 + accepted.length * 10 + suggestedCollaborators.length * 5 + 40,
+      100
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        pendingReceived,
+        pendingSent,
+        accepted,
+        rejected,
+        projects,
+        suggestedCollaborators,
+        collaborationScore
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

@@ -31,6 +31,31 @@ const upload = multer({
   },
 });
 
+const cvStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, 'cv-' + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const cvUpload = multer({
+  storage: cvStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB Limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /pdf|doc|docx/;
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = filetypes.test(file.mimetype);
+
+    if (extname || mimetype) {
+      return cb(null, true);
+    }
+    cb(new Error('Only document files (pdf, doc, docx) are allowed!'));
+  },
+});
+
 const router = express.Router();
 
 // Apply protect middleware to all profile routes
@@ -68,6 +93,9 @@ router.patch('/publications', profileController.patchPublications);
 
 router.post('/photo', upload.single('photo'), profileController.uploadPhoto);
 router.post('/cover', upload.single('cover'), profileController.uploadPhoto);
+router.post('/upload-photo', upload.single('photo'), profileController.uploadPhoto);
+router.post('/upload-cover', upload.single('cover'), profileController.uploadPhoto);
+router.post('/upload-cv', cvUpload.single('cv'), profileController.uploadCV);
 
 // Education Routes
 router.post('/education', profileController.addEducation);
