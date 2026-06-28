@@ -66,7 +66,6 @@ const researchFeedSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: true, // TTL Index will be created on this field
     },
   },
   {

@@ -60,6 +60,92 @@ export const getMyProfile = async (req, res, next) => {
 };
 
 /**
+ * Get another researcher's profile by user ID with relationship states
+ */
+export const getProfileByUserId = async (req, res, next) => {
+  try {
+    const targetUserId = req.params.id;
+    const currentUserId = req.user.id || req.user._id;
+
+    const profile = await Profile.findOne({ user: targetUserId })
+      .populate('user', 'fullName email role status emailVerified')
+      .populate('academicProfile')
+      .populate('researchMetrics')
+      .populate('educationList')
+      .populate('experienceList')
+      .populate({
+        path: 'researchAreas',
+        populate: { path: 'researchArea', select: 'areaName slug' }
+      })
+      .populate({
+        path: 'keywords',
+        populate: { path: 'keyword', select: 'keyword slug' }
+      });
+
+    if (!profile) {
+      return next(new AppError('Profile not found for this user.', 404));
+    }
+
+    const publications = await Publication.find({ user: targetUserId })
+      .populate({
+        path: 'authors',
+        options: { sort: { authorOrder: 1 } }
+      });
+
+    // 1. Fetch Follow status
+    const Follower = mongoose.model('Follower');
+    const isFollowing = await Follower.findOne({ follower: currentUserId, following: targetUserId });
+
+    // 2. Fetch Connection status
+    const ResearcherConnection = mongoose.model('ResearcherConnection');
+    const connection = await ResearcherConnection.findOne({
+      $or: [
+        { requester: currentUserId, receiver: targetUserId },
+        { requester: targetUserId, receiver: currentUserId },
+      ],
+    });
+
+    let connectionState = 'Not Connected';
+    let connectionId = null;
+    if (connection) {
+      connectionId = connection._id;
+      if (connection.status === 'Connected') {
+        connectionState = 'Connected';
+      } else if (connection.status === 'Pending') {
+        connectionState = connection.requester.toString() === currentUserId.toString() ? 'Pending Sent' : 'Pending Received';
+      }
+    }
+
+    // 3. Fetch Blocked status
+    const BlockedUser = mongoose.model('BlockedUser');
+    const isBlocked = await BlockedUser.findOne({ blocker: currentUserId, blocked: targetUserId });
+
+    // 4. Fetch Collaboration Status
+    const CollaborationStatus = mongoose.model('CollaborationStatus');
+    const colStatusRecord = await CollaborationStatus.findOne({ user: targetUserId });
+
+    // 5. Followers / Following counts
+    const followersCount = await Follower.countDocuments({ following: targetUserId });
+    const followingCount = await Follower.countDocuments({ follower: targetUserId });
+
+    res.status(200).json({
+      status: 'success',
+      profile,
+      publications,
+      isFollowing: !!isFollowing,
+      connectionState,
+      connectionId,
+      isBlocked: !!isBlocked,
+      collaborationStatus: colStatusRecord?.status || 'Open for Collaboration',
+      followersCount,
+      followingCount,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Update current user profile fields
  */
 export const updateProfile = async (req, res, next) => {

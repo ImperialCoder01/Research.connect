@@ -387,3 +387,157 @@ export const sendSecurityAlertEmail = async (email, alertDetails) => {
     fallbackConsoleMsg: `Security Alert: ${reason} - ${description}`,
   });
 };
+
+/**
+ * 8. Send Collaboration Request Email
+ */
+export const sendCollaborationRequestEmail = async (email, senderName, projectTitle) => {
+  const title = 'New Collaboration Request Received';
+  const contentHtml = `
+    <div class="body">
+      <h2>Hello,</h2>
+      <p>You have received a new collaboration request from <strong>${senderName}</strong> for the project: <strong>"${projectTitle}"</strong>.</p>
+      <p>Please log in to your ResearchConnect dashboard to review the request, accept/reject it, or ask questions.</p>
+      <div style="text-align: center; margin-top: 20px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/collaboration" class="btn">View Collaboration Request</a>
+      </div>
+    </div>
+  `;
+  const html = getEmailWrapper(title, contentHtml);
+  return await sendEmail({
+    to: email,
+    subject: `[ResearchConnect] New Collaboration Request from ${senderName}`,
+    html,
+    fallbackConsoleMsg: `Collaboration request email sent to ${email} for "${projectTitle}" from ${senderName}.`,
+  });
+};
+
+/**
+ * 9. Send Collaboration Request Accepted Email
+ */
+export const sendCollaborationRequestAcceptedEmail = async (email, receiverName, projectTitle) => {
+  const title = 'Collaboration Request Accepted!';
+  const contentHtml = `
+    <div class="body">
+      <h2>Hello,</h2>
+      <p>Great news! <strong>${receiverName}</strong> has accepted your collaboration request for the project: <strong>"${projectTitle}"</strong>.</p>
+      <p>An active collaboration workspace has been created for this project. You can now chat, share files, and schedule meetings on the platform.</p>
+      <div style="text-align: center; margin-top: 20px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/collaboration" class="btn">Go to Collaboration Workspace</a>
+      </div>
+    </div>
+  `;
+  const html = getEmailWrapper(title, contentHtml);
+  return await sendEmail({
+    to: email,
+    subject: `[ResearchConnect] Collaboration Request Accepted by ${receiverName}!`,
+    html,
+    fallbackConsoleMsg: `Collaboration accepted email sent to ${email} for "${projectTitle}" by ${receiverName}.`,
+  });
+};
+
+/**
+ * 10. Send New Connection Email
+ */
+export const sendNewConnectionEmail = async (email, connectorName) => {
+  const title = 'New Connection Request';
+  const contentHtml = `
+    <div class="body">
+      <h2>Hello,</h2>
+      <p><strong>${connectorName}</strong> wants to connect with you on ResearchConnect.</p>
+      <p>Building your network helps you discover new research opportunities and stay updated with your peers.</p>
+      <div style="text-align: center; margin-top: 20px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/connections" class="btn">Review Connection Request</a>
+      </div>
+    </div>
+  `;
+  const html = getEmailWrapper(title, contentHtml);
+  return await sendEmail({
+    to: email,
+    subject: `[ResearchConnect] Connection Request from ${connectorName}`,
+    html,
+    fallbackConsoleMsg: `Connection request email sent to ${email} from ${connectorName}.`,
+  });
+};
+
+/**
+ * 11. Send New Follower Email
+ */
+export const sendNewFollowerEmail = async (email, followerName) => {
+  const title = 'You Have a New Follower';
+  const contentHtml = `
+    <div class="body">
+      <h2>Hello,</h2>
+      <p><strong>${followerName}</strong> is now following your research activities on ResearchConnect.</p>
+      <p>They will receive updates in their activity feed whenever you share new publications, datasets, or projects.</p>
+      <div style="text-align: center; margin-top: 20px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile" class="btn">View Your Profile</a>
+      </div>
+    </div>
+  `;
+  const html = getEmailWrapper(title, contentHtml);
+  return await sendEmail({
+    to: email,
+    subject: `[ResearchConnect] ${followerName} is now following you`,
+    html,
+    fallbackConsoleMsg: `New follower email sent to ${email} for follower ${followerName}.`,
+  });
+};
+
+/**
+ * 12. Send Collaboration Status Changed Email
+ */
+export const sendCollaborationStatusChangedEmail = async (email, researcherName, newStatus) => {
+  const title = 'Collaboration Status Updated';
+  const contentHtml = `
+    <div class="body">
+      <h2>Hello ${researcherName},</h2>
+      <p>Your collaboration status has been successfully updated to: <strong>${newStatus}</strong>.</p>
+      <p>Other researchers will now see this status on your profile, search results, and recommendations.</p>
+      <div style="text-align: center; margin-top: 20px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/collaboration" class="btn">Manage Collaboration Status</a>
+      </div>
+    </div>
+  `;
+  const html = getEmailWrapper(title, contentHtml);
+  return await sendEmail({
+    to: email,
+    subject: `[ResearchConnect] Your Collaboration Status: ${newStatus}`,
+    html,
+    fallbackConsoleMsg: `Status update email sent to ${email} for status: ${newStatus}.`,
+  });
+};
+
+/**
+ * 13. Send New Publication Notification to Followers
+ */
+export const sendNewPublicationFollowersEmail = async (emails, authorName, publicationTitle, publicationType) => {
+  if (!emails || emails.length === 0) return { success: true };
+  const title = `New ${publicationType} Published by ${authorName}`;
+  const contentHtml = `
+    <div class="body">
+      <h2>Hello,</h2>
+      <p><strong>${authorName}</strong>, whom you follow, has just shared a new ${publicationType.toLowerCase()}:</p>
+      <p style="font-size: 16px; font-weight: bold; color: #1E3A8A; background-color: #F8FAFC; border-left: 4px solid #2563EB; padding: 12px; margin: 16px 0;">
+        "${publicationTitle}"
+      </p>
+      <p>Click below to view the publication details, download the files, or bookmark it.</p>
+      <div style="text-align: center; margin-top: 20px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/publications" class="btn">View Publication</a>
+      </div>
+    </div>
+  `;
+  const html = getEmailWrapper(title, contentHtml);
+  
+  const sendPromises = emails.map(email => 
+    sendEmail({
+      to: email,
+      subject: `[ResearchConnect] New ${publicationType} by ${authorName}: ${publicationTitle}`,
+      html,
+      fallbackConsoleMsg: `Follower alert sent to ${email} for new publication "${publicationTitle}" by ${authorName}.`,
+    })
+  );
+  
+  await Promise.all(sendPromises);
+  return { success: true };
+};

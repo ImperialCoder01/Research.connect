@@ -32,7 +32,6 @@ const trustedDeviceSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: [true, 'Expiration date is required'],
-      index: true,
     },
   },
   {

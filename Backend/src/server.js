@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 dns.setServers(['1.1.1.1', '8.8.8.8']);
 import app from './app.js';
 import connectDB from './config/db.js';
+import { initSocket } from './services/socket.service.js';
 
 // Handle uncaught exceptions globally
 process.on('uncaughtException', (err) => {
@@ -24,6 +25,9 @@ const port = process.env.PORT || 5000;
 const server = app.listen(port, () => {
   console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${port}`);
 });
+
+// Initialize Socket.io
+initSocket(server);
 
 // Handle unhandled promise rejections globally
 process.on('unhandledRejection', (err) => {

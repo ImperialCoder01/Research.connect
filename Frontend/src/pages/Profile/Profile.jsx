@@ -10,6 +10,7 @@ import {
   ExternalLink,
   BookOpen, 
   User,
+  Users,
   GraduationCap,
   Briefcase,
   Layers,
@@ -89,6 +90,46 @@ const ProfilePage = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
 
+  // Collaboration & Network States
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [connectionState, setConnectionState] = useState('Not Connected');
+  const [connectionId, setConnectionId] = useState(null);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [collaborationStatus, setCollaborationStatus] = useState('Open for Collaboration');
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [isOwnProfile, setIsOwnProfile] = useState(true);
+
+  // Collaborate Modal States
+  const [collabModalOpen, setCollabModalOpen] = useState(false);
+  const [collabForm, setCollabForm] = useState({
+    projectTitle: '',
+    researchArea: '',
+    purpose: '',
+    expectedContribution: '',
+    requiredSkills: '',
+    timeline: '',
+    fundingAvailable: false,
+    message: '',
+    priority: 'Medium',
+  });
+
+  const statusOptions = [
+    { value: 'Open for Collaboration', color: 'bg-emerald-500', text: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', icon: '🟢' },
+    { value: 'Available for Selected Projects', color: 'bg-amber-500', text: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', icon: '🟡' },
+    { value: 'Looking for Co-authors', color: 'bg-blue-500', text: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20', icon: '🔵' },
+    { value: 'Looking for Research Funding', color: 'bg-purple-500', text: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/20', icon: '🟣' },
+    { value: 'Looking for Supervisor', color: 'bg-orange-500', text: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20', icon: '🟠' },
+    { value: 'Looking for PhD Students', color: 'bg-amber-700', text: 'text-amber-700', bg: 'bg-amber-700/10', border: 'border-amber-700/20', icon: '🟤' },
+    { value: 'Looking for Master\'s Students', color: 'bg-emerald-600', text: 'text-emerald-600', bg: 'bg-emerald-600/10', border: 'border-emerald-600/20', icon: '🟢' },
+    { value: 'Looking for Interns', color: 'bg-sky-600', text: 'text-sky-600', bg: 'bg-sky-600/10', border: 'border-sky-600/20', icon: '🔵' },
+    { value: 'Looking for Industry Partners', color: 'bg-fuchsia-600', text: 'text-fuchsia-600', bg: 'bg-fuchsia-600/10', border: 'border-fuchsia-600/20', icon: '🟣' },
+    { value: 'Currently Not Available', color: 'bg-rose-500', text: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/20', icon: '🔴' }
+  ];
+
+  const getStatusOption = (val) => statusOptions.find(o => o.value === val) || statusOptions[0];
+
+
   const getPhotoUrl = (path, defaultUrl) => {
     if (!path) return defaultUrl;
     if (path.startsWith('http')) return path;
@@ -160,7 +201,8 @@ const ProfilePage = () => {
 
   const completeness = getCompletenessDetails();
 
-  const tabs = ['About', 'Education', 'Experience', 'Research Interests', 'Publications', 'Projects', 'Achievements'];
+  const tabs = ['About', 'Activity', 'Education', 'Experience', 'Research Interests', 'Publications', 'Projects', 'Achievements'];
+
 
   const handleUnlink = async (provider) => {
     if (window.confirm(`Are you sure you want to unlink your ${provider}?`)) {
@@ -264,21 +306,110 @@ const ProfilePage = () => {
   // Fetch real profile details and publications on mount
   const fetchProfileDetails = async () => {
     try {
-      const response = await api.get('/profile/me');
-      setProfileData(response.data.profile);
-      setPublications(response.data.publications || []);
+      const queryId = new URLSearchParams(window.location.search).get('id');
+      if (queryId && queryId !== user?.user?._id) {
+        setIsOwnProfile(false);
+        const response = await api.get(`/profile/user/${queryId}`);
+        setProfileData(response.data.profile);
+        setPublications(response.data.publications || []);
+        setIsFollowing(response.data.isFollowing);
+        setConnectionState(response.data.connectionState);
+        setConnectionId(response.data.connectionId);
+        setIsBlocked(response.data.isBlocked);
+        setCollaborationStatus(response.data.collaborationStatus);
+        setFollowersCount(response.data.followersCount);
+        setFollowingCount(response.data.followingCount);
+      } else {
+        setIsOwnProfile(true);
+        const response = await api.get('/profile/me');
+        setProfileData(response.data.profile);
+        setPublications(response.data.publications || []);
+        
+        // Fetch own status
+        try {
+          const colStatusRes = await api.get('/collaboration/status');
+          setCollaborationStatus(colStatusRes.data.data?.status || 'Open for Collaboration');
+        } catch (err) {
+          console.error('Failed to load collaboration status');
+        }
 
-      // Fetch Google Scholar connection status
-      try {
-        const statusRes = await api.get('/profile/google-scholar/status');
-        setScholarStatus(statusRes.data);
-      } catch (err) {
-        console.error('Failed to load Google Scholar status:', err);
+        // Fetch own followers
+        try {
+          const followRes = await api.get('/follows/dashboard');
+          setFollowersCount(followRes.data.data?.followers?.length || 0);
+          setFollowingCount(followRes.data.data?.following?.length || 0);
+        } catch (err) {
+          console.error('Failed to load followers counts');
+        }
+
+        // Fetch Google Scholar connection status
+        try {
+          const statusRes = await api.get('/profile/google-scholar/status');
+          setScholarStatus(statusRes.data);
+        } catch (err) {
+          console.error('Failed to load Google Scholar status:', err);
+        }
       }
     } catch (err) {
       console.error('Failed to load profile details', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFollowToggle = async () => {
+    try {
+      const queryId = new URLSearchParams(window.location.search).get('id');
+      if (!queryId) return;
+      if (isFollowing) {
+        await api.delete(`/follows/unfollow/${queryId}`);
+        setIsFollowing(false);
+        setFollowersCount(prev => Math.max(0, prev - 1));
+      } else {
+        await api.post(`/follows/follow/${queryId}`);
+        setIsFollowing(true);
+        setFollowersCount(prev => prev + 1);
+      }
+    } catch (err) {
+      console.error('Follow action failed:', err);
+    }
+  };
+
+  const handleConnectAction = async () => {
+    try {
+      const queryId = new URLSearchParams(window.location.search).get('id');
+      if (!queryId) return;
+      if (connectionState === 'Not Connected') {
+        const res = await api.post(`/connections/connect/${queryId}`);
+        setConnectionState('Pending Sent');
+        setConnectionId(res.data.data._id);
+      } else if (connectionState === 'Pending Received') {
+        await api.patch(`/connections/accept/${connectionId}`);
+        setConnectionState('Connected');
+      }
+    } catch (err) {
+      console.error('Connection action failed:', err);
+    }
+  };
+
+  const handleSendCollabRequest = async (e) => {
+    e.preventDefault();
+    try {
+      const queryId = new URLSearchParams(window.location.search).get('id');
+      const payload = {
+        ...collabForm,
+        receiverId: queryId,
+        requiredSkills: collabForm.requiredSkills.split(',').map(s => s.trim()).filter(Boolean),
+      };
+      await api.post('/collaboration/requests', payload);
+      alert('Collaboration request sent successfully!');
+      setCollabModalOpen(false);
+      setCollabForm({
+        projectTitle: '', researchArea: '', purpose: '', expectedContribution: '',
+        requiredSkills: '', timeline: '', fundingAvailable: false, message: '', priority: 'Medium'
+      });
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to send collaboration request');
     }
   };
 
@@ -462,32 +593,75 @@ const ProfilePage = () => {
           <div className="flex-1 pt-20 md:pt-24 space-y-4">
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
               <div>
-                <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2 leading-none font-display">
+                <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight flex flex-wrap items-center gap-2 leading-none font-display">
                   {fullName}
                   <CheckCircle2 className="w-6 h-6 text-blue-600 fill-blue-50/50 hover:scale-110 transition-transform cursor-pointer" />
                   <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200/50 rounded-full text-[9px] font-extrabold tracking-wider uppercase font-sans">
                     Score {completeness.percentage}%
                   </span>
+                  {(() => {
+                    const opt = getStatusOption(collaborationStatus);
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${opt.bg} ${opt.text} ${opt.border} animate-pulse`}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                        {opt.value}
+                      </span>
+                    );
+                  })()}
                 </h2>
                 <p className="text-sm font-bold text-blue-600 mt-2 font-sans tracking-wide uppercase">{designation}</p>
               </div>
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-3">
-                <button 
-                  onClick={() => setShowEditModal(true)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all hover:-translate-y-0.5 cursor-pointer shadow-md shadow-blue-500/10"
-                >
-                  Edit Profile
-                </button>
+                {isOwnProfile ? (
+                  <>
+                    <button 
+                      onClick={() => setShowEditModal(true)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all hover:-translate-y-0.5 cursor-pointer shadow-md shadow-blue-500/10"
+                    >
+                      Edit Profile
+                    </button>
+                    <a 
+                      href="/collaboration"
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all hover:-translate-y-0.5 text-center shadow-md shadow-slate-900/10"
+                    >
+                      Manage Collaboration
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      onClick={handleConnectAction}
+                      disabled={connectionState === 'Pending Sent'}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all hover:-translate-y-0.5 cursor-pointer shadow-md ${
+                        connectionState === 'Connected' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/10' :
+                        connectionState === 'Pending Sent' ? 'bg-slate-150 text-slate-400 border border-slate-200 cursor-not-allowed' :
+                        'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/10'
+                      }`}
+                    >
+                      {connectionState === 'Connected' ? 'Connected' :
+                       connectionState === 'Pending Sent' ? 'Invitation Sent' :
+                       connectionState === 'Pending Received' ? 'Accept Invitation' : 'Connect'}
+                    </button>
+                    <button 
+                      onClick={handleFollowToggle}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all hover:-translate-y-0.5 cursor-pointer shadow-md ${
+                        isFollowing ? 'border border-slate-200 hover:bg-slate-50 text-slate-600' : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10'
+                      }`}
+                    >
+                      {isFollowing ? 'Following' : 'Follow'}
+                    </button>
+                    <button 
+                      onClick={() => setCollabModalOpen(true)}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all hover:-translate-y-0.5 cursor-pointer shadow-md shadow-indigo-500/10"
+                    >
+                      Collaborate
+                    </button>
+                  </>
+                )}
                 <button className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition-all hover:-translate-y-0.5 cursor-pointer">
                   Share Profile
-                </button>
-                <button className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all hover:-translate-y-0.5 cursor-pointer shadow-md shadow-slate-900/10">
-                  Follow
-                </button>
-                <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all hover:-translate-y-0.5 cursor-pointer shadow-md shadow-indigo-500/10">
-                  Collaborate
                 </button>
               </div>
             </div>
@@ -1159,6 +1333,34 @@ const ProfilePage = () => {
             </>
           )}
 
+          {activeTab === 'Activity' && (
+            <div className="glass-card rounded-3xl p-8 bg-white border border-slate-200/80 shadow-sm space-y-6">
+              <h3 className="text-base font-bold text-slate-900 font-display">Recent Activity</h3>
+              {publications.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-slate-400 italic">No recent activity logged.</p>
+                </div>
+              ) : (
+                <div className="space-y-6 text-left">
+                  {publications.slice(0, 5).map((pub, idx) => (
+                    <div key={idx} className="flex gap-4 items-start border-b border-slate-100 pb-4 last:border-0">
+                      <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                          Shared a new {pub.publicationType?.toLowerCase() || 'publication'}
+                        </p>
+                        <h4 className="text-sm font-bold text-slate-900 mt-1">{pub.title}</h4>
+                        <p className="text-[11px] text-slate-500 mt-1">{pub.journal || pub.publisher} • {pub.publicationYear}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'Publications' && (
             <div className="glass-card rounded-3xl p-8 bg-white border border-slate-200/80 shadow-sm space-y-6">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -1433,6 +1635,24 @@ const ProfilePage = () => {
         {/* Right Column (Metrics & Metadata Summary - Sticky) */}
         <div className="flex flex-col gap-8 text-left lg:sticky lg:top-6 self-start h-fit">
           
+          {/* Network & Activity Summary Card */}
+          <div className="glass-card rounded-3xl p-6 bg-white border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h3 className="text-xs font-extrabold text-slate-800 tracking-wide uppercase font-display">Research Network</h3>
+              <Users className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 font-sans">
+              <div className="bg-slate-50/65 border border-slate-100 p-3.5 rounded-2xl text-center">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Followers</span>
+                <span className="text-xl font-black text-slate-900 mt-1 block">{followersCount}</span>
+              </div>
+              <div className="bg-slate-50/65 border border-slate-100 p-3.5 rounded-2xl text-center">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block">Following</span>
+                <span className="text-xl font-black text-slate-900 mt-1 block">{followingCount}</span>
+              </div>
+            </div>
+          </div>
+
           {/* Research Metrics Dashboard Card */}
           <div className="glass-card rounded-3xl p-6 bg-white border border-slate-200/80 shadow-sm space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -1731,6 +1951,140 @@ const ProfilePage = () => {
           alert('Profile sync completed successfully!');
         }}
       />
+
+      {/* Send Collaboration Request Modal */}
+      {collabModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 overflow-y-auto max-h-[90vh] text-left animate-in fade-in zoom-in-95 duration-250">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
+              <div>
+                <h3 className="text-lg font-extrabold text-slate-900 font-display">Send Collaboration Invitation</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Invite {fullName} to join a research project.</p>
+              </div>
+              <button 
+                onClick={() => setCollabModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold p-1.5 hover:bg-slate-50 rounded-xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSendCollabRequest} className="space-y-4 font-sans text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Project Title</label>
+                <input
+                  type="text"
+                  required
+                  value={collabForm.projectTitle}
+                  onChange={e => setCollabForm({ ...collabForm, projectTitle: e.target.value })}
+                  placeholder="e.g. LLM-based Climate Forecasting Models"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">Research Area</label>
+                  <input
+                    type="text"
+                    required
+                    value={collabForm.researchArea}
+                    onChange={e => setCollabForm({ ...collabForm, researchArea: e.target.value })}
+                    placeholder="e.g. Climate AI"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">Timeline (Months)</label>
+                  <input
+                    type="text"
+                    required
+                    value={collabForm.timeline}
+                    onChange={e => setCollabForm({ ...collabForm, timeline: e.target.value })}
+                    placeholder="e.g. 6-12 Months"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Purpose / Goal of Collaboration</label>
+                <textarea
+                  required
+                  value={collabForm.purpose}
+                  onChange={e => setCollabForm({ ...collabForm, purpose: e.target.value })}
+                  placeholder="Describe the overarching scientific goal..."
+                  rows="2"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Expected Contribution from {fullName}</label>
+                <textarea
+                  required
+                  value={collabForm.expectedContribution}
+                  onChange={e => setCollabForm({ ...collabForm, expectedContribution: e.target.value })}
+                  placeholder="What expertise are you seeking from them?"
+                  rows="2"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Required Skills (comma-separated)</label>
+                <input
+                  type="text"
+                  value={collabForm.requiredSkills}
+                  onChange={e => setCollabForm({ ...collabForm, requiredSkills: e.target.value })}
+                  placeholder="e.g. Python, PyTorch, Data Analysis"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center space-x-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                <input
+                  type="checkbox"
+                  id="fundingAvailable"
+                  checked={collabForm.fundingAvailable}
+                  onChange={e => setCollabForm({ ...collabForm, fundingAvailable: e.target.checked })}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="fundingAvailable" className="font-bold text-slate-700 text-xs cursor-pointer select-none">
+                  Institutional / Project Funding Available
+                </label>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Personalized Message</label>
+                <textarea
+                  value={collabForm.message}
+                  onChange={e => setCollabForm({ ...collabForm, message: e.target.value })}
+                  placeholder="Write a brief, polite introduction..."
+                  rows="2"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCollabModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md shadow-indigo-500/10 transition-all"
+                >
+                  Send Invitation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

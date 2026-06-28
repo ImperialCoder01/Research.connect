@@ -9,31 +9,80 @@ const collaborationPreferenceSchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
-    openForCollaboration: {
-      type: Boolean,
-      default: true,
-    },
-    collaborationStatus: {
-      type: String,
-      enum: ['Open', 'Looking for Co-author', 'Joint Research', 'Industry Collaboration', 'Funded Project'],
-      default: 'Open',
-      index: true,
-    },
-    projectType: {
+    researchInterests: {
       type: [String],
       default: [],
+    },
+    preferredCollaborationType: {
+      type: [String],
+      enum: [
+        'Research Paper',
+        'Journal Publication',
+        'Conference Paper',
+        'Book Writing',
+        'Grant Proposal',
+        'Patent',
+        'Dataset Creation',
+        'Open Source Project',
+        'Software Development',
+        'Experiment',
+        'Literature Review'
+      ],
+      default: [],
+    },
+    collaborationMode: {
+      type: String,
+      enum: ['Remote', 'Hybrid', 'On-site'],
+      default: 'Remote',
+    },
+    availability: {
+      type: String,
+      enum: ['Full Time', 'Part Time', 'Weekends', 'Flexible'],
+      default: 'Flexible',
     },
     preferredCountries: {
       type: [String],
       default: [],
     },
-    duration: {
-      type: String,
-      default: '', // e.g. '3-6 months', '1 year+'
+    preferredInstitutions: {
+      type: [String],
+      default: [],
     },
-    fundingRequired: {
+    preferredLanguages: {
+      type: [String],
+      default: [],
+    },
+    preferredTimeZone: {
+      type: String,
+      default: '',
+    },
+    preferredCommunication: {
+      type: String,
+      enum: ['Email', 'Platform Chat', 'Video Meeting'],
+      default: 'Platform Chat',
+    },
+    maxActiveCollaborations: {
+      type: Number,
+      default: 5,
+    },
+    experienceLevel: {
+      type: String,
+      enum: ['Student', 'Research Scholar', 'Assistant Professor', 'Professor', 'Industry Researcher'],
+      default: 'Research Scholar',
+    },
+    fundingAvailable: {
       type: Boolean,
       default: false,
+    },
+    travelAvailable: {
+      type: Boolean,
+      default: false,
+    },
+    expectedStartDate: {
+      type: Date,
+    },
+    expectedEndDate: {
+      type: Date,
     },
   },
   {

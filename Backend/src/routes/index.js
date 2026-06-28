@@ -10,6 +10,9 @@ import domainRouter from './domain.routes.js';
 import keywordRouter from './keyword.routes.js';
 import taxonomyRouter from './taxonomy.routes.js';
 import searchRouter from './search.routes.js';
+import collaborationRouter from './collaboration.routes.js';
+import connectionRouter from './connection.routes.js';
+import followRouter from './follow.routes.js';
 
 const router = express.Router();
 
@@ -25,5 +28,8 @@ router.use('/domains', domainRouter);
 router.use('/keywords', keywordRouter);
 router.use('/taxonomy', taxonomyRouter);
 router.use('/search', searchRouter);
+router.use('/collaboration', collaborationRouter);
+router.use('/connections', connectionRouter);
+router.use('/follows', followRouter);
 
 export default router;

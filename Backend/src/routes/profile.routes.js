@@ -37,6 +37,7 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/me', profileController.getMyProfile);
+router.get('/user/:id', profileController.getProfileByUserId);
 router.put('/', validateProfileUpdate, profileController.updateProfile);
 router.get('/history', profileController.getProfileHistory);
 router.post('/rollback', profileController.rollbackProfile);

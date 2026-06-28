@@ -25,6 +25,8 @@ import UploadPublication from '../pages/Publications/Upload.jsx';
 import PublicationDetails from '../pages/Publications/Detail.jsx';
 import GlobalSearch from '../pages/Search/GlobalSearch.jsx';
 import RecommendationDashboard from '../pages/Dashboard/RecommendationDashboard.jsx';
+import CollaborationDashboard from '../pages/Dashboard/CollaborationDashboard.jsx';
+import ConnectionsDashboard from '../pages/Dashboard/ConnectionsDashboard.jsx';
 
 // Gate
 import ProtectedRoute from './ProtectedRoute.jsx';
@@ -99,6 +101,30 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <RecommendationDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="collaboration" 
+          element={
+            <ProtectedRoute>
+              <CollaborationDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="collaborations" 
+          element={
+            <ProtectedRoute>
+              <CollaborationDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="connections" 
+          element={
+            <ProtectedRoute>
+              <ConnectionsDashboard />
             </ProtectedRoute>
           } 
         />

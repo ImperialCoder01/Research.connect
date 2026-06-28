@@ -21,6 +21,66 @@ const validateExpress = (req) => {
   }
 };
 
+// Helper: Notify followers when a researcher publishes a new publication
+const notifyFollowersOfPublication = async (userId, publication) => {
+  try {
+    const FollowerModel = mongoose.model('Follower');
+    const CollaborationNotificationModel = mongoose.model('CollaborationNotification');
+    const UserModel = mongoose.model('User');
+
+    const author = await UserModel.findById(userId);
+    if (!author) return;
+
+    const followers = await FollowerModel.find({ following: userId }).populate('follower');
+    if (!followers || followers.length === 0) return;
+
+    const followerEmails = [];
+    for (const follow of followers) {
+      const followerUser = follow.follower;
+      if (!followerUser) continue;
+
+      followerEmails.push(followerUser.email);
+
+      // Create database notification
+      const notif = await CollaborationNotificationModel.create({
+        user: followerUser._id,
+        sender: userId,
+        title: 'New Publication by Followed Researcher',
+        message: `${author.fullName} published a new ${publication.publicationType.toLowerCase()}: "${publication.title}"`,
+        type: 'NewPublication',
+        relatedEntity: publication._id,
+        onModel: 'Publication',
+      });
+
+      // Real-time notification
+      try {
+        const { sendRealTimeNotification } = await import('../services/socket.service.js');
+        sendRealTimeNotification(followerUser._id, 'NEW_PUBLICATION_BY_FOLLOWED', {
+          notification: notif,
+          publication,
+        });
+      } catch (err) {
+        console.error('Socket notification failed:', err);
+      }
+    }
+
+    // Send emails in background
+    try {
+      const { sendNewPublicationFollowersEmail } = await import('../services/email.service.js');
+      await sendNewPublicationFollowersEmail(
+        followerEmails,
+        author.fullName,
+        publication.title,
+        publication.publicationType
+      );
+    } catch (err) {
+      console.error('Email notification failed:', err);
+    }
+  } catch (error) {
+    console.error('Error in notifyFollowersOfPublication:', error);
+  }
+};
+
 // Helper: build pagination meta
 const paginate = (page, limit) => {
   const p = Math.max(1, parseInt(page) || 1);
@@ -266,6 +326,7 @@ export const createPublication = async (req, res, next) => {
     // Recalculate researcher metrics if published
     if (status === 'published') {
       await Profile.recalculateMetrics(req.user._id);
+      await notifyFollowersOfPublication(req.user._id, publication);
     }
 
     // Populate authors to return in response
@@ -527,6 +588,7 @@ export const publishDraft = async (req, res, next) => {
 
     // Recalculate metrics
     await Profile.recalculateMetrics(req.user._id);
+    await notifyFollowersOfPublication(req.user._id, publication);
 
     res.status(200).json({
       status: 'success',
