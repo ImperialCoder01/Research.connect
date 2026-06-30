@@ -10,29 +10,29 @@ Research Connect utilizes a premium light-theme design system. All interface ele
 
 ### Color Tokens
 
-| UI Element | Color Code | Purpose / Usage |
-| :--- | :--- | :--- |
-| 🔵 **Primary Blue** | `#2563EB` | Primary buttons, active sidebar, links, icons |
-| 🔷 **Blue Hover** | `#1D4ED8` | Button hover, active states |
-| 🟣 **Indigo** | `#4F46E5` | Highlights, badges, charts |
-| 🟢 **Success Green** | `#22C55E` | Success status, citations, completed items |
-| 🟠 **Orange** | `#F59E0B` | i10-index, warning metrics |
-| 🔴 **Red** | `#EF4444` | Notifications, errors, alerts |
-| ⚪ **Page Background** | `#F8FAFC` | Main website background |
-| 🤍 **Card Background** | `#FFFFFF` | Cards, profile sections, widgets |
-| ⚫ **Primary Text** | `#0F172A` | Headings & important text |
-| ⚫ **Secondary Text**| `#475569` | Description & body text |
-| ⚪ **Border** | `#E2E8F0` | Card borders, inputs, dividers |
-| 🔹 **Light Blue** | `#DBEAFE` | Metric cards, tags, badges background |
-| 🟢 **Light Green** | `#DCFCE7` | Success metric background |
-| 🟠 **Light Orange**| `#FEF3C7` | Warning metric background |
-| 🟣 **Light Purple**| `#EDE9FE` | Research tags, AI sections |
+| UI Element             | Color Code | Purpose / Usage                               |
+| :--------------------- | :--------- | :-------------------------------------------- |
+| 🔵 **Primary Blue**    | `#2563EB`  | Primary buttons, active sidebar, links, icons |
+| 🔷 **Blue Hover**      | `#1D4ED8`  | Button hover, active states                   |
+| 🟣 **Indigo**          | `#4F46E5`  | Highlights, badges, charts                    |
+| 🟢 **Success Green**   | `#22C55E`  | Success status, citations, completed items    |
+| 🟠 **Orange**          | `#F59E0B`  | i10-index, warning metrics                    |
+| 🔴 **Red**             | `#EF4444`  | Notifications, errors, alerts                 |
+| ⚪ **Page Background** | `#F8FAFC`  | Main website background                       |
+| 🤍 **Card Background** | `#FFFFFF`  | Cards, profile sections, widgets              |
+| ⚫ **Primary Text**    | `#0F172A`  | Headings & important text                     |
+| ⚫ **Secondary Text**  | `#475569`  | Description & body text                       |
+| ⚪ **Border**          | `#E2E8F0`  | Card borders, inputs, dividers                |
+| 🔹 **Light Blue**      | `#DBEAFE`  | Metric cards, tags, badges background         |
+| 🟢 **Light Green**     | `#DCFCE7`  | Success metric background                     |
+| 🟠 **Light Orange**    | `#FEF3C7`  | Warning metric background                     |
+| 🟣 **Light Purple**    | `#EDE9FE`  | Research tags, AI sections                    |
 
 ### Gradients
 
-*   **Primary Gradient**: `#2563EB` ➔ `#4F46E5` (Primary Blue to Indigo)
-*   **Hero Background Gradient**: `#F8FAFC` ➔ `#FFFFFF` (Page Background to Card Background)
-*   **Success Gradient**: `#22C55E` ➔ `#10B981` (Success Green to Emerald)
+- **Primary Gradient**: `#2563EB` ➔ `#4F46E5` (Primary Blue to Indigo)
+- **Hero Background Gradient**: `#F8FAFC` ➔ `#FFFFFF` (Page Background to Card Background)
+- **Success Gradient**: `#22C55E` ➔ `#10B981` (Success Green to Emerald)
 
 ---
 
@@ -107,22 +107,26 @@ research-connect/
 ## 🏛️ Architecture Rules & Patterns
 
 ### 1. Feature-First Architecture
-*   Every feature must live inside a self-contained module folder under `modules/` in both frontend and backend.
-*   Frontend modules contain components, pages, hooks, services, validators, and an `index.js` entry point.
-*   Backend modules contain controllers, services, repositories, routes, validators, middlewares, helpers, DTOs, and an `index.js` entry point.
-*   **Module Name Matching**: Frontend and backend module names must always match exactly (e.g., `authentication`, `publication`, `dashboard`).
+
+- Every feature must live inside a self-contained module folder under `modules/` in both frontend and backend.
+- Frontend modules contain components, pages, hooks, services, validators, and an `index.js` entry point.
+- Backend modules contain controllers, services, repositories, routes, validators, middlewares, helpers, DTOs, and an `index.js` entry point.
+- **Module Name Matching**: Frontend and backend module names must always match exactly (e.g., `authentication`, `publication`, `dashboard`).
 
 ### 2. Separation of Concerns (Backend)
-*   **Routes**: Define endpoints and map them directly to controllers. No business logic.
-*   **Controllers**: Validate request payloads (using Zod), map parameters, call services, and return standardized JSON responses.
-*   **Services**: Contain all business logic, transactions, and calculations.
-*   **Repositories**: Encapsulate Mongoose queries and database mutations.
-*   **DTOs (Data Transfer Objects)**: Sanitize database documents before sending them in responses.
+
+- **Routes**: Define endpoints and map them directly to controllers. No business logic.
+- **Controllers**: Validate request payloads (using Zod), map parameters, call services, and return standardized JSON responses.
+- **Services**: Contain all business logic, transactions, and calculations.
+- **Repositories**: Encapsulate Mongoose queries and database mutations.
+- **DTOs (Data Transfer Objects)**: Sanitize database documents before sending them in responses.
 
 ### 3. Standardized API Responses
+
 All API responses must follow these exact JSON structures:
 
 #### Success Response
+
 ```json
 {
   "success": true,
@@ -133,6 +137,7 @@ All API responses must follow these exact JSON structures:
 ```
 
 #### Error Response
+
 ```json
 {
   "success": false,
@@ -145,19 +150,21 @@ All API responses must follow these exact JSON structures:
 ```
 
 ### 4. Naming Conventions
-*   **Folders**: lowercase (e.g., `publication`, `researcher`, `dashboard`).
-*   **React Components**: PascalCase (e.g., `PublicationCard.jsx`).
-*   **React Hooks**: camelCase starting with `use` (e.g., `usePublication.js`).
-*   **Services**: `*.service.js` (e.g., `auth.service.js`).
-*   **Controllers**: `*.controller.js` (e.g., `auth.controller.js`).
-*   **Routes**: `*.routes.js` (e.g., `auth.routes.js`).
-*   **Models**: PascalCase (e.g., `User.js`).
+
+- **Folders**: lowercase (e.g., `publication`, `researcher`, `dashboard`).
+- **React Components**: PascalCase (e.g., `PublicationCard.jsx`).
+- **React Hooks**: camelCase starting with `use` (e.g., `usePublication.js`).
+- **Services**: `*.service.js` (e.g., `auth.service.js`).
+- **Controllers**: `*.controller.js` (e.g., `auth.controller.js`).
+- **Routes**: `*.routes.js` (e.g., `auth.routes.js`).
+- **Models**: PascalCase (e.g., `User.js`).
 
 ---
 
 ## 🗄️ Database Schema Design
 
 ### 1. User Model (`User.js`)
+
 Stores account credentials, role details, and authentication/verification states.
 
 ```javascript
@@ -177,6 +184,7 @@ Stores account credentials, role details, and authentication/verification states
 ```
 
 ### 2. Researcher Profile Model (`ResearcherProfile.js`)
+
 Stores professional details, institution details, publication metrics, and social handles.
 
 ```javascript
@@ -210,12 +218,14 @@ Stores professional details, institution details, publication metrics, and socia
 ## 🚀 Quickstart & Installation
 
 ### Prerequisites
-*   Node.js (v18+)
-*   MongoDB (Local instance or Atlas cluster URI)
+
+- Node.js (v18+)
+- MongoDB (Local instance or Atlas cluster URI)
 
 ### Setup Instructions
 
 1.  **Clone the repository**:
+
     ```bash
     git clone <repository-url>
     cd Research.connect
@@ -223,6 +233,7 @@ Stores professional details, institution details, publication metrics, and socia
 
 2.  **Configure Environment Variables**:
     Create a `.env` file in the `backend/` directory based on the following template:
+
     ```env
     PORT=5000
     NODE_ENV=development
@@ -237,6 +248,7 @@ Stores professional details, institution details, publication metrics, and socia
     ```
 
 3.  **Install dependencies**:
+
     ```bash
     # Install backend dependencies
     cd backend
@@ -248,12 +260,14 @@ Stores professional details, institution details, publication metrics, and socia
     ```
 
 4.  **Seed the database**:
+
     ```bash
     cd ../backend
     node src/database/seed.js
     ```
 
 5.  **Start local development servers**:
+
     ```bash
     # Run backend (from backend/)
     npm run dev
@@ -263,32 +277,3 @@ Stores professional details, institution details, publication metrics, and socia
     ```
 
 ---
-
-## 🦾 Antigravity Master Prompt
-
-To extend this codebase or generate new features using Google DeepMind's **Antigravity** coding agent, feed the following prompt template to the agent:
-
-```text
-You are Antigravity, pair programming on the "Research Connect" platform.
-We strictly follow a Feature-First Architecture with two root folders: frontend/ and backend/.
-
-When implementing a new module, you must adhere to:
-1. Directory structures:
-   - Backend: src/modules/<name>/[controller, service, repository, routes, validator, middleware, helper, dto, index.js]
-   - Frontend: src/modules/<name>/[components, pages, hooks, services, api, utils, context, styles, constants, index.js]
-2. Coding Standards:
-   - Backend routes only call controllers. Controllers validate with Zod and call services. Services contain business logic. Repositories communicate with Mongoose.
-   - All API responses must follow:
-     Success: { "success": true, "message": "...", "data": {}, "error": null }
-     Error: { "success": false, "message": "...", "error": { "code": "...", "details": {} } }
-3. Color Palette:
-   - Use CSS variables mapped to:
-     Primary Blue: #2563EB, Blue Hover: #1D4ED8, Indigo: #4F46E5, Success Green: #22C55E, Orange: #F59E0B, Red: #EF4444.
-     Page Background: #F8FAFC, Card Background: #FFFFFF, Primary Text: #0F172A, Secondary Text: #475569, Border: #E2E8F0.
-     Light Blue: #DBEAFE, Light Green: #DCFCE7, Light Orange: #FEF3C7, Light Purple: #EDE9FE.
-   - Primary Gradient: #2563EB to #4F46E5.
-   - Success Gradient: #22C55E to #10B981.
-   - Hero Background Gradient: #F8FAFC to #FFFFFF.
-4. Process:
-   Explain the plan (Folder Structure, Files, Dependencies, APIs, Models, Controllers, Services) before writing any code.
-```
