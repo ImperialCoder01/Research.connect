@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;      /* #F8FAFC (Page Background) */
+    --foreground: 222 47% 11%;      /* #0F172A (Primary Text) */
+
+    --muted: 215 16% 47%;          /* #475569 (Secondary Text) */
+    --muted-foreground: 215 16% 47%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;             /* #FFFFFF (Card Background) */
+    --card-foreground: 222 47% 11%;
+
+    --border: 214 32% 91%;          /* #E2E8F0 (Border) */
+    --input: 214 32% 91%;
+
+    --primary: 221 83% 53%;         /* #2563EB (Primary Blue) */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 244 79% 58%;       /* #4F46E5 (Indigo) */
+    --secondary-foreground: 0 0% 100%;
+
+    --accent: 213 94% 93%;          /* #DBEAFE (Light Blue) */
+    --accent-foreground: 221 83% 53%;
+
+    --destructive: 0 84% 60%;       /* #EF4444 (Red) */
+    --destructive-foreground: 0 0% 100%;
+
+    --ring: 221 83% 53%;
+
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Glassmorphism utility class for light theme */
+.glass {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
+}
+
+/* Gradients */
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-[#2563EB] to-[#4F46E5];
+}
+
+.gradient-success {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-[#22C55E] to-[#10B981];
+}
+
+/* Background Gradients */
+.bg-hero-gradient {
+  background: linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%);
+}
+
+.bg-primary-gradient {
+  background: linear-gradient(135deg, #2563EB 0%, #4F46E5 100%);
+}
