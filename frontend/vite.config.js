@@ -6,6 +6,8 @@ import path from 'path';
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const port = Number(env.VITE_FRONTEND_PORT);
+  const resolvedPort = Number.isFinite(port) ? port : 5173;
 
   return {
     plugins: [react()],
@@ -15,7 +17,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: env.VITE_FRONTEND_PORT || 5173,
+      port: resolvedPort ,
       proxy: {
         '/api': {
           target: env.VITE_API_BASE_URL || 'http://localhost:5000',
