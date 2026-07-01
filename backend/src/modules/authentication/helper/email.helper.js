@@ -47,7 +47,7 @@ const createTransporter = () => {
 const transporter = createTransporter();
 
 export const sendVerificationEmail = async (email, token) => {
-  const verificationUrl = `${process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5174'}/verify-email?token=${token}`;
+  const verificationUrl = `${process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${token}`;
   
   const mailOptions = {
     from: `"Research Connect" <${process.env.EMAIL_USER || 'noreply@researchconnect.com'}>`,
