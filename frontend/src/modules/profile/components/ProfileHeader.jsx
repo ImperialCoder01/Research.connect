@@ -65,7 +65,7 @@ const ProfileHeader = ({
       className="bg-white rounded-3xl overflow-hidden border border-border shadow-sm"
     >
       {/* Cover Image */}
-      <div className="h-44 sm:h-60 relative w-full overflow-hidden group">
+      <div className="h-36 sm:h-48 relative w-full overflow-hidden group">
         <img
           src={profile?.coverImage || defaultCover}
           alt="Profile Cover"
@@ -95,10 +95,10 @@ const ProfileHeader = ({
       </div>
 
       {/* Profile Details Area */}
-      <div className="px-6 pb-6 pt-0 relative flex flex-col md:flex-row md:items-end gap-6">
+      <div className="px-6 pb-6 pt-0 relative flex flex-col md:flex-row md:items-center gap-6">
         
         {/* Avatar Wrapper with negative margin */}
-        <div className="-mt-14 sm:-mt-20 relative z-10">
+        <div className="-mt-20 sm:-mt-24 relative z-10">
           <ProfileAvatar 
             imageUrl={profile?.profileImage || user?.profileImage} 
             onAvatarChange={onAvatarChange} 
@@ -107,16 +107,16 @@ const ProfileHeader = ({
         </div>
 
         {/* Bio Details */}
-        <div className="flex-grow space-y-2 mt-4 md:mt-0 pt-2">
+        <div className="flex-grow space-y-1 mt-4 md:mt-0 pt-2">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl sm:text-2xl font-black text-text-primary tracking-tight">
+            <h2 className="text-2xl sm:text-3xl font-black text-text-primary tracking-tight leading-none">
               {user?.fullName || `${user?.firstName || ''} ${user?.lastName || ''}`}
             </h2>
             <CheckCircle className="w-5 h-5 text-primary fill-primary/10" title="Verified Researcher" />
           </div>
 
           {/* Social Links Row directly under the name */}
-          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          <div className="flex flex-wrap items-center gap-2 pt-0.5 pb-1">
             {Object.entries(socialIcons).map(([key, config]) => {
               const url = profile?.socialLinks?.[key];
               if (!url) return null;
@@ -137,14 +137,18 @@ const ProfileHeader = ({
             })}
           </div>
 
-          <p className="text-xs sm:text-sm font-bold text-primary">
-            {profile?.designation || 'Academic Researcher'} 
-            {profile?.department && ` @ ${profile.department}`}
-          </p>
+          {profile?.designation && (
+            <p className="text-xs sm:text-sm font-bold text-primary leading-tight">
+              {profile.designation} 
+              {profile.department && ` @ ${profile.department}`}
+            </p>
+          )}
 
-          <p className="text-xs text-text-secondary font-medium">
-            {profile?.institution || 'Research Connect Network'}
-          </p>
+          {profile?.institution && (
+            <p className="text-xs text-text-secondary font-medium leading-none">
+              {profile.institution}
+            </p>
+          )}
 
           <div className="flex items-center gap-1.5 text-xs text-text-secondary font-semibold">
             <MapPin className="w-3.5 h-3.5" />
@@ -187,25 +191,38 @@ const ProfileHeader = ({
               )}
               <button
                 onClick={onEdit}
-                className="flex items-center gap-1.5 px-4 py-2 border border-border bg-white rounded-xl text-xs font-bold text-text-secondary hover:bg-bg-page hover:text-text-primary transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-4 py-2 border border-border bg-white rounded-xl text-xs font-bold text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-all active:scale-95"
               >
                 <Edit2 className="w-3.5 h-3.5" />
                 Edit Profile
               </button>
               <button
                 onClick={onShare}
-                className="flex items-center gap-1.5 px-4 py-2 border border-border bg-white rounded-xl text-xs font-bold text-text-secondary hover:bg-bg-page hover:text-text-primary transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-4 py-2 border border-border bg-white rounded-xl text-xs font-bold text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-all active:scale-95"
                 title="Share Profile"
               >
                 <Share2 className="w-3.5 h-3.5" />
                 Share
+              </button>
+              <button
+                onClick={onFollow}
+                className="flex items-center gap-1.5 px-4 py-2 border border-border bg-white rounded-xl text-xs font-bold text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-all active:scale-95"
+              >
+                Follow
+              </button>
+              <button
+                onClick={onConnect}
+                className="flex items-center gap-1.5 px-4 py-2 border border-border bg-white rounded-xl text-xs font-bold text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-all active:scale-95"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                Connect
               </button>
             </>
           ) : (
             <>
               <button
                 onClick={onShare}
-                className="flex items-center gap-1.5 px-4 py-2 border border-border bg-white rounded-xl text-xs font-bold text-text-secondary hover:bg-bg-page hover:text-text-primary transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-4 py-2 border border-border bg-white rounded-xl text-xs font-bold text-text-secondary hover:bg-primary hover:text-white hover:border-primary transition-all active:scale-95"
                 title="Share Profile"
               >
                 <Share2 className="w-3.5 h-3.5" />
@@ -215,7 +232,7 @@ const ProfileHeader = ({
                 onClick={onFollow}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
                   isFollowing 
-                    ? 'border border-primary text-primary bg-primary/5 hover:bg-primary/10' 
+                    ? 'border border-primary text-primary bg-primary/5 hover:bg-primary hover:text-white' 
                     : 'bg-primary text-white hover:bg-primary-hover shadow-md shadow-primary/15'
                 }`}
               >
@@ -225,7 +242,7 @@ const ProfileHeader = ({
                 onClick={onConnect}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
                   isConnected 
-                    ? 'bg-slate-100 text-text-secondary hover:bg-slate-200' 
+                    ? 'bg-slate-100 text-text-secondary hover:bg-primary hover:text-white hover:border-primary' 
                     : 'bg-gradient-primary text-white hover:opacity-90 shadow-md shadow-primary/15'
                 }`}
               >

@@ -78,7 +78,7 @@ const AuthenticatedNavbar = () => {
 
   return (
     <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[95%] xl:max-w-[92%] mx-auto px-2 sm:px-4 lg:px-6">
         <div className="flex items-center justify-between h-16 gap-4">
           
           {/* Logo */}
@@ -88,7 +88,7 @@ const AuthenticatedNavbar = () => {
                 <Share2 className="w-5 h-5" />
               </span>
               <span className="font-bold text-xl tracking-tight text-slate-900 hidden sm:block">
-                Research<span className="text-blue-600">Connect</span>
+                Research <span className="text-blue-600">Connect</span>
               </span>
             </Link>
           </div>

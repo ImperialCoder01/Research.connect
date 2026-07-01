@@ -759,18 +759,18 @@ const ProfilePage = () => {
             
             {(() => {
               const activeMetrics = [
-                { label: 'Publications', value: profile?.metrics?.publicationsCount ?? 0, icon: FileText, color: 'text-blue-500 bg-blue-50/50 border border-blue-100/50' },
-                { label: 'Citations', value: profile?.metrics?.citationsCount ?? profile?.metrics?.totalCitations ?? 0, icon: TrendingUp, color: 'text-indigo-500 bg-indigo-50/50 border border-indigo-100/50' },
-                { label: 'h-index', value: profile?.metrics?.hIndex ?? 0, icon: Award, color: 'text-orange-500 bg-orange-50/50 border border-orange-100/50' },
-                { label: 'i10-index', value: profile?.metrics?.i10Index ?? 0, icon: BarChart2, color: 'text-emerald-500 bg-emerald-50/50 border border-emerald-100/50' },
-                { label: 'Experience (Y)', value: profile?.metrics?.experienceYears ?? profile?.metrics?.researchExperience ?? 0, icon: Calendar, color: 'text-purple-500 bg-purple-50/50 border border-purple-100/50' },
-                { label: 'Projects', value: profile?.metrics?.projectsCount ?? 0, icon: BookMarked, color: 'text-pink-500 bg-pink-50/50 border border-pink-100/50' },
-                { label: 'Patents', value: profile?.metrics?.patentsCount ?? 0, icon: ShieldCheck, color: 'text-teal-500 bg-teal-50/50 border border-teal-100/50' },
-                { label: 'Books', value: profile?.metrics?.booksCount ?? 0, icon: BookOpen, color: 'text-red-500 bg-red-50/50 border border-red-100/50' },
-                { label: 'Datasets', value: profile?.metrics?.datasetsCount ?? 0, icon: Database, color: 'text-yellow-500 bg-yellow-50/50 border border-yellow-100/50' },
-                { label: 'Downloads', value: profile?.metrics?.downloadsCount ?? 0, icon: Download, color: 'text-cyan-500 bg-cyan-50/50 border border-cyan-100/50' },
-                { label: 'Views', value: profile?.metrics?.viewsCount ?? 0, icon: Eye, color: 'text-rose-500 bg-rose-50/50 border border-rose-100/50' },
-                { label: 'Research Score', value: profile?.metrics?.researchScore ?? 0, icon: Activity, color: 'text-violet-500 bg-violet-50/50 border border-violet-100/50' }
+                { label: 'Publications', value: profile?.metrics?.publicationsCount ?? 0, icon: FileText, cardBg: 'bg-blue-50/60 border-blue-100 hover:bg-blue-100/45', textColor: 'text-blue-900', labelColor: 'text-blue-700', iconBg: 'bg-blue-100 text-blue-600' },
+                { label: 'Citations', value: profile?.metrics?.citationsCount ?? profile?.metrics?.totalCitations ?? 0, icon: TrendingUp, cardBg: 'bg-indigo-50/60 border-indigo-100 hover:bg-indigo-100/45', textColor: 'text-indigo-900', labelColor: 'text-indigo-700', iconBg: 'bg-indigo-100 text-indigo-600' },
+                { label: 'h-index', value: profile?.metrics?.hIndex ?? 0, icon: Award, cardBg: 'bg-amber-50/60 border-amber-100 hover:bg-amber-100/45', textColor: 'text-amber-900', labelColor: 'text-amber-700', iconBg: 'bg-amber-100 text-amber-600' },
+                { label: 'i10-index', value: profile?.metrics?.i10Index ?? 0, icon: BarChart2, cardBg: 'bg-emerald-50/60 border-emerald-100 hover:bg-emerald-100/45', textColor: 'text-emerald-900', labelColor: 'text-emerald-700', iconBg: 'bg-emerald-100 text-emerald-600' },
+                { label: 'Experience (Y)', value: profile?.metrics?.experienceYears ?? profile?.metrics?.researchExperience ?? 0, icon: Calendar, cardBg: 'bg-purple-50/60 border-purple-100 hover:bg-purple-100/45', textColor: 'text-purple-900', labelColor: 'text-purple-700', iconBg: 'bg-purple-100 text-purple-600' },
+                { label: 'Projects', value: profile?.metrics?.projectsCount ?? 0, icon: BookMarked, cardBg: 'bg-pink-50/60 border-pink-100 hover:bg-pink-100/45', textColor: 'text-pink-900', labelColor: 'text-pink-700', iconBg: 'bg-pink-100 text-pink-600' },
+                { label: 'Patents', value: profile?.metrics?.patentsCount ?? 0, icon: ShieldCheck, cardBg: 'bg-teal-50/60 border-teal-100 hover:bg-teal-100/45', textColor: 'text-teal-900', labelColor: 'text-teal-700', iconBg: 'bg-teal-100 text-teal-600' },
+                { label: 'Books', value: profile?.metrics?.booksCount ?? 0, icon: BookOpen, cardBg: 'bg-rose-50/60 border-rose-100 hover:bg-rose-100/45', textColor: 'text-rose-900', labelColor: 'text-rose-700', iconBg: 'bg-rose-100 text-rose-600' },
+                { label: 'Datasets', value: profile?.metrics?.datasetsCount ?? 0, icon: Database, cardBg: 'bg-yellow-50/60 border-yellow-100 hover:bg-yellow-100/45', textColor: 'text-yellow-900', labelColor: 'text-yellow-700', iconBg: 'bg-yellow-100 text-yellow-600' },
+                { label: 'Downloads', value: profile?.metrics?.downloadsCount ?? 0, icon: Download, cardBg: 'bg-cyan-50/60 border-cyan-100 hover:bg-cyan-100/45', textColor: 'text-cyan-900', labelColor: 'text-cyan-700', iconBg: 'bg-cyan-100 text-cyan-600' },
+                { label: 'Views', value: profile?.metrics?.viewsCount ?? 0, icon: Eye, cardBg: 'bg-orange-50/60 border-orange-100 hover:bg-orange-100/45', textColor: 'text-orange-900', labelColor: 'text-orange-700', iconBg: 'bg-orange-100 text-orange-600' },
+                { label: 'Research Score', value: profile?.metrics?.researchScore ?? 0, icon: Activity, cardBg: 'bg-violet-50/60 border-violet-100 hover:bg-violet-100/45', textColor: 'text-violet-900', labelColor: 'text-violet-700', iconBg: 'bg-violet-100 text-violet-600' }
               ].filter(item => Number(item.value) !== 0);
 
               if (activeMetrics.length === 0) {
@@ -788,18 +788,18 @@ const ProfilePage = () => {
                     return (
                       <div
                         key={item.label}
-                        className="p-2.5 rounded-xl border border-border hover:border-slate-300 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-all flex flex-col justify-between"
+                        className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between shadow-[0_1px_2px_rgba(0,0,0,0.01)] ${item.cardBg}`}
                       >
                         <div className="flex items-center justify-between gap-1.5">
-                          <span className="text-[9px] uppercase font-extrabold tracking-wider text-text-secondary truncate">
+                          <span className={`text-[9px] uppercase font-extrabold tracking-wider truncate ${item.labelColor}`}>
                             {item.label}
                           </span>
-                          <div className={`p-1 rounded-lg ${item.color} flex-shrink-0`}>
+                          <div className={`p-1 rounded-lg flex-shrink-0 ${item.iconBg}`}>
                             <Icon className="w-3.5 h-3.5" />
                           </div>
                         </div>
                         <div className="mt-2">
-                          <h5 className="text-sm font-black text-text-primary tracking-tight truncate">
+                          <h5 className={`text-base font-black tracking-tight truncate ${item.textColor}`}>
                             {item.value}
                           </h5>
                         </div>
