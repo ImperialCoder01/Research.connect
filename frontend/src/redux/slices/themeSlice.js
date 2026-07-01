@@ -1,27 +1,32 @@
 import { createSlice } from '@reduxjs/toolkit';
 
+// Force light theme and clean up dark class if present
+if (typeof window !== 'undefined') {
+  window.document.documentElement.classList.remove('dark');
+  localStorage.setItem('theme', 'light');
+}
+
 const initialState = {
-  theme: localStorage.getItem('theme') || 'light', // Light is primary design theme
+  theme: 'light',
 };
 
 const themeSlice = createSlice({
   name: 'theme',
   initialState,
   reducers: {
-    setTheme(state, action) {
-      state.theme = action.payload;
-      localStorage.setItem('theme', action.payload);
-      
-      const root = window.document.documentElement;
-      if (action.payload === 'dark') {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
+    setTheme(state) {
+      state.theme = 'light';
+      localStorage.setItem('theme', 'light');
+      if (typeof window !== 'undefined') {
+        window.document.documentElement.classList.remove('dark');
       }
     },
     toggleTheme(state) {
-      const nextTheme = state.theme === 'light' ? 'dark' : 'light';
-      themeSlice.caseReducers.setTheme(state, { payload: nextTheme });
+      state.theme = 'light';
+      localStorage.setItem('theme', 'light');
+      if (typeof window !== 'undefined') {
+        window.document.documentElement.classList.remove('dark');
+      }
     }
   }
 });

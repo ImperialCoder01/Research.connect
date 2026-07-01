@@ -82,6 +82,116 @@ const updateProfileValidator = [
     .optional()
     .trim()
     .isString(),
+  body('socialLinks.github')
+    .optional()
+    .trim()
+    .isString(),
+  body('socialLinks.scopus')
+    .optional()
+    .trim()
+    .isString(),
+  body('coverImage')
+    .optional()
+    .trim()
+    .isString(),
+  body('profileImage')
+    .optional()
+    .trim()
+    .isString(),
+  body('researchSummary')
+    .optional()
+    .trim()
+    .isString(),
+  body('currentResearch')
+    .optional()
+    .trim()
+    .isString(),
+  body('researchVision')
+    .optional()
+    .trim()
+    .isString(),
+
+  // Arrays validations
+  body('education')
+    .optional()
+    .isArray()
+    .withMessage('Education must be an array'),
+  body('education.*.degree')
+    .notEmpty()
+    .withMessage('Degree is required in education'),
+  body('education.*.university')
+    .notEmpty()
+    .withMessage('University is required in education'),
+  body('education.*.duration')
+    .notEmpty()
+    .withMessage('Duration is required in education'),
+
+  body('experience')
+    .optional()
+    .isArray()
+    .withMessage('Experience must be an array'),
+  body('experience.*.designation')
+    .notEmpty()
+    .withMessage('Designation is required in experience'),
+  body('experience.*.institution')
+    .notEmpty()
+    .withMessage('Institution is required in experience'),
+  body('experience.*.duration')
+    .notEmpty()
+    .withMessage('Duration is required in experience'),
+
+  body('projects')
+    .optional()
+    .isArray()
+    .withMessage('Projects must be an array'),
+  body('projects.*.title')
+    .notEmpty()
+    .withMessage('Project title is required'),
+
+  body('skills')
+    .optional()
+    .isArray()
+    .withMessage('Skills must be an array'),
+  body('skills.*.name')
+    .notEmpty()
+    .withMessage('Skill name is required'),
+  body('skills.*.category')
+    .optional()
+    .isIn(['Programming', 'AI', 'ML', 'Cloud', 'Research', 'Writing', 'Statistics', 'Other'])
+    .withMessage('Invalid skill category'),
+
+  body('achievements')
+    .optional()
+    .isArray()
+    .withMessage('Achievements must be an array'),
+  body('achievements.*.title')
+    .notEmpty()
+    .withMessage('Achievement title is required'),
+  body('achievements.*.type')
+    .isIn(['Award', 'Patent', 'Honor', 'Recognition'])
+    .withMessage('Invalid achievement type'),
+  body('achievements.*.organization')
+    .notEmpty()
+    .withMessage('Achievement organization is required'),
+  body('achievements.*.year')
+    .isInt({ min: 1900, max: 2100 })
+    .withMessage('Achievement year must be a valid integer'),
+
+  body('certifications')
+    .optional()
+    .isArray()
+    .withMessage('Certifications must be an array'),
+  body('certifications.*.name')
+    .notEmpty()
+    .withMessage('Certification name is required'),
+  body('certifications.*.organization')
+    .notEmpty()
+    .withMessage('Certification organization is required'),
+
+  body('metrics')
+    .optional()
+    .isObject()
+    .withMessage('Metrics must be an object'),
   
   validationMiddleware
 ];

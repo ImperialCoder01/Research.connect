@@ -30,7 +30,7 @@ const seedData = async () => {
       password: hashedPassword,
       phone: '+15550199',
       role: 'admin',
-      isVerified: true,
+      emailVerified: true,
       status: 'active',
       country: 'United States'
     });
@@ -43,7 +43,7 @@ const seedData = async () => {
       password: hashedPassword,
       phone: '+15550100',
       role: 'researcher',
-      isVerified: true,
+      emailVerified: true,
       status: 'active',
       country: 'United Kingdom'
     });

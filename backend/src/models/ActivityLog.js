@@ -17,7 +17,7 @@ const ActivityLogSchema = new Schema(
       type: String,
       trim: true
     },
-    ipAddress: {
+    ip: {
       type: String,
       default: ''
     }

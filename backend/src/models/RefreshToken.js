@@ -9,10 +9,6 @@ const RefreshTokenSchema = new Schema(
       required: true,
       index: true
     },
-    user: {
-      type: Schema.Types.ObjectId,
-      ref: 'User'
-    },
     token: {
       type: String,
       required: true,
@@ -30,9 +26,6 @@ const RefreshTokenSchema = new Schema(
       type: Date,
       required: true
     },
-    expiry: {
-      type: Date
-    },
     isDeleted: {
       type: Boolean,
       default: false
@@ -42,20 +35,6 @@ const RefreshTokenSchema = new Schema(
     timestamps: true
   }
 );
-
-RefreshTokenSchema.pre('save', function (next) {
-  if (this.userId && !this.user) {
-    this.user = this.userId;
-  } else if (this.user && !this.userId) {
-    this.userId = this.user;
-  }
-  if (this.expiresAt && !this.expiry) {
-    this.expiry = this.expiresAt;
-  } else if (this.expiry && !this.expiresAt) {
-    this.expiresAt = this.expiry;
-  }
-  next();
-});
 
 // TTL index to automatically remove expired refresh tokens
 RefreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });

@@ -1,321 +1,794 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { motion as motionFramer, AnimatePresence as AnimatePresenceFramer } from 'framer-motion';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { motion } from 'framer-motion';
 import { 
-  User, 
-  ArrowLeft, 
-  Save, 
-  Globe, 
-  Linkedin, 
-  Link as LinkIcon, 
-  Award, 
+  Sparkles, 
+  BookOpen, 
   MapPin, 
-  Phone, 
-  FileText 
+  Globe, 
+  Activity, 
+  BookMarked,
+  Award,
+  FileText,
+  Bookmark,
+  Calendar,
+  Layers,
+  ShieldCheck,
+  User,
+  HeartHandshake
 } from 'lucide-react';
+
 import profileService from '../../../services/profile.service';
 import { updateProfileState, updateUserState } from '../../../redux/slices/authSlice';
-import Input from '../../../components/common/inputs/Input';
+
+// Subcomponents
+import ProfileHeader from '../components/ProfileHeader';
+import ResearchMetrics from '../components/ResearchMetrics';
+import EducationTimeline from '../components/EducationTimeline';
+import ExperienceTimeline from '../components/ExperienceTimeline';
+import PublicationTable from '../components/PublicationTable';
+import ProjectCard from '../components/ProjectCard';
+import ProfileCompletion from '../components/ProfileCompletion';
+import RecentActivity from '../components/RecentActivity';
+import SkillsList from '../components/SkillsList';
+import EditProfileModal from '../components/EditProfileModal';
+import ShareProfileModal from '../components/ShareProfileModal';
 import Button from '../../../components/common/buttons/Button';
 
 const ProfilePage = () => {
+  const { profileSlug } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { user, profile } = useSelector((state) => state.auth);
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('general'); // 'general', 'workplace', 'social'
+  const queryClient = useQueryClient();
+  
+  const currentUser = useSelector((state) => state.auth.user);
+  
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('about');
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors }
-  } = useForm({
-    defaultValues: {
-      firstName: user?.firstName || '',
-      lastName: user?.lastName || '',
-      phone: user?.phone || '',
-      profileImage: user?.profileImage || '',
-      bio: profile?.bio || '',
-      country: profile?.country || user?.country || '',
-      // Academic
-      institution: profile?.institution || '',
-      department: profile?.department || '',
-      designation: profile?.designation || '',
-      // Corporate
-      company: profile?.company || '',
-      division: profile?.division || '',
-      position: profile?.position || '',
-      // Socials
-      orcid: profile?.socialLinks?.orcid || '',
-      googleScholar: profile?.socialLinks?.googleScholar || '',
-      researchGate: profile?.socialLinks?.researchGate || '',
-      linkedin: profile?.socialLinks?.linkedin || '',
-      website: profile?.socialLinks?.website || ''
-    }
+  // Determine if viewing own profile
+  const isOwnProfile = currentUser && currentUser.profileSlug === profileSlug;
+
+  // Query to fetch profile details (hydrated from all collections)
+  const { data: profileData, isLoading, error, refetch } = useQuery({
+    queryKey: ['profile', profileSlug],
+    queryFn: async () => {
+      return await profileService.getPublicProfile(profileSlug);
+    },
+    staleTime: 1000 * 60 * 5 // 5 minutes
   });
 
-  const onSubmit = async (data) => {
-    setLoading(true);
-    try {
-      const payload = {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phone: data.phone,
-        profileImage: data.profileImage,
-        bio: data.bio,
-        country: data.country,
-        institution: data.institution,
-        department: data.department,
-        designation: data.designation,
-        company: data.company,
-        division: data.division,
-        position: data.position,
-        socialLinks: {
-          orcid: data.orcid,
-          googleScholar: data.googleScholar,
-          researchGate: data.researchGate,
-          linkedin: data.linkedin,
-          website: data.website
-        }
-      };
+  const profile = profileData?.data;
 
-      const response = await profileService.updateProfile(payload);
-      
-      if (response.success) {
-        toast.success('Profile details updated successfully!');
+  // Sync own profile data to Redux auth state when loaded
+  useEffect(() => {
+    if (profile && isOwnProfile) {
+      dispatch(updateProfileState(profile));
+    }
+  }, [profile, isOwnProfile, dispatch]);
+
+  const handleSaveProfile = async (formData) => {
+    setSaveLoading(true);
+    try {
+      const res = await profileService.updateProfile(formData);
+      if (res.success) {
+        toast.success('Researcher profile updated successfully!');
         
-        // Update Redux state and sync local storage
-        dispatch(updateProfileState(response.data));
-        dispatch(updateUserState({
-          firstName: data.firstName,
-          lastName: data.lastName,
-          fullName: `${data.firstName} ${data.lastName}`,
-          phone: data.phone,
-          profileImage: data.profileImage,
-          country: data.country
-        }));
+        // 1. Update Redux Auth state (if it is own profile)
+        if (isOwnProfile) {
+          dispatch(updateProfileState(res.data));
+          dispatch(updateUserState({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            fullName: `${formData.firstName} ${formData.lastName}`,
+            profileImage: formData.profileImage,
+            username: res.data.username,
+            profileSlug: res.data.profileSlug,
+            profileUrl: res.data.profileUrl
+          }));
+        }
+
+        // 2. Update React Query Cache
+        queryClient.setQueryData(['profile', profileSlug], {
+          ...profileData,
+          data: res.data
+        });
+
+        setIsEditOpen(false);
+        refetch();
       }
-    } catch (error) {
-      console.error('Profile update failed:', error);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Failed to update profile');
     } finally {
-      setLoading(false);
+      setSaveLoading(false);
     }
   };
 
-  return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="p-2 border border-border bg-white rounded-lg hover:bg-bg-page text-text-secondary hover:text-text-primary transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Researcher Profile</h1>
-          <p className="text-xs text-text-secondary">Configure your academic credentials, social indexes, and bio details</p>
-        </div>
+  const handleFollow = () => {
+    toast.success('Successfully followed researcher!');
+  };
+
+  const handleConnect = () => {
+    toast.success('Connection request sent!');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-bold text-text-secondary uppercase tracking-widest animate-pulse">Loading profile...</p>
       </div>
+    );
+  }
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Navigation Sidebar */}
-        <div className="md:col-span-1 space-y-2">
-          <button
-            onClick={() => setActiveTab('general')}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold rounded-xl transition-colors text-left ${
-              activeTab === 'general' 
-                ? 'bg-primary text-white shadow-sm' 
-                : 'bg-white border border-border text-text-secondary hover:bg-bg-page'
-            }`}
-          >
-            <User className="w-4 h-4" /> Personal Details
-          </button>
+  if (error) {
+    return (
+      <div className="text-center py-16 max-w-md mx-auto space-y-4">
+        <div className="p-4 bg-red-50 text-accent-red rounded-full w-fit mx-auto">
+          <BookMarked className="w-8 h-8" />
+        </div>
+        <h3 className="text-lg font-black text-text-primary tracking-tight">Failed to Load Profile</h3>
+        <p className="text-xs text-text-secondary leading-relaxed font-semibold">
+          {error.message || 'The requested researcher profile does not exist or has been suspended.'}
+        </p>
+        <Button variant="ghost" onClick={() => refetch()} className="mx-auto">Retry Loading</Button>
+      </div>
+    );
+  }
+
+  const tabs = [
+    { id: 'about', name: 'About' },
+    { id: 'timeline', name: 'Education & Experience' },
+    { id: 'publications', name: 'Publications' },
+    { id: 'projects', name: 'Projects' },
+    { id: 'skills', name: 'Skills' },
+    { id: 'patents', name: 'Patents' },
+    { id: 'books', name: 'Books' },
+    { id: 'awards', name: 'Awards & Certificates' },
+    { id: 'analytics', name: 'Research Analytics' }
+  ];
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Profile Header */}
+      <ProfileHeader
+        profile={profile}
+        user={profile} // Since profile object holds user properties now
+        onEdit={() => setIsEditOpen(true)}
+        onShare={() => setIsShareOpen(true)}
+        onFollow={handleFollow}
+        onConnect={handleConnect}
+        isOwnProfile={isOwnProfile}
+        onSync={() => navigate('/research-identity')}
+      />
+
+      {/* Main 2-Column Responsive Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left/Center Main Column */}
+        <div className="lg:col-span-2 space-y-6">
           
-          <button
-            onClick={() => setActiveTab('workplace')}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold rounded-xl transition-colors text-left ${
-              activeTab === 'workplace' 
-                ? 'bg-primary text-white shadow-sm' 
-                : 'bg-white border border-border text-text-secondary hover:bg-bg-page'
-            }`}
-          >
-            <FileText className="w-4 h-4" /> Affiliation Details
-          </button>
+          {/* Tab Navigation */}
+          <div className="bg-white border border-border rounded-2xl p-2 flex gap-1 overflow-x-auto scrollbar-none">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-text-secondary hover:bg-bg-page hover:text-text-primary'
+                }`}
+              >
+                {tab.name}
+              </button>
+            ))}
+          </div>
 
-          <button
-            onClick={() => setActiveTab('social')}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold rounded-xl transition-colors text-left ${
-              activeTab === 'social' 
-                ? 'bg-primary text-white shadow-sm' 
-                : 'bg-white border border-border text-text-secondary hover:bg-bg-page'
-            }`}
-          >
-            <Globe className="w-4 h-4" /> Research Indexes
-          </button>
+          {/* Tab Content Panel */}
+          <div className="min-h-[400px]">
+            <AnimatePresenceFramer mode="wait">
+              <motionFramer.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                {activeTab === 'about' && (
+                  <div className="bg-white border border-border rounded-3xl p-6 md:p-8 space-y-6 shadow-sm">
+                    <div className="space-y-2">
+                      <h3 className="text-base font-black text-text-primary tracking-tight">Professional Biography</h3>
+                      <p className="text-xs text-text-secondary leading-relaxed font-medium whitespace-pre-line">
+                        {profile?.researchSummary || profile?.bio || 'No professional biography added yet.'}
+                      </p>
+                    </div>
+
+                    {profile?.currentResearch && (
+                      <div className="space-y-2 pt-4 border-t border-border/50">
+                        <h3 className="text-sm font-black text-text-primary tracking-tight">Current Research</h3>
+                        <p className="text-xs text-text-secondary leading-relaxed font-medium whitespace-pre-line">
+                          {profile.currentResearch}
+                        </p>
+                      </div>
+                    )}
+
+                    {profile?.researchVision && (
+                      <div className="space-y-2 pt-4 border-t border-border/50">
+                        <h3 className="text-sm font-black text-text-primary tracking-tight">Research Vision</h3>
+                        <p className="text-xs text-text-secondary leading-relaxed font-medium whitespace-pre-line">
+                          {profile.researchVision}
+                        </p>
+                      </div>
+                    )}
+
+                    {profile?.languages && profile.languages.length > 0 && (
+                      <div className="space-y-2 pt-4 border-t border-border/50">
+                        <h3 className="text-sm font-black text-text-primary tracking-tight">Languages</h3>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {profile.languages.map((lang, idx) => (
+                            <span key={idx} className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-semibold">
+                              {lang}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Collaboration/Availability Card */}
+                    <div className="pt-6 border-t border-border/50 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {profile?.availability && (
+                        <div className="flex items-start gap-2.5 p-4 border border-border rounded-2xl bg-bg-page/10">
+                          <Calendar className="w-5 h-5 text-primary mt-0.5" />
+                          <div>
+                            <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider">Availability</h4>
+                            <p className="text-xs text-text-secondary mt-0.5 font-medium">{profile.availability}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-start gap-2.5 p-4 border border-border rounded-2xl bg-bg-page/10">
+                        <HeartHandshake className="w-5 h-5 text-accent-indigo mt-0.5" />
+                        <div>
+                          <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider">Open to Opportunities</h4>
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {profile?.openToCollaborate && (
+                              <span className="text-[9px] bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-lg">Collaborations</span>
+                            )}
+                            {profile?.openToMentor && (
+                              <span className="text-[9px] bg-teal-50 border border-teal-100 text-teal-700 font-bold px-2 py-0.5 rounded-lg">Mentorship</span>
+                            )}
+                            {profile?.openToResearch && (
+                              <span className="text-[9px] bg-blue-50 border border-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-lg">Joint Research</span>
+                            )}
+                            {!profile?.openToCollaborate && !profile?.openToMentor && !profile?.openToResearch && (
+                              <span className="text-[10px] text-text-secondary italic font-medium">None specified</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'timeline' && (
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <h3 className="text-base font-black text-text-primary tracking-tight pl-2">Education History</h3>
+                      <EducationTimeline education={profile?.education} />
+                    </div>
+
+                    <div className="space-y-4 pt-6 border-t border-border">
+                      <h3 className="text-base font-black text-text-primary tracking-tight pl-2">Professional Work Experience</h3>
+                      <ExperienceTimeline experience={profile?.experience} />
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'publications' && (
+                  <div className="bg-white border border-border rounded-3xl p-6 shadow-sm space-y-4">
+                    <h3 className="text-base font-black text-text-primary tracking-tight">Publications Portfolio</h3>
+                    <PublicationTable publications={profile?.publications} />
+                  </div>
+                )}
+
+                {activeTab === 'projects' && (
+                  <div className="space-y-4">
+                    <h3 className="text-base font-black text-text-primary tracking-tight pl-2">Research Projects</h3>
+                    {profile?.projects && profile.projects.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {profile.projects.map((proj, i) => (
+                          <ProjectCard key={i} project={proj} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 bg-white border border-border rounded-2xl shadow-sm">
+                        <BookMarked className="w-8 h-8 text-text-secondary mx-auto mb-2 opacity-50" />
+                        <p className="text-xs font-bold text-text-secondary uppercase">No projects added yet</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'skills' && (
+                  <div className="bg-white border border-border rounded-3xl p-6 md:p-8 space-y-4 shadow-sm">
+                    <h3 className="text-base font-black text-text-primary tracking-tight">Skills & Expertise</h3>
+                    <SkillsList skills={profile?.skills} />
+                  </div>
+                )}
+
+                {activeTab === 'patents' && (
+                  <div className="space-y-4">
+                    <h3 className="text-base font-black text-text-primary tracking-tight pl-2">Patents Portfolio</h3>
+                    {profile?.patents && profile.patents.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-4">
+                        {profile.patents.map((pat, i) => (
+                          <div key={i} className="p-5 bg-white border border-border rounded-2xl shadow-sm space-y-2">
+                            <div className="flex justify-between items-start gap-4">
+                              <h4 className="text-sm font-extrabold text-text-primary">{pat.title}</h4>
+                              {pat.patentNumber && (
+                                <span className="text-[10px] bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded-lg border border-slate-200">
+                                  No: {pat.patentNumber}
+                                </span>
+                              )}
+                            </div>
+                            {pat.inventors && (
+                              <p className="text-xs text-primary font-bold">Inventors: {pat.inventors}</p>
+                            )}
+                            {pat.description && (
+                              <p className="text-xs text-text-secondary leading-relaxed font-semibold">{pat.description}</p>
+                            )}
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="text-[10px] text-text-secondary font-medium">Issued: {pat.issueDate || 'N/A'}</span>
+                              {pat.url && (
+                                <a href={pat.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary font-bold hover:underline">
+                                  View Patent Document &rarr;
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 bg-white border border-border rounded-2xl shadow-sm">
+                        <FileText className="w-8 h-8 text-text-secondary mx-auto mb-2 opacity-50" />
+                        <p className="text-xs font-bold text-text-secondary uppercase">No patents registered yet</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'books' && (
+                  <div className="space-y-4">
+                    <h3 className="text-base font-black text-text-primary tracking-tight pl-2">Published Books & Chapters</h3>
+                    {profile?.books && profile.books.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-4">
+                        {profile.books.map((bk, i) => (
+                          <div key={i} className="p-5 bg-white border border-border rounded-2xl shadow-sm space-y-2">
+                            <h4 className="text-sm font-extrabold text-text-primary">{bk.title}</h4>
+                            {bk.authors && (
+                              <p className="text-xs text-text-secondary font-semibold">By: {bk.authors}</p>
+                            )}
+                            {bk.publisher && (
+                              <p className="text-xs text-primary font-bold">Publisher: {bk.publisher} ({bk.year || 'N/A'})</p>
+                            )}
+                            {bk.description && (
+                              <p className="text-xs text-text-secondary leading-relaxed font-medium">{bk.description}</p>
+                            )}
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="text-[10px] text-text-secondary font-medium">ISBN: {bk.isbn || 'N/A'}</span>
+                              {bk.url && (
+                                <a href={bk.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary font-bold hover:underline">
+                                  Publisher Link &rarr;
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 bg-white border border-border rounded-2xl shadow-sm">
+                        <Bookmark className="w-8 h-8 text-text-secondary mx-auto mb-2 opacity-50" />
+                        <p className="text-xs font-bold text-text-secondary uppercase">No books added yet</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'awards' && (
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-black text-text-primary uppercase tracking-wider pl-2">Awards & Honors</h4>
+                      {profile?.awards && profile.awards.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {profile.awards.map((aw, i) => (
+                            <div key={i} className="p-4 bg-white border border-border rounded-2xl shadow-sm space-y-1.5 relative overflow-hidden">
+                              <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full pointer-events-none flex items-center justify-center">
+                                <Award className="w-5 h-5 text-primary opacity-20 -mt-4 -mr-4" />
+                              </div>
+                              <h5 className="text-xs font-bold text-text-primary pr-8">{aw.title}</h5>
+                              <p className="text-[10px] text-primary font-bold">{aw.organization} ({aw.year})</p>
+                              {aw.description && (
+                                <p className="text-[10px] text-text-secondary font-medium">{aw.description}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-white border border-border rounded-2xl shadow-sm">
+                          <p className="text-xs font-bold text-text-secondary uppercase">No awards declared yet</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4 pt-6 border-t border-border">
+                      <h4 className="text-xs font-black text-text-primary uppercase tracking-wider pl-2">Certificates</h4>
+                      {profile?.certificates && profile.certificates.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {profile.certificates.map((cert, i) => (
+                            <div key={i} className="p-4 bg-white border border-border rounded-2xl shadow-sm flex items-start gap-3">
+                              <ShieldCheck className="w-5 h-5 text-accent-green mt-0.5" />
+                              <div className="space-y-1 flex-grow">
+                                <h5 className="text-xs font-bold text-text-primary">{cert.name}</h5>
+                                <p className="text-[10px] text-text-secondary font-semibold">{cert.organization} | {cert.issueDate || 'N/A'}</p>
+                                {cert.credentialUrl && (
+                                  <a href={cert.credentialUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-primary font-bold hover:underline block pt-0.5">
+                                    Verify Credential &rarr;
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-white border border-border rounded-2xl shadow-sm">
+                          <p className="text-xs font-bold text-text-secondary uppercase">No certificates uploaded yet</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'analytics' && (
+                  <div className="space-y-6">
+                    {/* SVG Citation Graph Card */}
+                    <div className="bg-white border border-border rounded-3xl p-6 md:p-8 shadow-sm space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="text-base font-black text-text-primary tracking-tight">Citations Over Time</h3>
+                          <p className="text-[10px] text-text-secondary font-bold uppercase tracking-wider mt-0.5">Google Scholar Citation Index Graph</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-black text-primary">{profile?.metrics?.totalCitations || 0}</p>
+                          <p className="text-[9px] text-text-secondary uppercase font-bold tracking-wider">Total Citations</p>
+                        </div>
+                      </div>
+                      
+                      <CitationChart citationGraph={profile?.citationGraph || []} />
+                    </div>
+
+                    {/* Derived Analytics Grid Card */}
+                    <div className="bg-white border border-border rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+                      <h3 className="text-base font-black text-text-primary tracking-tight">Derived Academic Analytics</h3>
+                      
+                      {profile?.derivedAnalytics ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                          <div className="p-4 border border-border rounded-2xl bg-bg-page/50">
+                            <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">Publication Distribution</p>
+                            <div className="mt-2 flex items-center justify-between text-xs font-bold text-text-primary">
+                              <span>Journals: {profile.derivedAnalytics.journalPapers || 0}</span>
+                              <span>Conferences: {profile.derivedAnalytics.conferencePapers || 0}</span>
+                            </div>
+                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-1.5 flex">
+                              <div className="bg-primary h-full" style={{ width: `${(profile.derivedAnalytics.journalPapers / (profile.derivedAnalytics.totalPublications || 1)) * 100}%` }} />
+                              <div className="bg-accent-indigo h-full flex-grow" />
+                            </div>
+                          </div>
+
+                          <div className="p-4 border border-border rounded-2xl bg-bg-page/50">
+                            <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">Avg Citations Per Paper</p>
+                            <p className="text-xl font-black text-text-primary mt-1">{profile.derivedAnalytics.averageCitations || 0}</p>
+                          </div>
+
+                          <div className="p-4 border border-border rounded-2xl bg-bg-page/50">
+                            <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">Most Active Research Year</p>
+                            <p className="text-xl font-black text-text-primary mt-1">{profile.derivedAnalytics.mostActiveResearchYear || 'N/A'}</p>
+                          </div>
+
+                          <div className="p-4 border border-border rounded-2xl bg-bg-page/50">
+                            <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">Research Experience</p>
+                            <p className="text-xl font-black text-text-primary mt-1">{profile.derivedAnalytics.researchExperience || 0} Years</p>
+                          </div>
+
+                          <div className="p-4 border border-border rounded-2xl bg-bg-page/50">
+                            <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">Citations Growth Rate</p>
+                            <p className="text-xl font-black text-accent-green mt-1">+{profile.derivedAnalytics.citationGrowthRate || 0}%</p>
+                          </div>
+
+                          <div className="p-4 border border-border rounded-2xl bg-bg-page/50">
+                            <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">Avg Papers Per Year</p>
+                            <p className="text-xl font-black text-text-primary mt-1">{profile.derivedAnalytics.averagePublicationsPerYear || 0}</p>
+                          </div>
+
+                          <div className="sm:col-span-2 md:col-span-3 p-4 border border-border rounded-2xl bg-bg-page/50 space-y-1">
+                            <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">Most Cited Work</p>
+                            <p className="text-xs font-black text-primary leading-snug">{profile.derivedAnalytics.mostCitedPublicationTitle || 'N/A'}</p>
+                            <p className="text-[10px] text-text-secondary font-semibold">Citations: {profile.derivedAnalytics.mostCitedPublicationCitations || 0}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-xs text-text-secondary font-bold uppercase tracking-widest bg-bg-page/30 rounded-2xl">
+                          No derived analytics available. Try syncing your Google Scholar profile.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Co-Authors Network Card */}
+                    <div className="bg-white border border-border rounded-3xl p-6 md:p-8 shadow-sm space-y-4">
+                      <h3 className="text-base font-black text-text-primary tracking-tight">Co-Author Network</h3>
+                      {profile?.coAuthors && profile.coAuthors.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                          {profile.coAuthors.map((co) => (
+                            <div key={co._id || co.name} className="p-4 border border-border rounded-2xl bg-bg-page/30 flex items-start gap-3">
+                              {co.photo ? (
+                                <img src={co.photo} alt={co.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs uppercase flex-shrink-0">
+                                  {co.name.charAt(0)}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <h4 className="text-xs font-black text-text-primary truncate">{co.name}</h4>
+                                <p className="text-[10px] text-text-secondary truncate mt-0.5">{co.affiliation || 'Researcher'}</p>
+                                {co.profileURL && (
+                                  <a href={co.profileURL} target="_blank" rel="noopener noreferrer" className="text-[9px] text-primary font-bold hover:underline block mt-1">
+                                    Scholar Profile &rarr;
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-text-secondary italic">No co-authors indexed.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </motionFramer.div>
+            </AnimatePresenceFramer>
+          </div>
         </div>
 
-        {/* Form content */}
-        <div className="md:col-span-3">
-          <form onSubmit={handleSubmit(onSubmit)} className="glass-card rounded-2xl p-6 md:p-8 bg-white border border-border shadow-sm space-y-6">
-            
-            {/* General Tab */}
-            {activeTab === 'general' && (
-              <div className="space-y-4">
-                <h3 className="text-base font-bold text-text-primary border-b border-border pb-2">Personal Details</h3>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="First Name"
-                    error={errors.firstName?.message}
-                    required
-                    {...register('firstName', { required: 'First name is required' })}
-                  />
-                  <Input
-                    label="Last Name"
-                    error={errors.lastName?.message}
-                    required
-                    {...register('lastName', { required: 'Last name is required' })}
-                  />
-                </div>
+        {/* Right Sidebar Column */}
+        <div className="space-y-6">
+          {/* Profile Completion Card */}
+          <ProfileCompletion profile={profile} user={profile} />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Phone Number"
-                    {...register('phone')}
-                    icon={<Phone className="w-4 h-4 text-text-secondary" />}
-                  />
-                  <Input
-                    label="Country"
-                    error={errors.country?.message}
-                    required
-                    {...register('country', { required: 'Country is required' })}
-                    icon={<MapPin className="w-4 h-4 text-text-secondary" />}
-                  />
-                </div>
+          {/* Research Areas / Tags */}
+          <div className="bg-white border border-border rounded-2xl p-5 shadow-sm space-y-3">
+            <h4 className="text-xs font-bold text-text-primary tracking-tight">Research Areas</h4>
+            <div className="flex flex-wrap gap-1.5">
+              {profile?.researchAreas && profile.researchAreas.length > 0 ? (
+                profile.researchAreas.map((area) => (
+                  <span
+                    key={area._id || area.name}
+                    className="text-[10px] bg-primary/5 hover:bg-primary/10 text-primary border border-primary/10 px-2.5 py-1 rounded-lg font-bold cursor-pointer transition-colors"
+                  >
+                    {area.name}
+                  </span>
+                ))
+              ) : (
+                <p className="text-[11px] text-text-secondary italic">No research areas defined</p>
+              )}
+            </div>
+          </div>
 
-                <Input
-                  label="Profile Image URL"
-                  placeholder="https://example.com/avatar.jpg"
-                  {...register('profileImage')}
-                />
+          {/* Keywords / Chips */}
+          <div className="bg-white border border-border rounded-2xl p-5 shadow-sm space-y-3">
+            <h4 className="text-xs font-bold text-text-primary tracking-tight">Top Keywords</h4>
+            <div className="flex flex-wrap gap-1">
+              {profile?.keywords && profile.keywords.length > 0 ? (
+                profile.keywords.slice(0, 15).map((key) => (
+                  <span
+                    key={key._id || key.name}
+                    className="text-[10px] bg-bg-page border border-border px-2 py-0.5 rounded-md font-semibold text-text-secondary"
+                  >
+                    {key.name} ({key.count})
+                  </span>
+                ))
+              ) : (
+                <p className="text-[11px] text-text-secondary italic">No keywords synced</p>
+              )}
+            </div>
+          </div>
 
-                <div className="flex flex-col space-y-1.5">
-                  <label className="text-xs font-semibold text-text-secondary tracking-wide">About Me (Bio)</label>
-                  <textarea
-                    rows={4}
-                    placeholder="Short description of your research focus..."
-                    className="w-full px-4 py-2 text-sm bg-bg-card border border-border focus:border-primary focus:ring-2 focus:ring-primary focus:ring-opacity-40 rounded-lg focus:outline-none transition-colors"
-                    {...register('bio')}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Workplace Tab */}
-            {activeTab === 'workplace' && (
-              <div className="space-y-4">
-                <h3 className="text-base font-bold text-text-primary border-b border-border pb-2">Workplace Affiliation</h3>
-
-                <div className="space-y-4">
-                  <Input
-                    label="University / Institution / Company"
-                    placeholder="e.g. Stanford University / Google DeepMind"
-                    {...register('institution')}
-                  />
-                  <Input
-                    label="Department / Division"
-                    placeholder="e.g. Department of Biotechnology / AI Division"
-                    {...register('department')}
-                  />
-                  <Input
-                    label="Designation / Position / Title"
-                    placeholder="e.g. Lead Research Engineer / Professor"
-                    {...register('designation')}
-                  />
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-border space-y-4">
-                  <h4 className="text-xs font-bold text-text-secondary uppercase">Secondary / Corporate Details</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Input
-                      label="Company"
-                      placeholder="Alternative Company"
-                      {...register('company')}
-                    />
-                    <Input
-                      label="Division"
-                      placeholder="Alternative Division"
-                      {...register('division')}
-                    />
-                    <Input
-                      label="Position"
-                      placeholder="Alternative Position"
-                      {...register('position')}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Social / Indexes Tab */}
-            {activeTab === 'social' && (
-              <div className="space-y-4">
-                <h3 className="text-base font-bold text-text-primary border-b border-border pb-2">Scientific & Social Portfolios</h3>
-
-                <div className="space-y-4">
-                  <Input
-                    label="ORCID Identifier"
-                    placeholder="e.g. 0000-0002-1825-0097"
-                    {...register('orcid')}
-                    icon={<Award className="w-4 h-4 text-text-secondary" />}
-                  />
-                  <Input
-                    label="Google Scholar Profile URL"
-                    placeholder="https://scholar.google.com/citations?user=..."
-                    {...register('googleScholar')}
-                    icon={<Globe className="w-4 h-4 text-text-secondary" />}
-                  />
-                  <Input
-                    label="ResearchGate Profile URL"
-                    placeholder="https://www.researchgate.net/profile/..."
-                    {...register('researchGate')}
-                    icon={<LinkIcon className="w-4 h-4 text-text-secondary" />}
-                  />
-                  <Input
-                    label="LinkedIn Profile URL"
-                    placeholder="https://linkedin.com/in/..."
-                    {...register('linkedin')}
-                    icon={<Linkedin className="w-4 h-4 text-text-secondary" />}
-                  />
-                  <Input
-                    label="Personal Website"
-                    placeholder="https://example.com"
-                    {...register('website')}
-                    icon={<LinkIcon className="w-4 h-4 text-text-secondary" />}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Submit button */}
-            <div className="flex justify-end pt-4 border-t border-border">
-              <Button
-                type="submit"
-                variant="primary"
-                loading={loading}
-                icon={<Save className="w-4 h-4" />}
-                className="px-6 py-2.5 font-bold shadow-md"
-              >
-                Save Profile
-              </Button>
+          {/* AI recommendations */}
+          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 border border-slate-800 text-white rounded-2xl p-5 shadow-lg space-y-4">
+            <div className="flex items-center gap-2 text-indigo-400">
+              <Sparkles className="w-4 h-4 animate-pulse" />
+              <h4 className="text-xs font-bold uppercase tracking-wider">AI Recommendations</h4>
             </div>
 
-          </form>
+            <div className="space-y-3 pt-2">
+              <div className="space-y-1">
+                <p className="text-[10px] text-slate-400 font-bold uppercase">NLP Matches</p>
+                <div className="text-[11px] font-semibold text-slate-200">
+                  <p className="hover:underline cursor-pointer">Dr. Sarah Connor (Stanford)</p>
+                  <p className="hover:underline cursor-pointer">Prof. Alan Turing (Cambridge)</p>
+                </div>
+              </div>
+
+              <div className="space-y-1 pt-1.5 border-t border-slate-800">
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Relevant Journals</p>
+                <div className="text-[11px] font-semibold text-slate-200">
+                  <p className="hover:underline cursor-pointer">IEEE Transactions on Pattern Analysis</p>
+                  <p className="hover:underline cursor-pointer">Nature Machine Intelligence</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+
+      </div>
+
+      {/* Profile Metrics Overview Grid */}
+      <div className="space-y-4 pt-6 border-t border-border">
+        <h3 className="text-sm font-black text-text-primary tracking-tight">Research Analytics & Metrics</h3>
+        <ResearchMetrics metrics={profile?.metrics} />
+      </div>
+
+      {/* Edit Profile Modal Dialog */}
+      {isOwnProfile && (
+        <EditProfileModal
+          isOpen={isEditOpen}
+          onClose={() => setIsEditOpen(false)}
+          profile={profile}
+          user={profile}
+          onSave={handleSaveProfile}
+          loading={saveLoading}
+        />
+      )}
+
+      {/* Share Profile Modal Dialog */}
+      <ShareProfileModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        profileUrl={profile?.profileUrl || `/profile/${profileSlug}`}
+        fullName={profile?.fullName || `${profile?.firstName || ''} ${profile?.lastName || ''}`}
+      />
+    </div>
+  );
+};
+
+// Custom premium SVG Citation Timeline Chart
+const CitationChart = ({ citationGraph }) => {
+  if (!citationGraph || citationGraph.length === 0) {
+    return (
+      <div className="h-48 flex items-center justify-center border border-dashed border-border rounded-2xl bg-bg-page/30 text-xs text-text-secondary italic">
+        No citation history available.
+      </div>
+    );
+  }
+
+  const maxCitations = Math.max(...citationGraph.map(d => d.citations), 1);
+  const minCitations = Math.min(...citationGraph.map(d => d.citations), 0);
+  const range = maxCitations - minCitations;
+  const buffer = range * 0.1 || 10;
+  const chartMax = maxCitations + buffer;
+
+  const width = 600;
+  const height = 200;
+  const paddingLeft = 40;
+  const paddingRight = 20;
+  const paddingTop = 20;
+  const paddingBottom = 30;
+
+  const chartWidth = width - paddingLeft - paddingRight;
+  const chartHeight = height - paddingTop - paddingBottom;
+
+  const points = citationGraph.map((d, i) => {
+    const x = paddingLeft + (i / Math.max(1, citationGraph.length - 1)) * chartWidth;
+    const y = paddingTop + chartHeight - (d.citations / chartMax) * chartHeight;
+    return { x, y, data: d };
+  });
+
+  let dPath = '';
+  let areaPath = '';
+  if (points.length > 0) {
+    dPath = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      const p0 = points[i - 1];
+      const p1 = points[i];
+      const cpX1 = p0.x + (p1.x - p0.x) / 2;
+      const cpY1 = p0.y;
+      const cpX2 = p0.x + (p1.x - p0.x) / 2;
+      const cpY2 = p1.y;
+      dPath += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p1.x} ${p1.y}`;
+    }
+    areaPath = `${dPath} L ${points[points.length - 1].x} ${height - paddingBottom} L ${points[0].x} ${height - paddingBottom} Z`;
+  }
+
+  return (
+    <div className="w-full overflow-x-auto scrollbar-none">
+      <div className="min-w-[600px] h-[200px] relative">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+          <defs>
+            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* Grid Lines */}
+          {[0, 0.25, 0.5, 0.75, 1].map((r, idx) => {
+            const y = paddingTop + chartHeight * r;
+            const val = Math.round(chartMax * (1 - r));
+            return (
+              <g key={idx} className="opacity-40">
+                <line 
+                  x1={paddingLeft} 
+                  y1={y} 
+                  x2={width - paddingRight} 
+                  y2={y} 
+                  stroke="var(--color-border, #e2e8f0)" 
+                  strokeDasharray="4 4" 
+                />
+                <text 
+                  x={paddingLeft - 8} 
+                  y={y + 4} 
+                  textAnchor="end" 
+                  className="font-sans font-bold text-[9px] fill-text-secondary"
+                >
+                  {val}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Area */}
+          {areaPath && (
+            <path d={areaPath} fill="url(#chartGrad)" />
+          )}
+
+          {/* Curve */}
+          {dPath && (
+            <path 
+              d={dPath} 
+              fill="none" 
+              stroke="rgb(59, 130, 246)" 
+              strokeWidth="2.5" 
+              strokeLinecap="round"
+            />
+          )}
+
+          {/* Points */}
+          {points.map((p, idx) => (
+            <g key={idx} className="group cursor-pointer">
+              <circle 
+                cx={p.x} 
+                cy={p.y} 
+                r="4" 
+                className="fill-white stroke-primary stroke-2 hover:r-5 hover:fill-primary transition-all"
+              />
+              <text 
+                x={p.x} 
+                y={height - paddingBottom + 16} 
+                textAnchor="middle" 
+                className="font-sans font-extrabold text-[9px] fill-text-secondary group-hover:fill-primary transition-colors"
+              >
+                {p.data.year}
+              </text>
+              <title>{`${p.data.year}: ${p.data.citations} Citations`}</title>
+            </g>
+          ))}
+        </svg>
       </div>
     </div>
   );

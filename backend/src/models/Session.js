@@ -25,10 +25,6 @@ const SessionSchema = new Schema(
       type: String,
       default: ''
     },
-    ipAddress: {
-      type: String,
-      default: ''
-    },
     location: {
       type: String,
       default: 'Unknown'
@@ -69,11 +65,6 @@ SessionSchema.pre('save', function (next) {
     this.status = this.active ? 'active' : 'revoked';
   } else if (this.isModified('status')) {
     this.active = this.status === 'active';
-  }
-  if (this.isModified('ip') && !this.ipAddress) {
-    this.ipAddress = this.ip;
-  } else if (this.isModified('ipAddress') && !this.ip) {
-    this.ip = this.ipAddress;
   }
   next();
 });

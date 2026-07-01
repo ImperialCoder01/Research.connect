@@ -17,8 +17,10 @@ const startServer = async () => {
     }
 
     // 3. Start Express Listener
+    const importQueueService = require('./modules/scholar/service/import-queue.service');
     const server = app.listen(PORT, () => {
       logger.info(`Research Connect server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+      importQueueService.runQueueWorker();
     });
 
     // Handle Graceful Shutdowns

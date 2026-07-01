@@ -12,6 +12,18 @@ require('../../models/RefreshToken');
 require('../../models/EmailOtp');
 require('../../models/SystemConfiguration');
 require('../../models/ApplicationLog');
+require('../../models/GoogleScholarProfile');
+require('../../models/Publication');
+require('../../models/PublicationAuthor');
+require('../../models/CoAuthor');
+require('../../models/CitationGraph');
+require('../../models/ResearchArea');
+require('../../models/Keyword');
+require('../../models/ResearchMetric');
+require('../../models/Import');
+require('../../models/ImportLog');
+require('../../models/DerivedAnalytics');
+require('../../models/SyncHistory');
 
 const syncDatabaseIndexes = async () => {
   logger.info('Auditing and syncing database indexes...');

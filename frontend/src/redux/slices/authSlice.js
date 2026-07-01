@@ -78,6 +78,15 @@ const authSlice = createSlice({
       state.error = action.payload;
       state.loading = false;
     },
+    updateToken(state, action) {
+      state.token = action.payload;
+      state.isAuthenticated = !!action.payload;
+      if (action.payload) {
+        localStorage.setItem('token', action.payload);
+      } else {
+        localStorage.removeItem('token');
+      }
+    },
     logoutSuccess(state) {
       state.user = null;
       state.profile = null;
@@ -105,6 +114,7 @@ export const {
   setOtpEmail,
   setOtpPurpose,
   setError,
+  updateToken,
   logoutSuccess
 } = authSlice.actions;
 

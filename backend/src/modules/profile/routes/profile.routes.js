@@ -3,13 +3,40 @@ const router = express.Router();
 const profileController = require('../controller/profile.controller');
 const { authMiddleware } = require('../../../common/middlewares/auth.middleware');
 const { updateProfileValidator } = require('../validator/profile.validator');
+const { scholarSyncLimiter } = require('../../../config/rateLimiter');
 
-// All profile endpoints require authentication
+// Profile detail retrieval for the logged in user (defined before dynamic slug to avoid collision)
+router.get('/me', authMiddleware, profileController.getProfile);
+
+// Public route to view a researcher profile by slug
+router.get('/:profileSlug', profileController.getPublicProfile);
+
+// Secure routes below this point
 router.use(authMiddleware);
 
-router.get('/', profileController.getProfile);
+// Bulk and specific PUT/PATCH endpoints for profile updates
 router.put('/', updateProfileValidator, profileController.updateProfile);
 router.patch('/', updateProfileValidator, profileController.updateProfile);
+router.patch('/banner', profileController.updateBanner);
+router.patch('/avatar', profileController.updateAvatar);
+router.patch('/basic', updateProfileValidator, profileController.updateBasic);
+router.patch('/about', updateProfileValidator, profileController.updateAbout);
+router.patch('/skills', updateProfileValidator, profileController.updateSkills);
+router.patch('/research', updateProfileValidator, profileController.updateResearch);
+router.patch('/education', updateProfileValidator, profileController.updateEducation);
+router.patch('/experience', updateProfileValidator, profileController.updateExperience);
+router.patch('/projects', updateProfileValidator, profileController.updateProjects);
+router.patch('/social', updateProfileValidator, profileController.updateSocial);
+router.patch('/metrics', updateProfileValidator, profileController.updateMetrics);
+
+// Analytics tracking and retrieval
+router.get('/analytics', profileController.getAnalytics);
+router.patch('/analytics/download', profileController.trackDownload);
+
+// Background task trigger for Google Scholar Synchronization
+router.post('/google-scholar/sync', scholarSyncLimiter, profileController.syncGoogleScholar);
+
+// Soft delete account & profile
 router.delete('/', profileController.deleteProfile);
 
 module.exports = router;

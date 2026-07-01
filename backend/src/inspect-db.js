@@ -15,7 +15,7 @@ async function run() {
     const users = await User.find({}).sort({ createdAt: -1 }).limit(5);
     console.log('\n--- LATEST 5 USERS IN DB ---');
     users.forEach(u => {
-      console.log(`Email: ${u.email}, Status: ${u.status}, Verified: ${u.emailVerified || u.isVerified}`);
+      console.log(`Email: ${u.email}, Status: ${u.status}, Verified: ${u.emailVerified}`);
     });
   } catch (err) {
     console.error(err);

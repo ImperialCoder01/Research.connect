@@ -20,7 +20,6 @@ const NotificationSchema = new Schema(
     },
     type: {
       type: String,
-      enum: ['info', 'success', 'warning', 'error', 'system', 'collaboration'],
       default: 'info'
     },
     isRead: {

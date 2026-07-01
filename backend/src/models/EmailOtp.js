@@ -27,9 +27,6 @@ const EmailOtpSchema = new Schema(
       type: Date,
       required: true
     },
-    expiry: {
-      type: Date
-    },
     verified: {
       type: Boolean,
       default: false
@@ -43,15 +40,6 @@ const EmailOtpSchema = new Schema(
     timestamps: true
   }
 );
-
-EmailOtpSchema.pre('save', function (next) {
-  if (this.expiresAt && !this.expiry) {
-    this.expiry = this.expiresAt;
-  } else if (this.expiry && !this.expiresAt) {
-    this.expiresAt = this.expiry;
-  }
-  next();
-});
 
 EmailOtpSchema.index({ email: 1, purpose: 1 });
 EmailOtpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // Auto-expire from DB

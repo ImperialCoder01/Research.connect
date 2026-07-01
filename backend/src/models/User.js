@@ -60,10 +60,6 @@ const UserSchema = new Schema(
       type: Boolean,
       default: false
     },
-    isVerified: {
-      type: Boolean,
-      default: false
-    },
     isActive: {
       type: Boolean,
       default: false
@@ -96,6 +92,36 @@ const UserSchema = new Schema(
       trim: true,
       default: ''
     },
+    username: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      unique: true,
+      sparse: true,
+      index: true
+    },
+    publicProfileId: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      index: true
+    },
+    profileSlug: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      index: true
+    },
+    profileUrl: {
+      type: String,
+      trim: true
+    },
+    publicProfileUrl: {
+      type: String,
+      trim: true
+    },
     isDeleted: {
       type: Boolean,
       default: false
@@ -113,21 +139,33 @@ const UserSchema = new Schema(
   }
 );
 
-// Pre-save hook to populate fullName and sync verified fields
-UserSchema.pre('save', function (next) {
+// Pre-save hook to populate fullName, sync verified fields, and auto-generate username/profile URL
+UserSchema.pre('save', async function (next) {
   if (this.isModified('firstName') || this.isModified('lastName')) {
     this.fullName = `${this.firstName} ${this.lastName}`.trim();
   }
-  if (this.isModified('emailVerified')) {
-    this.isVerified = this.emailVerified;
-  } else if (this.isModified('isVerified')) {
-    this.emailVerified = this.isVerified;
+
+  // Generate username and public profile URL details if not present
+  if (!this.username) {
+    try {
+      const { generateUniqueUsernameAndSlug } = require('../modules/profile/helper/username.helper');
+      const urls = await generateUniqueUsernameAndSlug(this.firstName, this.lastName);
+      this.username = urls.username;
+      this.publicProfileId = urls.publicProfileId;
+      this.profileSlug = urls.profileSlug;
+      this.profileUrl = urls.profileUrl;
+      this.publicProfileUrl = `https://researchconnect.com${urls.profileUrl}`;
+    } catch (err) {
+      console.error('Error generating username and slug: ', err);
+    }
   }
   next();
 });
 
 // Indexes
-UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ username: 1 }, { unique: true, sparse: true });
+UserSchema.index({ publicProfileId: 1 }, { unique: true, sparse: true });
+UserSchema.index({ profileSlug: 1 }, { unique: true, sparse: true });
 UserSchema.index({ status: 1 });
 UserSchema.index({ isDeleted: 1 });
 UserSchema.index({ createdAt: -1 });

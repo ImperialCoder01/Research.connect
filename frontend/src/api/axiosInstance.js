@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import { store } from '../redux';
+import { updateToken, logoutSuccess } from '../redux/slices/authSlice';
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -31,6 +33,20 @@ axiosInstance.interceptors.request.use(
   }
 );
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 // Response Interceptor
 axiosInstance.interceptors.response.use(
   (response) => {
@@ -51,20 +67,64 @@ axiosInstance.interceptors.response.use(
       }
     };
 
-    if (status === 401) {
-      // Token expired or invalid - redirect to login / clear local storage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      
-      // Prevent infinite loop if we are already attempting refresh or on login page
-      if (!originalRequest._retry && !window.location.pathname.includes('/login')) {
-        originalRequest._retry = true;
-        toast.error('Session expired. Please log in again.', toastStyle);
-        // Dispatch redirect to login in real implementation or route
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 1500);
+    if (status === 401 && !originalRequest._retry) {
+      // If we are already on login page or attempting to refresh token, do not retry
+      if (window.location.pathname.includes('/login') || originalRequest.url.includes('/refresh-token')) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('profile');
+        store.dispatch(logoutSuccess());
+        
+        // Visual feedback for invalid credentials or refresh failure
+        const errorMsg = error.response?.data?.message || 'Invalid email or password.';
+        toast.error(errorMsg, toastStyle);
+        
+        return Promise.reject(error);
       }
+
+      if (isRefreshing) {
+        return new Promise(function(resolve, reject) {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers['Authorization'] = 'Bearer ' + token;
+          return axiosInstance(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      return new Promise(function(resolve, reject) {
+        axiosInstance.post('/v1/auth/refresh-token')
+          .then((res) => {
+            if (res.success && res.data?.accessToken) {
+              const newToken = res.data.accessToken;
+              store.dispatch(updateToken(newToken));
+              originalRequest.headers['Authorization'] = 'Bearer ' + newToken;
+              processQueue(null, newToken);
+              resolve(axiosInstance(originalRequest));
+            } else {
+              throw new Error('Refresh token invalid');
+            }
+          })
+          .catch((err) => {
+            processQueue(err, null);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('profile');
+            store.dispatch(logoutSuccess());
+            toast.error('Session expired. Please log in again.', toastStyle);
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 1500);
+            reject(err);
+          })
+          .finally(() => {
+            isRefreshing = false;
+          });
+      });
     } else if (status === 403) {
       toast.error('You do not have permission to perform this action.', toastStyle);
     } else if (status === 429) {

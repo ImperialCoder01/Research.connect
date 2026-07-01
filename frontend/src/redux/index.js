@@ -1,21 +1,47 @@
 import { configureStore } from '@reduxjs/toolkit';
 import appReducer from './slices/appSlice';
 import themeReducer from './slices/themeSlice';
-import notificationReducer from './slices/notificationSlice';
 import loadingReducer from './slices/loadingSlice';
 import authReducer from './slices/authSlice';
-import userReducer from './slices/userSlice';
-import sessionReducer from './slices/sessionSlice';
+import scholarReducer from './slices/scholarSlice';
+import publicationReducer from './slices/publicationSlice';
+import coAuthorReducer from './slices/coAuthorSlice';
+import citationReducer from './slices/citationSlice';
+import researchAreaReducer from './slices/researchAreaSlice';
+import feedReducer from './slices/feedSlice';
+import searchReducer from './slices/searchSlice';
+import messageReducer from './slices/messageSlice';
+import bookmarkReducer from './slices/bookmarkSlice';
+import communityReducer from './slices/communitySlice';
+import commentReducer from './slices/commentSlice';
+import likeReducer from './slices/likeSlice';
+import shareReducer from './slices/shareSlice';
+import recommendationReducer from './slices/recommendationSlice';
+import requestReducer from './slices/requestSlice';
+import settingsReducer from './slices/settingsSlice';
 
 export const store = configureStore({
   reducer: {
     app: appReducer,
     theme: themeReducer,
-    notification: notificationReducer,
     loading: loadingReducer,
     auth: authReducer,
-    user: userReducer,
-    session: sessionReducer
+    scholar: scholarReducer,
+    publication: publicationReducer,
+    coAuthor: coAuthorReducer,
+    citation: citationReducer,
+    researchArea: researchAreaReducer,
+    feed: feedReducer,
+    search: searchReducer,
+    message: messageReducer,
+    bookmark: bookmarkReducer,
+    community: communityReducer,
+    comment: commentReducer,
+    like: likeReducer,
+    share: shareReducer,
+    recommendation: recommendationReducer,
+    request: requestReducer,
+    settings: settingsReducer
   },
   devTools: process.env.NODE_ENV !== 'production'
 });

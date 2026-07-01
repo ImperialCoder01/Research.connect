@@ -8,7 +8,7 @@ const signAccessToken = (payload) => {
 
 const signRefreshToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_REFRESH_SECRET || 'supersecretjwtrefreshkeyforresearchconnect', {
-    expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d'
+    expiresIn: process.env.JWT_REFRESH_EXPIRE || '30d'
   });
 };
 
