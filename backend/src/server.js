@@ -1,85 +1,64 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
-import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
-import { connectDB } from './database/connection.js';
+require('dotenv').config();
+const app = require('./app');
+const { connectDB, closeDB } = require('./config/database/connection');
+const logger = require('./common/logger/winston');
+const { syncDatabaseIndexes } = require('./config/database/indexes');
 
-dotenv.config();
-
-const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Connect to Database
-connectDB();
+const startServer = async () => {
+  try {
+    // 1. Establish Database Connection
+    await connectDB();
 
-// Global Middleware
-app.use(helmet());
-app.use(morgan('dev'));
+    // 2. Sync database indexes
+    if (process.env.NODE_ENV !== 'test') {
+      await syncDatabaseIndexes();
+    }
 
-// CORS Configuration
-const corsOptions = {
-  origin: process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+    // 3. Start Express Listener
+    const server = app.listen(PORT, () => {
+      logger.info(`Research Connect server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+    });
+
+    // Handle Graceful Shutdowns
+    const shutdownGracefully = async (signal) => {
+      logger.info(`Received ${signal}. Shutting down server gracefully...`);
+      
+      server.close(async () => {
+        logger.info('HTTP server closed.');
+        // Terminate db connection
+        await closeDB();
+        logger.info('Database connections closed. Exiting process.');
+        process.exit(0);
+      });
+
+      // Force shutdown after 10s if graceful fails
+      setTimeout(() => {
+        logger.error('Forceful shutdown triggered.');
+        process.exit(1);
+      }, 10000);
+    };
+
+    process.on('SIGTERM', () => shutdownGracefully('SIGTERM'));
+    process.on('SIGINT', () => shutdownGracefully('SIGINT'));
+
+  } catch (error) {
+    logger.error('Error starting Research Connect server:', error);
+    process.exit(1);
+  }
 };
-app.use(cors(corsOptions));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-// Routes
-import { authRoutes } from './modules/authentication/index.js';
-app.use('/api/auth', authRoutes);
-
-// Base health check route
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Research Connect API is healthy',
-    data: {
-      uptime: process.uptime(),
-      timestamp: new Date(),
-    },
-    error: null,
-  });
+// Handle Uncaught Exception events
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception occurred:', err);
+  process.exit(1);
 });
 
-// Global 404 Route handler
-app.use((req, res, next) => {
-  res.status(404).json({
-    success: false,
-    message: `API Route not found: ${req.originalUrl}`,
-    error: {
-      code: 'NOT_FOUND',
-      details: 'The requested resource could not be located on this server.',
-    },
-  });
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-// Global Error Handling Middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled Error:', err);
-  
-  const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
-  
-  res.status(statusCode).json({
-    success: false,
-    message,
-    error: {
-      code: err.code || 'INTERNAL_SERVER_ERROR',
-      details: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    },
-  });
-});
+startServer();
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`Server is running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-});
-
-export default app;
+// Nodemon reload trigger to connect cleanly after port release

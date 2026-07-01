@@ -1,73 +1,78 @@
 import React from 'react';
-import { Shield, Cpu, Target, Award, Compass, MessageSquare } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import axiosInstance from '../../../api/axiosInstance';
+import { Compass, Users, FileText, Sparkles, BarChart3, GraduationCap } from 'lucide-react';
+import Card from '../../../components/ui/Card';
 
-export const Features = () => {
-  const features = [
-    {
-      icon: <Cpu className="h-6 w-6" />,
-      title: 'AI Research Recommendations',
-      description: 'Our proprietary recommendation engine matches you with relevant publications and researchers based on your profile and reading history.',
+const iconMap = {
+  discovery: Compass,
+  collaboration: Users,
+  publications: FileText,
+  'ai-recs': Sparkles,
+  analytics: BarChart3,
+  'scholar-integration': GraduationCap
+};
+
+const Features = () => {
+  const { data: featuresData, isLoading } = useQuery({
+    queryKey: ['features'],
+    queryFn: async () => {
+      const response = await axiosInstance.get('/features');
+      return response.data;
     },
-    {
-      icon: <Shield className="h-6 w-6" />,
-      title: 'Verified Researcher Profiles',
-      description: 'Robust verification mechanisms ensure that profiles belong to actual researchers, preventing spam and academic identity theft.',
-    },
-    {
-      icon: <Target className="h-6 w-6" />,
-      title: 'Precision Literature Search',
-      description: 'Search through millions of papers with advanced filters (keywords, authors, publication date, journal impact) and semantic understanding.',
-    },
-    {
-      icon: <Award className="h-6 w-6" />,
-      title: 'Impact Analytics & h-Index',
-      description: 'Get deep insights into how your work is being received, tracking citations, reads, and overall academic reach.',
-    },
-    {
-      icon: <Compass className="h-6 w-6" />,
-      title: 'Co-Author & Peer Discovery',
-      description: 'Find potential collaborators with complementary skills or similar research paths to accelerate your active projects.',
-    },
-    {
-      icon: <MessageSquare className="h-6 w-6" />,
-      title: 'Secure Scientific Discussions',
-      description: 'Engage in structured Q&A, comment on open-access preprints, and exchange constructive feedback with peers.',
-    },
-  ];
+    // Fallback if backend is not started
+    initialData: [
+      { featureId: 'discovery', title: 'Research Discovery', description: 'Discover relevant research articles and preprints semantically parsed with AI.', isComingSoon: false },
+      { featureId: 'collaboration', title: 'Research Collaboration', description: 'Connect with co-authors, share private workspace drafts, and cooperate on publications.', isComingSoon: false },
+      { featureId: 'publications', title: 'Publication Management', description: 'Upload, manage, and index your academic publications easily on a single profile.', isComingSoon: false },
+      { featureId: 'ai-recs', title: 'AI Recommendation', description: 'Get automated, personalized recommendations of research items matching your expertise.', isComingSoon: false },
+      { featureId: 'analytics', title: 'Research Analytics', description: 'Track citation counts, reads, profile views, and index metrics over time.', isComingSoon: false },
+      { featureId: 'scholar-integration', title: 'Google Scholar Integration', description: 'Sync your publications and citation statistics from Google Scholar automatically.', isComingSoon: true }
+    ]
+  });
 
   return (
-    <section id="features" className="py-24 bg-[#F8FAFC] border-t border-border">
-      <div className="max-w-7xl mx-auto px-6 sm:px-8">
-        <div className="text-center max-w-3xl mx-auto mb-20">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
-            Designed for Modern Scientific Discovery
+    <section id="features" className="py-20 px-4 bg-bg-page border-b border-border">
+      <div className="max-w-7xl mx-auto text-center space-y-12">
+        <div className="max-w-3xl mx-auto space-y-4">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-text-primary">
+            Platform Capabilities
           </h2>
-          <p className="mt-4 text-lg text-muted-foreground font-medium">
-            Research Connect provides a suite of advanced tools that simplify the way you find, share, and collaborate on scientific research.
+          <p className="text-base text-text-secondary">
+            Research Connect provides a comprehensive suite of tools designed specifically to accelerate academic publishing and improve networking.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className="relative group p-8 rounded-2xl bg-white border border-border hover:border-slate-300 hover:shadow-md transition-all duration-200 flex flex-col justify-between"
-            >
-              <div className="space-y-4">
-                <div className="bg-primary/10 p-3 rounded-xl w-fit border border-primary/20 text-primary group-hover:bg-primary/20 transition duration-200">
-                  {feature.icon}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
+          {featuresData.map((feat) => {
+            const Icon = iconMap[feat.featureId] || Compass;
+            return (
+              <Card key={feat.featureId} className="flex flex-col h-full bg-bg-card">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-light-blue text-primary rounded-xl">
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-text-primary flex items-center gap-2">
+                      {feat.title}
+                      {feat.isComingSoon && (
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-light-orange text-accent-orange border border-amber-200">
+                          Soon
+                        </span>
+                      )}
+                    </h3>
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition duration-200">
-                  {feature.title}
-                </h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  {feature.description}
+                <p className="text-sm text-text-secondary leading-relaxed flex-grow">
+                  {feat.description}
                 </p>
-              </div>
-            </div>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       </div>
     </section>
   );
 };
+
+export default Features;

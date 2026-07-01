@@ -1,22 +1,41 @@
 import React from 'react';
-import { Navbar } from '../components/Navbar.jsx';
-import { Hero } from '../components/Hero.jsx';
-import { Stats } from '../components/Stats.jsx';
-import { Features } from '../components/Features.jsx';
-import { Categories } from '../components/Categories.jsx';
-import { Faq } from '../components/Faq.jsx';
-import { Footer } from '../components/Footer.jsx';
+import Hero from '../components/Hero';
+import Stats from '../components/Stats';
+import Features from '../components/Features';
+import HowItWorks from '../components/HowItWorks';
+import Categories from '../components/Categories';
+import Testimonials from '../components/Testimonials';
+import FAQ from '../components/FAQ';
+import CTA from '../components/CTA';
 
-export const LandingPage = () => {
+const LandingPage = () => {
   return (
-    <div className="min-h-screen bg-slate-950 text-white overflow-x-hidden">
-      <Navbar />
+    <div className="min-h-screen">
+      {/* Hero Header */}
       <Hero />
+
+      {/* Metrics Counters */}
       <Stats />
+
+      {/* Capabilities */}
       <Features />
+
+      {/* Workflow */}
+      <HowItWorks />
+
+      {/* Disciplines */}
       <Categories />
-      <Faq />
-      <Footer />
+
+      {/* User Quotes */}
+      <Testimonials />
+
+      {/* Accordion Support */}
+      <FAQ />
+
+      {/* Footer Banner */}
+      <CTA />
     </div>
   );
 };
+
+export default LandingPage;

@@ -1,6 +1,8 @@
 # Research Connect
 
-An enterprise-grade, production-ready **AI-powered Research Discovery & Collaboration Platform** built using the MERN Stack (React, Node.js, Express, MongoDB). Designed with a clean **Feature-First Architecture**, strict design systems, and modern SaaS aesthetics.
+An enterprise-grade, production-ready **AI-Powered Research Discovery & Collaboration Platform** built using the MERN Stack (React, Node.js, Express, MongoDB). Designed with a clean **Feature-First Architecture**, strict design systems, and modern SaaS aesthetics.
+
+This documentation describes the foundation structure, system architecture, database models, and setup procedures established in **Phase 0**.
 
 ---
 
@@ -16,7 +18,7 @@ Research Connect utilizes a premium light-theme design system. All interface ele
 | 🔷 **Blue Hover**      | `#1D4ED8`  | Button hover, active states                   |
 | 🟣 **Indigo**          | `#4F46E5`  | Highlights, badges, charts                    |
 | 🟢 **Success Green**   | `#22C55E`  | Success status, citations, completed items    |
-| 🟠 **Orange**          | `#F59E0B`  | i10-index, warning metrics                    |
+| 🟠 **Orange**          | `#F59E0B`  | Warnings, pending states, metrics             |
 | 🔴 **Red**             | `#EF4444`  | Notifications, errors, alerts                 |
 | ⚪ **Page Background** | `#F8FAFC`  | Main website background                       |
 | 🤍 **Card Background** | `#FFFFFF`  | Cards, profile sections, widgets              |
@@ -31,54 +33,65 @@ Research Connect utilizes a premium light-theme design system. All interface ele
 ### Gradients
 
 - **Primary Gradient**: `#2563EB` ➔ `#4F46E5` (Primary Blue to Indigo)
-- **Hero Background Gradient**: `#F8FAFC` ➔ `#FFFFFF` (Page Background to Card Background)
-- **Success Gradient**: `#22C55E` ➔ `#10B981` (Success Green to Emerald)
+- **Hero Background Gradient**: Radial-gradient (`#F8FAFC` ➔ `#FFFFFF`)
 
 ---
 
 ## 📂 Project Directory Structure
 
-The project is structured with exactly two root folders, maintaining a strict separation between client and server.
+The project is structured with exactly two root folders, maintaining a strict separation between client and server, utilizing **Feature-First** localization.
 
 ### 💻 Frontend (Client-side)
 
 ```text
 frontend/                 # React.js (Vite) Client
+├── .vscode/
+│   └── settings.json     # Custom CSS linter rules for Tailwind
 ├── public/
 ├── src/
-│   ├── api/              # Axios configurations & interceptors
-│   ├── components/       # Reusable global UI components (e.g., ProtectedRoute)
-│   ├── hooks/            # Reusable global React hooks
-│   ├── layouts/          # Global layouts
-│   ├── store/            # Redux Toolkit store & slice definitions
-│   │   ├── slices/       # Redux slices (e.g., authSlice)
-│   │   └── index.js      # Store configuration
-│   ├── utils/            # Shared utilities
-│   ├── modules/          # Feature-First Modules
-│   │   ├── authentication/
-│   │   │   ├── api/
-│   │   │   ├── components/
-│   │   │   ├── constants/
-│   │   │   ├── context/
-│   │   │   ├── hooks/
-│   │   │   ├── pages/
-│   │   │   ├── services/
-│   │   │   ├── styles/
-│   │   │   ├── utils/
-│   │   │   └── index.js  # Module entry point
-│   │   ├── landing/
-│   │   │   ├── components/
-│   │   │   ├── pages/
-│   │   │   └── index.js
-│   │   └── dashboard/
+│   ├── api/
+│   │   └── axiosInstance.js # Axios instance with interceptors and toast prompts
+│   ├── components/
+│   │   ├── common/
+│   │   │   ├── ComingSoon.jsx # Custom page redirect placeholder
+│   │   │   ├── Footer.jsx     # Responsive marketing footer
+│   │   │   └── Navbar.jsx     # Sticky navigation bar with mobile drawer
+│   │   └── ui/
+│   │       ├── Accordion.jsx  # Smooth animated toggle accordion
+│   │       ├── Button.jsx     # Motion-enhanced microinteraction buttons
+│   │       └── Card.jsx       # Elevation-hover cards and glassmorphic cards
+│   ├── layouts/
+│   │   └── MainLayout.jsx     # Layout shell wrapping header/footer
+│   ├── routes/
+│   │   └── AppRoutes.jsx      # Router configuration (Landing, Placeholders, 404)
+│   ├── store/
+│   │   ├── slices/
+│   │   │   ├── appSlice.js    # Mobile menus & general loading state
+│   │   │   ├── themeSlice.js  # Theme toggles and cache
+│   │   │   └── notificationSlice.js # Global alerts tracking
+│   │   └── index.js           # Combined Redux Toolkit store
+│   ├── styles/
+│   │   └── index.css          # Tailwind directives and CSS variables
+│   ├── modules/               # Feature-First Modules
+│   │   └── landing/           # Landing page feature folder
+│   │       ├── components/
+│   │       │   ├── Hero.jsx   # Header panel with search mock
+│   │       │   ├── Stats.jsx  # Database metric counters
+│   │       │   ├── Features.jsx # Interactive capabilities grid
+│   │       │   ├── Categories.jsx # Academic disciplines counters
+│   │       │   ├── FAQ.jsx
+│   │       │   ├── CTA.jsx
+│   │       │   └── Testimonials.jsx
 │   │       ├── pages/
-│   │       └── index.js
-│   ├── index.css         # Tailwind & global styles
-│   └── main.jsx          # App entry point with router & providers
+│   │       │   └── LandingPage.jsx # Assembled dashboard page
+│   │       └── index.js       # Sibling exports wrapper
+│   ├── App.jsx
+│   └── main.jsx
 ├── index.html
+├── vite.config.js
 ├── tailwind.config.js
 ├── postcss.config.js
-└── vite.config.js
+└── package.json
 ```
 
 <br />
@@ -88,413 +101,200 @@ frontend/                 # React.js (Vite) Client
 ```text
 backend/                  # Node.js + Express.js Server
 ├── src/
-│   ├── database/         # Database Configuration
-│   │   ├── models/       # Shared database models
-│   │   ├── connection.js # Mongoose connection helper
-│   │   ├── indexes.js    # Index audit utilities
-│   │   └── seed.js       # Local database seeder
-│   ├── modules/          # Feature-First Modules
-│   │   └── authentication/
+│   ├── config/
+│   │   └── database/
+│   │       ├── connection.js # Pool, auto-reconnect, and health check client
+│   │       ├── indexes.js    # Index audit sync engine
+│   │       └── seed.js       # Local database seed generator
+│   ├── common/
+│   │   ├── logger/
+│   │   │   └── winston.js    # JSON daily rotating logging manager
+│   │   ├── errors/
+│   │   │   └── AppError.js   # Centralized Operational Error hierarchy
+│   │   ├── responses/
+│   │   │   └── ApiResponse.js # Standardized JSON format builders
+│   │   ├── repository/
+│   │   │   └── base.repository.js # Generic CRUD Engine
+│   │   ├── middlewares/
+│   │   │   ├── requestId.middleware.js
+│   │   │   ├── logger.middleware.js
+│   │   │   ├── responseFormatter.middleware.js
+│   │   │   ├── security.middleware.js
+│   │   │   ├── validation.middleware.js
+│   │   │   ├── asyncHandler.middleware.js
+│   │   │   ├── notFound.middleware.js
+│   │   │   └── errorHandler.middleware.js # Multi-exception parser
+│   │   └── utils/
+│   │       ├── dateFormatter.js
+│   │       ├── hashHelper.js
+│   │       ├── otpGenerator.js
+│   │       ├── jwtHelper.js
+│   │       ├── fileUpload.js  # Multer image/PDF configurations
+│   │       └── emailHelper.js # Nodemailer dispatcher
+│   ├── models/                # Schema blueprints
+│   │   ├── User.js
+│   │   ├── Profile.js
+│   │   ├── Settings.js
+│   │   ├── Notification.js
+│   │   ├── Session.js
+│   │   ├── ActivityLog.js
+│   │   ├── RefreshToken.js
+│   │   └── EmailOtp.js
+│   ├── modules/               # Feature-First Modules
+│   │   └── landing/           # Landing API endpoints
 │   │       ├── controller/
 │   │       ├── service/
 │   │       ├── repository/
 │   │       ├── routes/
 │   │       ├── validator/
-│   │       ├── middleware/
-│   │       ├── helper/
 │   │       ├── dto/
-│   │       └── index.js  # Module entry point
-│   └── server.js         # Express application entry point
+│   │       └── index.js
+│   ├── app.js
+│   ├── server.js
+│   └── index.js
+├── .env.example
 ├── .env
-└── .env.example
+└── package.json
 ```
 
 ---
 
-## 🏛️ Architecture Rules & Patterns
+## 🏛️ Permanent Coding Standards & Guidelines
 
-### 1. Feature-First Architecture
+Refer to [.agents/AGENTS.md](file:///c:/Users/codew/Downloads/Research.connect/.agents/AGENTS.md) for full project constraints. Key guidelines include:
 
-- Every feature must live inside a self-contained module folder under `modules/` in both frontend and backend.
-- Frontend modules contain components, pages, hooks, services, validators, and an `index.js` entry point.
-- Backend modules contain controllers, services, repositories, routes, validators, middlewares, helpers, DTOs, and an `index.js` entry point.
-- **Module Name Matching**: Frontend and backend module names must always match exactly (e.g., `authentication`, `publication`, `dashboard`).
-
-### 2. Separation of Concerns (Backend)
-
-- **Routes**: Define endpoints and map them directly to controllers. No business logic.
-- **Controllers**: Validate request payloads (using Zod), map parameters, call services, and return standardized JSON responses.
-- **Services**: Contain all business logic, transactions, and calculations.
-- **Repositories**: Encapsulate Mongoose queries and database mutations.
-- **DTOs (Data Transfer Objects)**: Sanitize database documents before sending them in responses.
-
-### 3. Standardized API Responses
-
-All API responses must follow these exact JSON structures:
-
-#### Success Response
-
-```json
-{
-  "success": true,
-  "message": "Action completed successfully",
-  "data": {},
-  "error": null
-}
-```
-
-#### Error Response
-
-```json
-{
-  "success": false,
-  "message": "Error description",
-  "error": {
-    "code": "ERROR_CODE",
-    "details": {}
-  }
-}
-```
-
-### 4. Naming Conventions
-
-- **Folders**: lowercase (e.g., `publication`, `researcher`, `dashboard`).
-- **React Components**: PascalCase (e.g., `PublicationCard.jsx`).
-- **React Hooks**: camelCase starting with `use` (e.g., `usePublication.js`).
-- **Services**: `*.service.js` (e.g., `auth.service.js`).
-- **Controllers**: `*.controller.js` (e.g., `auth.controller.js`).
-- **Routes**: `*.routes.js` (e.g., `auth.routes.js`).
-- **Models**: PascalCase (e.g., `User.js`).
+1. **Strict Separation of Concerns**: Routes map directly to Controllers. Controllers sanitize parameters, call Services, and output structured DTOs. Services host all transaction logic. Repositories communicate with Mongoose.
+2. **Standardized Responses**:
+   - **Success (HTTP 200-299)**:
+     ```json
+     {
+       "success": true,
+       "message": "Action completed successfully",
+       "data": {},
+       "error": null
+     }
+     ```
+   - **Failure (HTTP 400-599)**:
+     ```json
+     {
+       "success": false,
+       "message": "Error description",
+       "error": { "code": "ERROR_CODE", "details": {} }
+     }
+     ```
+3. **Mongoose Collections**: Must support audit logging (`createdAt`, `updatedAt`), soft-delete properties (`isDeleted`, `deletedAt`), and normalized `ObjectId` references.
 
 ---
 
-## 🗄️ Database Schema Design
+## 🗄️ Database Schemas & Collection Blueprints
 
-### 1. User Model (`User.js`)
+### 1. `users` (Model: `User`)
+Manages authentication credentials and role flags.
+- **Fields**: `_id`, `firstName`, `lastName`, `email` (unique), `password` (select: false), `phone`, `role` (enum: `['researcher', 'admin']`), `status` (enum: `['pending', 'active', 'suspended']`), `isActive`, `isVerified`, `profileImage`, `country`, `createdAt`, `updatedAt`.
+- **Indexes**: `email: 1` (unique), `createdAt: 1`.
 
-Stores account credentials, role details, and authentication/verification states.
+### 2. `profiles` (Model: `Profile`)
+Academic portfolios and social handles mapped 1:1 to User.
+- **Fields**: `userId` (ObjectId, unique, ref: `User`), `bio`, `country`, `institution`, `department`, `designation`, `organization`, `socialLinks` (`orcid`, `googleScholar`, `researchGate`, `linkedin`, `website`), `profileCompletion`.
+- **Indexes**: `userId: 1` (unique), `institution: 1`.
 
-```javascript
-{
-  firstName: { type: String, required: true, trim: true },
-  lastName: { type: String, required: true, trim: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password: { type: String, required: true, select: false },
-  role: { type: String, enum: ['researcher', 'admin'], default: 'researcher' },
-  isVerified: { type: Boolean, default: false },
-  verificationToken: String,
-  verificationTokenExpires: Date,
-  passwordResetToken: String,
-  passwordResetExpires: Date,
-  refreshToken: { type: String, select: false }
-}
-```
+### 3. `settings` (Model: `Settings`)
+User preferences and theme details.
+- **Fields**: `userId` (ObjectId, unique, ref: `User`), `theme` (enum: `['light', 'dark', 'system']`), `language`, `notifications` (`email`, `push`, `weeklyDigest`), `privacy` (`profileVisible`, `showPublications`, `showStats`), `timezone`.
+- **Indexes**: `userId: 1` (unique).
 
-### 2. Researcher Profile Model (`ResearcherProfile.js`)
+### 4. `notifications` (Model: `Notification`)
+Push alerts and collaboration invites.
+- **Fields**: `userId` (ObjectId, ref: `User`), `title`, `message`, `type` (enum: `['info', 'success', 'warning', 'error', 'system', 'collaboration']`), `isRead`.
+- **Indexes**: `userId: 1, isRead: 1`, `createdAt: -1`.
 
-Stores professional details, institution details, publication metrics, and social handles.
+### 5. `sessions` (Model: `Session`)
+Tracks device login metadata.
+- **Fields**: `userId` (ObjectId, ref: `User`), `browser`, `device`, `ipAddress`, `location`, `loginTime`, `logoutTime`, `status` (enum: `['active', 'expired', 'revoked']`).
+- **Indexes**: `userId: 1, status: 1`.
 
-```javascript
-{
-  user: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-  title: { type: String, default: '' },
-  bio: { type: String, maxlength: 500, default: '' },
-  institution: { type: String, default: '' },
-  department: { type: String, default: '' },
-  skills: [{ type: String }],
-  socialLinks: {
-    orcid: { type: String, default: '' },
-    googleScholar: { type: String, default: '' },
-    researchGate: { type: String, default: '' },
-    linkedin: { type: String, default: '' },
-    website: { type: String, default: '' }
-  },
-  stats: {
-    views: { type: Number, default: 0 },
-    citations: { type: Number, default: 0 },
-    reads: { type: Number, default: 0 },
-    hIndex: { type: Number, default: 0 }
-  },
-  publications: [{ type: Schema.Types.ObjectId, ref: 'Publication' }],
-  coAuthors: [{ type: Schema.Types.ObjectId, ref: 'User' }]
-}
-```
+### 6. `activitylogs` (Model: `ActivityLog`)
+System audits.
+- **Fields**: `userId` (ObjectId, ref: `User`), `action`, `description`, `ipAddress`, `createdAt`.
+- **Indexes**: `userId: 1, action: 1`, `createdAt: -1`.
+
+### 7. `refreshtokens` (Model: `RefreshToken`)
+OAuth token lifecycle tracking.
+- **Fields**: `userId` (ObjectId, ref: `User`), `token` (unique), `expiresAt`.
+- **Indexes**: `token: 1` (unique), `expiresAt: 1` (TTL auto-expiration).
+
+### 8. `emailotps` (Model: `EmailOtp`)
+Passwords resets and verification numbers.
+- **Fields**: `email`, `otp`, `purpose` (enum: `['email_verification', 'password_reset']`), `expiresAt`.
+- **Indexes**: `email: 1, purpose: 1`, `expiresAt: 1` (TTL auto-expiration).
 
 ---
 
-## 🚀 Quickstart & Installation
+## ⚙️ Generic CRUD Repository Engine
+
+All future repositories inherit from `BaseRepository` ([base.repository.js](file:///c:/Users/codew/Downloads/Research.connect/backend/src/common/repository/base.repository.js)), which provides:
+- `create(data)` & `bulkInsert(dataArray)`
+- `findById(id, populate, select)` & `findOne(filter, populate, select)`
+- `find(filter, queryOptions, populate)` (supports sort, limit, skip pagination, and case-insensitive regex search)
+- `update(id, updateData, options)` & `updateMany(filter, updateData, options)`
+- `delete(id)` (hard delete) & `softDelete(id, deletedBy)` (toggles `isDeleted`, sets timestamp)
+- `aggregate(pipeline)` & `count(filter)`
+- `bulkUpdate(operations)` (utilizes `bulkWrite` transactions)
+
+---
+
+## 🚀 Installation & Quickstart
 
 ### Prerequisites
-
 - Node.js (v18+)
-- MongoDB (Local instance or Atlas cluster URI)
+- MongoDB (Local instance or Atlas connection string)
 
-### Setup Instructions
+### 1. Configure Environment Variables
+Create a `.env` file in the `backend/` directory using the configuration keys in `.env.example`:
+```env
+PORT=5000
+NODE_ENV=development
+CLIENT_URL=http://localhost:5173
+MONGO_URI=mongodb://localhost:27017/research_connect
+JWT_SECRET=supersecretjwtkeyforresearchconnect
+JWT_REFRESH_SECRET=supersecretjwtrefreshkeyforresearchconnect
+```
 
-1.  **Clone the repository**:
+### 2. Install Packages
+```bash
+# Install backend packages
+cd backend
+npm install
 
-    ```bash
-    git clone <repository-url>
-    cd Research.connect
-    ```
+# Install frontend packages
+cd ../frontend
+npm install
+```
 
-2.  **Configure Environment Variables**:
-    Create a `.env` file in the `backend/` directory based on the following template:
+### 3. Seed Database
+```bash
+cd ../backend
+npm run seed
+```
 
-    ```env
-    PORT=5000
-    NODE_ENV=development
-    MONGO_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/research_connect
-    JWT_SECRET=your_jwt_secret
-    JWT_EXPIRE=15m
-    JWT_REFRESH_SECRET=your_refresh_secret
-    JWT_REFRESH_EXPIRE=7d
-    CLIENT_URL=http://localhost:5174
-    EMAIL_USER=your_gmail@gmail.com
-    EMAIL_PASS="your_gmail_app_password"
-    ```
+### 4. Run Development Servers
+```bash
+# Launch backend (from backend/)
+npm run dev
 
-3.  **Install dependencies**:
-
-    ```bash
-    # Install backend dependencies
-    cd backend
-    npm install
-
-    # Install frontend dependencies
-    cd ../frontend
-    npm install
-    ```
-
-4.  **Seed the database**:
-
-    ```bash
-    cd ../backend
-    node src/database/seed.js
-    ```
-
-5.  **Start local development servers**:
-
-    ```bash
-    # Run backend (from backend/)
-    npm run dev
-
-    # Run frontend (from frontend/)
-    npm run dev
-    ```
+# Launch frontend (from frontend/)
+npm run dev
+```
 
 ---
 
-## 🚀 Development Roadmap
+## 🔬 API Endpoint Routes Summary
 
-Below is the complete 16-phase implementation roadmap for **Research Connect**, detailing the dependencies and execution order.
-
-### 🟢 Phase 1 — Foundation & Project Setup
-
-- **Objective**: Establish the core architecture, configurations, and boilerplate.
-- **Status**: `[x] Completed`
-- **Modules**:
-  - `[x]` Project Setup & Folder Structure
-  - `[x]` Git & Branch Configurations
-  - `[x]` Environment variables (`.env`)
-  - `[x]` MongoDB connection pools
-  - `[x]` Express server boilerplate
-  - `[x]` React + Vite client setup
-  - `[x]` Tailwind CSS v4 & Theme configuration
-  - `[x]` Global Redux Store (Redux Toolkit + Redux Persist)
-  - `[x]` Axios API client with interceptors
-  - `[x]` Global React Hot Toast system
-  - `[x]` Global `ProtectedRoute` component
-  - `[x]` Landing Page (Navbar, Hero, Stats, Features, Categories, FAQ, Footer)
-
-### 🔐 Phase 2 — Authentication & Authorization
-
-- **Objective**: Secure user authentication and role-based route guarding.
-- **Status**: `[x] Completed`
-- **Modules**:
-  - `[x]` User registration with secure password hashing
-  - `[x]` Login with JWT access & refresh token generation
-  - `[x]` Silent token refresh cycles (`httpOnly` cookies)
-  - `[x]` Email verification with token expiration
-  - `[x]` Forgot Password & Reset Password flows
-  - `[x]` Role-based authorization middleware (`protect`, `authorize`)
-  - `[x]` Remember Me session management
-  - `[x]` Safe logout (invalidating refresh tokens in DB)
-
-### 👤 Phase 3 — Researcher Profile
-
-- **Objective**: Complete academic and professional profile management.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Personal Information (Biography, Designation, Department)
-  - `[ ]` Academic Details & Institutional affiliation
-  - `[ ]` Profile & Cover photo uploads
-  - `[ ]` Education & Professional experience timelines
-  - `[ ]` Social & Research Links (ORCID, Google Scholar, Scopus, ResearchGate, LinkedIn)
-  - `[ ]` Research Metrics (Views, Citations, Reads, h-Index)
-  - `[ ]` Dynamic Profile Completion meter
-
-### 📄 Phase 4 — Publication Management
-
-- **Objective**: Implement research papers upload, indexing, and management.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Upload Publication (PDF, DOI, Abstract, Authors, Journal, Conference, Publisher)
-  - `[ ]` Edit & Delete publication metadata
-  - `[ ]` PDF parsing & metadata extraction
-  - `[ ]` Citation count tracking
-  - `[ ]` Publication type categorization (Journal, Conference, Book, Preprint)
-  - `[ ]` Advanced search and filtering (by author, date, journal)
-
-### 🏷️ Phase 5 — Research Areas & Keywords
-
-- **Objective**: Define academic expertise and keyword indexing.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Research Areas categorization
-  - `[ ]` Academic Keywords indexing
-  - `[ ]` AI-powered keyword extraction suggestions (Gemini API Integration)
-  - `[ ]` Trending keywords analysis
-  - `[ ]` Research tag management
-
-### 🔍 Phase 6 — Search Engine
-
-- **Objective**: Implement a high-performance global search engine.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Global unified search
-  - `[ ]` Researcher search (by name, skill, institution)
-  - `[ ]` Publication search (by title, abstract, DOI)
-  - `[ ]` Institutional directory search
-  - `[ ]` Advanced filters (country, department, journal impact)
-  - `[ ]` Server-side pagination & sorting
-
-### 🤝 Phase 7 — Collaboration System
-
-- **Objective**: Connect researchers for co-authoring and joint projects.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Collaboration Profile toggles ("Open for Collaboration", "Looking for Co-author")
-  - `[ ]` Collaboration Request (Send, Accept, Reject, Withdraw)
-  - `[ ]` Matching preferences (preferred countries, domains)
-  - `[ ]` Active and historical collaborations tracker
-
-### 📊 Phase 8 — Dashboard
-
-- **Objective**: Personal workspace for researchers to monitor metrics and actions.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Dashboard overview with key metrics (h-index, citations, views)
-  - `[ ]` Interactive charts for publication growth and citation trends
-  - `[ ]` Publications & Citations widget
-  - `[ ]` Active collaborations & pending requests widget
-  - `[ ]` Recent activities timeline & quick actions panel
-
-### 🌍 Phase 9 — Discovery Dashboard
-
-- **Objective**: Community explorer feed.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Recommended researchers to follow
-  - `[ ]` Trending research areas and popular keywords
-  - `[ ]` Top performing institutions
-  - `[ ]` Recently joined researchers list
-  - `[ ]` Popular and trending publications
-  - `[ ]` Open collaborations board
-
-### 🤖 Phase 10 — AI Recommendation System
-
-- **Objective**: Implement intelligent recommendation engines.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Similar Researcher recommendation engine
-  - `[ ]` Similar Publication recommender
-  - `[ ]` Semantic matching based on abstract analysis (Gemini embeddings)
-  - `[ ]` Common interests and co-author path matching
-  - `[ ]` Recommendation scoring and match percentage displays
-
-### 📈 Phase 11 — Analytics
-
-- **Objective**: In-depth analytics of research impact.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Profile views, paper views, and download counts tracking
-  - `[ ]` Citation analytics over time
-  - `[ ]` Research area distribution charts
-  - `[ ]` Collaboration network graphs
-  - `[ ]` Monthly PDF impact report generation
-
-### 📰 Phase 12 — Research Feed
-
-- **Objective**: Academic social feed.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Create posts with text, links, or file attachments
-  - `[ ]` Share publications directly to the feed
-  - `[ ]` Social interactions (Like, Comment, Share)
-  - `[ ]` Institutional announcements and research updates
-
-### ⚙️ Phase 13 — Settings
-
-- **Objective**: Account and preference management.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Account settings (email change, profile URL)
-  - `[ ]` Security settings (password change, 2FA)
-  - `[ ]` Privacy controls (profile visibility, metrics sharing)
-  - `[ ]` Dark / Light theme toggle
-  - `[ ]` Notification preferences (email & push)
-  - `[ ]` Account deletion / deactivation
-
-### 📧 Phase 14 — Email System
-
-- **Objective**: Transactional and notification email automation.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Welcome email on registration
-  - `[ ]` Verification & password reset templates
-  - `[ ]` Collaboration request & acceptance emails
-  - `[ ]` Weekly digest (citation updates, recommended papers)
-
-### 📂 Phase 15 — File Management
-
-- **Objective**: Scalable file upload and hosting system.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` Profile and cover photo uploads (Cloudinary)
-  - `[ ]` PDF publication uploads (Cloudinary / S3)
-  - `[ ]` File validations (size, mime-type, malware scan)
-  - `[ ]` Certificate and dataset uploads
-
-### 🌐 Phase 16 — Public API & Documentation
-
-- **Objective**: Standardized public API for external integrations.
-- **Status**: `[ ] Pending`
-- **Modules**:
-  - `[ ]` API versioning (`/api/v1`)
-  - `[ ]` Swagger / OpenAPI documentation
-  - `[ ]` API rate limiting & request throttling
-  - `[ ]` API request logging and audit trails
-
----
-
-## 📋 Final Development Order
-
-| Phase  | Module                         | Depends On |     Status     |
-| :----: | :----------------------------- | :--------- | :------------: |
-| **1**  | **Foundation & Landing**       | —          | `🟢 Completed` |
-| **2**  | **Authentication**             | Phase 1    |  `🟡 Pending`  |
-| **3**  | **Researcher Profile**         | Phase 2    |  `🟡 Pending`  |
-| **4**  | **Publication Management**     | Phase 3    |  `🟡 Pending`  |
-| **5**  | **Research Areas & Keywords**  | Phase 4    |  `🟡 Pending`  |
-| **6**  | **Search Engine**              | Phase 5    |  `🟡 Pending`  |
-| **7**  | **Collaboration System**       | Phase 6    |  `🟡 Pending`  |
-| **8**  | **Dashboard**                  | Phase 7    |  `🟡 Pending`  |
-| **9**  | **Discovery Dashboard**        | Phase 8    |  `🟡 Pending`  |
-| **10** | **AI Recommendation**          | Phase 9    |  `🟡 Pending`  |
-| **11** | **Analytics**                  | Phase 10   |  `🟡 Pending`  |
-| **12** | **Research Feed**              | Phase 11   |  `🟡 Pending`  |
-| **13** | **Settings**                   | Phase 12   |  `🟡 Pending`  |
-| **14** | **Email System**               | Phase 13   |  `🟡 Pending`  |
-| **15** | **File Management**            | Phase 14   |  `🟡 Pending`  |
-| **16** | **Public API & Documentation** | Phase 15   |  `🟡 Pending`  |
+All system details retrieve using endpoints mounted on `/api`:
+- **GET `/api`**: Welcome message, check online state.
+- **GET `/api/health`**: Server health metrics and system uptime.
+- **GET `/api/database`**: MongoDB connection status, client states, and active connection pool size.
+- **GET `/api/stats`**: Aggregated researcher count, universities, publications, and countries.
+- **GET `/api/categories`**: Lists active academic disciplines and paper distributions.
+- **GET `/api/features`**: Returns platform modules list and placeholders state.
+- **GET `/api/version`**: Build version, current phase number, and phase title.

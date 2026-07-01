@@ -1,37 +1,63 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import axiosInstance from '../../../api/axiosInstance';
+import { Users2, School, BookOpenCheck, Globe } from 'lucide-react';
+import Card from '../../../components/ui/Card';
 
-export const Stats = () => {
-  const stats = [
-    { value: '150K+', label: 'Verified Researchers' },
-    { value: '12M+', label: 'Scientific Publications' },
-    { value: '50M+', label: 'Citation Connections' },
-    { value: '2.5K+', label: 'Academic Institutions' },
+const statIcons = {
+  researchers: Users2,
+  universities: School,
+  publications: BookOpenCheck,
+  countries: Globe
+};
+
+const Stats = () => {
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['stats'],
+    queryFn: async () => {
+      const response = await axiosInstance.get('/stats');
+      return response.data;
+    },
+    initialData: {
+      researchersCount: 1422,
+      universitiesCount: 116,
+      publicationsCount: 18450,
+      countriesCount: 54
+    }
+  });
+
+  const statItems = [
+    { label: 'Registered Researchers', key: 'researchersCount', icon: Users2, color: 'text-[#2563EB]', bg: 'bg-[#DBEAFE]' },
+    { label: 'Universities & Partners', key: 'universitiesCount', icon: School, color: 'text-[#4F46E5]', bg: 'bg-[#EDE9FE]' },
+    { label: 'Indexed Publications', key: 'publicationsCount', icon: BookOpenCheck, color: 'text-[#22C55E]', bg: 'bg-[#DCFCE7]' },
+    { label: 'Represented Countries', key: 'countriesCount', icon: Globe, color: 'text-[#F59E0B]', bg: 'bg-[#FEF3C7]' }
   ];
 
   return (
-    <section id="stats" className="py-20 bg-white border-t border-border">
-      <div className="max-w-7xl mx-auto px-6 sm:px-8">
-        <div className="p-10 md:p-16 rounded-3xl glass border border-border relative overflow-hidden shadow-sm">
-          {/* Subtle background glow */}
-          <div className="absolute top-0 right-0 -mr-24 -mt-24 w-80 h-80 rounded-full bg-primary/5 blur-3xl -z-10"></div>
-          <div className="absolute bottom-0 left-0 -ml-24 -mbl-24 w-80 h-80 rounded-full bg-indigo-500/5 blur-3xl -z-10"></div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12 text-center">
-            {stats.map((stat, index) => (
-              <div key={index} className="space-y-2">
-                <div className="text-4xl sm:text-5xl font-extrabold tracking-tight">
-                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
-                    {stat.value}
-                  </span>
+    <section className="py-16 px-4 bg-bg-card border-b border-border">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {statItems.map((item) => {
+            const Icon = item.icon;
+            const value = stats[item.key];
+            return (
+              <Card key={item.key} hoverEffect={true} className="flex flex-col items-center text-center p-6 bg-bg-page/50">
+                <div className={`p-4 rounded-full ${item.bg} ${item.color} mb-4 flex items-center justify-center`}>
+                  <Icon className="w-8 h-8" />
                 </div>
-                <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  {stat.label}
-                </div>
-              </div>
-            ))}
-          </div>
+                <h3 className="text-3xl font-extrabold text-text-primary tracking-tight mb-1">
+                  {value.toLocaleString()}
+                </h3>
+                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  {item.label}
+                </p>
+              </Card>
+            );
+          })}
         </div>
       </div>
     </section>
   );
 };
+
+export default Stats;

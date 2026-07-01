@@ -1,111 +1,173 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Sparkles, BookOpen, Share2, Users } from 'lucide-react';
+import { Search, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import Button from '../../../components/ui/Button';
 
-export const Hero = () => {
+const Hero = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery) {
+      alert(`Simulation search triggered for: "${searchQuery}". Semantics index logic will launch in Phase 3.`);
+    }
+  };
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.15, delayChildren: 0.1 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 30 },
+    visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } }
+  };
+
   return (
-    <section className="relative min-h-screen flex items-center justify-center pt-28 pb-20 overflow-hidden bg-hero-gradient">
-      {/* Background Gradients & Glows (subtle for light theme) */}
-      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-[120px] -z-10"></div>
-      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[600px] h-[600px] rounded-full bg-indigo-550/5 blur-[120px] -z-10"></div>
-      
-      {/* Grid Pattern overlay */}
-      <div className="absolute inset-0 bg-grid-pattern opacity-[0.03] -z-10"></div>
+    <section className="relative overflow-hidden bg-gradient-hero pt-20 pb-24 md:pt-28 md:pb-32 px-4 border-b border-border">
+      {/* Decorative backdrop blobs */}
+      <div className="absolute top-1/4 left-10 w-72 h-72 bg-light-blue rounded-full filter blur-[80px] opacity-60 -z-10 animate-pulse"></div>
+      <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-light-purple rounded-full filter blur-[100px] opacity-40 -z-10"></div>
 
-      <div className="max-w-7xl mx-auto px-6 sm:px-8 text-center relative z-10">
-        {/* Banner */}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        {/* Hero Left Content */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="inline-flex items-center space-x-2 bg-white border border-border px-4 py-2 rounded-full mb-8 shadow-sm"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="lg:col-span-7 text-left space-y-6"
         >
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span className="text-xs font-semibold text-muted-foreground">A New Era of Academic Collaboration</span>
+          {/* Badge */}
+          <motion.div
+            variants={itemVariants}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-light-blue text-primary border border-blue-200 text-xs font-semibold"
+          >
+            <Sparkles className="w-4 h-4 text-accent-indigo" />
+            <span>Phase 0 Foundation Live</span>
+          </motion.div>
+
+          {/* Heading */}
+          <motion.h1
+            variants={itemVariants}
+            className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-text-primary tracking-tight leading-tight"
+          >
+            Empowering Scientific <br />
+            <span className="text-transparent bg-clip-text bg-gradient-primary">
+              Discovery & Synergy
+            </span>
+          </motion.h1>
+
+          {/* Subheading */}
+          <motion.p
+            variants={itemVariants}
+            className="text-lg text-text-secondary max-w-2xl leading-relaxed"
+          >
+            An enterprise-grade, AI-powered collaboration network built for researchers. Discover academic publications, cooperate on projects, and sync Google Scholar metrics in real-time.
+          </motion.p>
+
+          {/* Search bar UI */}
+          <motion.form
+            variants={itemVariants}
+            onSubmit={handleSearchSubmit}
+            className="w-full max-w-xl flex items-center p-1.5 bg-bg-card rounded-xl shadow-md border border-border focus-within:ring-2 focus-within:ring-primary focus-within:border-transparent transition-all"
+          >
+            <div className="flex items-center flex-grow pl-3 text-text-secondary">
+              <Search className="w-5 h-5 mr-2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search research papers, keywords, DOI..."
+                className="w-full bg-transparent border-none text-text-primary focus:ring-0 focus:outline-none placeholder-text-secondary text-sm"
+              />
+            </div>
+            <Button type="submit" variant="primary" size="md">
+              Search
+            </Button>
+          </motion.form>
+
+          {/* Trust bullets */}
+          <motion.div
+            variants={itemVariants}
+            className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-4 text-sm text-text-secondary font-medium"
+          >
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-accent-green" />
+              <span>Semantic Search Ready</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-accent-green" />
+              <span>Secure Session Locks</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-accent-green" />
+              <span>Modular Repository Layer</span>
+            </div>
+          </motion.div>
         </motion.div>
 
-        {/* Heading */}
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-foreground mb-8 max-w-4xl mx-auto leading-[1.1]"
-        >
-          Connecting Minds to{' '}
-          <span className="gradient-text">Advance Human Knowledge</span>
-        </motion.h1>
-
-        {/* Subtitle */}
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="text-lg sm:text-xl text-muted-foreground font-medium max-w-2xl mx-auto mb-12 leading-relaxed"
-        >
-          Discover relevant publications, connect with global co-authors, and leverage AI to accelerate your scientific discoveries.
-        </motion.p>
-
-        {/* Action Buttons */}
+        {/* Hero Right Visuals */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-20"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          className="lg:col-span-5 flex justify-center relative"
         >
-          <Link
-            to="/register"
-            className="group w-full sm:w-auto inline-flex justify-center items-center py-4 px-8 border border-transparent rounded-xl text-base font-bold text-white bg-primary hover:bg-primary-600 shadow-lg shadow-primary/25 transition duration-200"
-          >
-            Join the Network
-            <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-          </Link>
-          <a
-            href="#features"
-            className="w-full sm:w-auto inline-flex justify-center items-center py-4 px-8 rounded-xl text-base font-bold text-muted-foreground bg-white border border-border hover:bg-slate-50 hover:text-foreground transition duration-200 shadow-sm"
-          >
-            Explore Features
-          </a>
-        </motion.div>
-
-        {/* Floating Feature Cards representing the network */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.4 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto"
-        >
-          <div className="p-6 rounded-2xl bg-card border border-border text-left space-y-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="bg-primary/10 p-3 rounded-xl w-fit border border-primary/20 text-primary">
-              <BookOpen className="h-6 w-6" />
+          {/* Glassmorphic illustration panel simulating publication dashboard */}
+          <div className="w-full max-w-md bg-white/70 backdrop-blur-md border border-slate-200 p-6 rounded-2xl shadow-xl space-y-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-primary rounded-bl-full opacity-10"></div>
+            
+            {/* Header profile row */}
+            <div className="flex items-center gap-3 border-b border-border pb-4">
+              <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center text-white font-bold text-lg">
+                AS
+              </div>
+              <div>
+                <h4 className="font-bold text-text-primary text-sm">Dr. Alice Smith</h4>
+                <p className="text-xs text-text-secondary">Associate Professor, Stanford</p>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-foreground">Smart Discovery</h3>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              Find publications and research papers tailored to your specific field and interests using semantic analysis.
-            </p>
-          </div>
 
-          <div className="p-6 rounded-2xl bg-card border border-border text-left space-y-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="bg-primary/10 p-3 rounded-xl w-fit border border-primary/20 text-primary">
-              <Users className="h-6 w-6" />
+            {/* Micro stats grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-[#DBEAFE] p-3 rounded-xl border border-blue-200">
+                <p className="text-xs text-[#2563EB] font-bold">Citations</p>
+                <p className="text-xl font-extrabold text-[#0F172A]">4,200+</p>
+              </div>
+              <div className="bg-[#DCFCE7] p-3 rounded-xl border border-green-200">
+                <p className="text-xs text-[#22C55E] font-bold">h-Index</p>
+                <p className="text-xl font-extrabold text-[#0F172A]">18</p>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-foreground">Real-time Collaboration</h3>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              Form research groups, co-author publications, and share datasets seamlessly within secure environments.
-            </p>
-          </div>
 
-          <div className="p-6 rounded-2xl bg-card border border-border text-left space-y-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="bg-primary/10 p-3 rounded-xl w-fit border border-primary/20 text-primary">
-              <Share2 className="h-6 w-6" />
+            {/* Micro paper list preview */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-text-primary uppercase tracking-wider">Publications Preview</p>
+              <div className="p-3 bg-bg-card rounded-lg border border-border text-left hover:border-slate-300 transition-colors">
+                <h5 className="font-semibold text-xs text-text-primary mb-1">Attention Is All You Need</h5>
+                <p className="text-[10px] text-text-secondary">Preprint • Cited by 120,531</p>
+              </div>
+              <div className="p-3 bg-bg-card rounded-lg border border-border text-left hover:border-slate-300 transition-colors">
+                <h5 className="font-semibold text-xs text-text-primary mb-1">Deep Residual Learning for Image Recognition</h5>
+                <p className="text-[10px] text-text-secondary">Conference Paper • Cited by 98,241</p>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-foreground">Impact Tracking</h3>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              Monitor your citations, reads, views, and h-index dynamically with real-time updates and analytics.
-            </p>
+
+            {/* Bottom synergy indicator */}
+            <div className="bg-light-purple p-3 rounded-xl border border-purple-200 flex items-center justify-between text-xs">
+              <span className="text-accent-indigo font-bold">AI Vector Embeddings Sync</span>
+              <span className="px-2 py-0.5 rounded bg-white text-accent-indigo font-semibold border border-purple-200">
+                Active
+              </span>
+            </div>
           </div>
         </motion.div>
       </div>
     </section>
   );
 };
+
+export default Hero;
