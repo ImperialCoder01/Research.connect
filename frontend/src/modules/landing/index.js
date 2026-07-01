@@ -9,3 +9,4 @@ export { default as Categories } from './components/Categories';
 export { default as Testimonials } from './components/Testimonials';
 export { default as FAQ } from './components/FAQ';
 export { default as CTA } from './components/CTA';
+export { default as Companies } from './components/Companies';

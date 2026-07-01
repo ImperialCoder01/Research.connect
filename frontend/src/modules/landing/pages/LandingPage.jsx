@@ -1,5 +1,6 @@
 import React from 'react';
 import Hero from '../components/Hero';
+import Companies from '../components/Companies';
 import Stats from '../components/Stats';
 import Features from '../components/Features';
 import HowItWorks from '../components/HowItWorks';
@@ -13,6 +14,9 @@ const LandingPage = () => {
     <div className="min-h-screen">
       {/* Hero Header */}
       <Hero />
+
+      {/* Corporate Partners Slider */}
+      <Companies />
 
       {/* Metrics Counters */}
       <Stats />

@@ -11,43 +11,64 @@ const logFormat = winston.format.combine(
 
 const consoleFormat = winston.format.combine(
   winston.format.colorize(),
-  winston.format.printf(({ level, message, timestamp, stack }) => {
-    return `[${timestamp}] ${level}: ${stack || message}`;
+  winston.format.printf(({ level, message, timestamp, stack, category }) => {
+    const catPrefix = category ? `[${category.toUpperCase()}] ` : '';
+    return `[${timestamp}] ${level}: ${catPrefix}${stack || message}`;
   })
 );
 
 const logDirectory = path.join(process.cwd(), 'logs');
 
-const transports = [
-  new winston.transports.Console({
-    format: consoleFormat,
-    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug'
-  }),
-  new winston.transports.DailyRotateFile({
-    filename: path.join(logDirectory, 'error-%DATE%.log'),
-    datePattern: 'YYYY-MM-DD',
-    zippedArchive: true,
-    maxSize: '20m',
-    maxFiles: '14d',
-    level: 'error',
-    format: logFormat
-  }),
-  new winston.transports.DailyRotateFile({
-    filename: path.join(logDirectory, 'combined-%DATE%.log'),
-    datePattern: 'YYYY-MM-DD',
-    zippedArchive: true,
-    maxSize: '20m',
-    maxFiles: '14d',
-    format: logFormat
-  })
-];
+const createCategoryLogger = (categoryName) => {
+  return winston.createLogger({
+    level: 'debug',
+    format: logFormat,
+    defaultMeta: { service: 'research-connect', category: categoryName },
+    transports: [
+      new winston.transports.Console({
+        format: consoleFormat,
+        level: process.env.NODE_ENV === 'production' ? 'info' : 'debug'
+      }),
+      new winston.transports.DailyRotateFile({
+        filename: path.join(logDirectory, `${categoryName}-%DATE%.log`),
+        datePattern: 'YYYY-MM-DD',
+        zippedArchive: true,
+        maxSize: '20m',
+        maxFiles: '14d',
+        format: logFormat
+      }),
+      // Re-route errors from any category to error file as well
+      ...(categoryName !== 'error' ? [
+        new winston.transports.DailyRotateFile({
+          filename: path.join(logDirectory, 'error-%DATE%.log'),
+          datePattern: 'YYYY-MM-DD',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '14d',
+          level: 'error',
+          format: logFormat
+        })
+      ] : [])
+    ]
+  });
+};
 
-const logger = winston.createLogger({
-  level: 'info',
-  format: logFormat,
-  defaultMeta: { service: 'research-connect' },
-  transports,
-  exitOnError: false
-});
+const appLogger = createCategoryLogger('application');
+const apiLogger = createCategoryLogger('api');
+const dbLogger = createCategoryLogger('mongodb');
+const errorLogger = createCategoryLogger('error');
+const authLogger = createCategoryLogger('auth');
+
+const logger = {
+  info: (msg, ...meta) => appLogger.info(msg, ...meta),
+  error: (msg, ...meta) => errorLogger.error(msg, ...meta),
+  warn: (msg, ...meta) => appLogger.warn(msg, ...meta),
+  debug: (msg, ...meta) => appLogger.debug(msg, ...meta),
+  app: appLogger,
+  api: apiLogger,
+  db: dbLogger,
+  errorLogger: errorLogger,
+  auth: authLogger
+};
 
 module.exports = logger;

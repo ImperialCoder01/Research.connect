@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
-import Button from '../../../components/ui/Button';
+import Button from '../../../components/common/buttons/Button';
 
 const Hero = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,7 +55,7 @@ const Hero = () => {
             className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-text-primary tracking-tight leading-tight"
           >
             Empowering Scientific <br />
-            <span className="text-transparent bg-clip-text bg-gradient-primary">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent-indigo">
               Discovery & Synergy
             </span>
           </motion.h1>

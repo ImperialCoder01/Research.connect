@@ -1,9 +1,9 @@
 import React from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { toggleMobileMenu, closeMobileMenu } from '../../store/slices/appSlice';
-import { Menu, X, Share2, Compass, Award, Layers } from 'lucide-react';
-import Button from '../ui/Button';
+import { toggleMobileMenu, closeMobileMenu } from '../../redux/slices/appSlice';
+import { Menu, X, Share2 } from 'lucide-react';
+import Button from '../../components/common/buttons/Button';
 
 const Navbar = () => {
   const dispatch = useDispatch();
@@ -91,7 +91,7 @@ const Navbar = () => {
           </div>
           <div className="border-t border-border pt-4 flex flex-col gap-3">
             <Button
-              variant="outline"
+              variant="secondary"
               className="w-full"
               onClick={() => {
                 dispatch(closeMobileMenu());

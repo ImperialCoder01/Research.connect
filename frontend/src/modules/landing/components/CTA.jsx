@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Sparkles } from 'lucide-react';
-import Button from '../../../components/ui/Button';
+import Button from '../../../components/common/buttons/Button';
 
 const CTA = () => {
   const navigate = useNavigate();

@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, ArrowLeft } from 'lucide-react';
-import Button from '../ui/Button';
+import Button from '../common/buttons/Button';
 
 const ComingSoon = ({ title = 'Feature Coming Soon' }) => {
   const navigate = useNavigate();

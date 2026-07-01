@@ -88,6 +88,30 @@ class BaseRepository {
     );
   }
 
+  async createMany(dataArray) {
+    return await this.model.insertMany(dataArray);
+  }
+
+  async restore(id) {
+    return await this.model.findByIdAndUpdate(
+      id,
+      {
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null
+      },
+      { new: true }
+    );
+  }
+
+  async exists(filter = {}) {
+    return await this.model.exists({ ...filter, isDeleted: { $ne: true } });
+  }
+
+  async paginate(filter = {}, queryOptions = {}, populate = '') {
+    return await this.find(filter, queryOptions, populate);
+  }
+
   async bulkInsert(dataArray) {
     return await this.model.insertMany(dataArray);
   }

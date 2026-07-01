@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Provider as ReduxProvider } from 'react-redux';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-import store from './store';
+import store from './redux';
 import App from './App';
 import './styles/index.css';
 

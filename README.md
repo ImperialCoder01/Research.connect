@@ -4,6 +4,14 @@ An enterprise-grade, production-ready **AI-Powered Research Discovery & Collabor
 
 This documentation describes the foundation structure, system architecture, database models, and setup procedures established in **Phase 0**.
 
+### 📖 Technical Documentation Guides
+For in-depth explanations of specific features, refer to:
+- [Architecture Guide](file:///c:/Users/codew/Downloads/Research.connect/docs/architecture_guide.md)
+- [Folder Guide](file:///c:/Users/codew/Downloads/Research.connect/docs/folder_guide.md)
+- [Coding Standards & Guidelines](file:///c:/Users/codew/Downloads/Research.connect/docs/coding_standards.md)
+- [Installation Guide](file:///c:/Users/codew/Downloads/Research.connect/docs/installation_guide.md)
+- [Development Guide](file:///c:/Users/codew/Downloads/Research.connect/docs/development_guide.md)
+
 ---
 
 ## 🎨 Design System & Color Palette

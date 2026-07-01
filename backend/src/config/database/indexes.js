@@ -10,6 +10,8 @@ require('../../models/Session');
 require('../../models/ActivityLog');
 require('../../models/RefreshToken');
 require('../../models/EmailOtp');
+require('../../models/SystemConfiguration');
+require('../../models/ApplicationLog');
 
 const syncDatabaseIndexes = async () => {
   logger.info('Auditing and syncing database indexes...');

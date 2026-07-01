@@ -1,26 +1,29 @@
 import axios from 'axios';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
-  timeout: 10000,
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
-  },
+    'Accept': 'application/json'
+  }
 });
 
-// Request interceptor
+// Request Interceptor
 axiosInstance.interceptors.request.use(
   (config) => {
-    // Inject auth token if available (prepared for future phases)
+    // Generate a unique Request ID for distributed tracing
+    config.headers['X-Request-Id'] = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : Math.random().toString(36).substring(2, 15);
+
+    // Attach Bearer JWT token if stored locally
     const token = localStorage.getItem('token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
-    
-    if (import.meta.env.DEV) {
-      console.log(`[API Request] ${config.method.toUpperCase()} - ${config.url}`, config.data || '');
-    }
+
     return config;
   },
   (error) => {
@@ -28,26 +31,53 @@ axiosInstance.interceptors.request.use(
   }
 );
 
-// Response interceptor
+// Response Interceptor
 axiosInstance.interceptors.response.use(
   (response) => {
-    if (import.meta.env.DEV) {
-      console.log(`[API Response] Success - ${response.config.url}`, response.data);
-    }
+    // Return formatted data block directly for ease of use
     return response.data;
   },
-  (error) => {
-    const errorResponse = error.response?.data || {};
-    const errorMessage = errorResponse.message || 'Something went wrong. Please try again.';
-    
-    if (import.meta.env.DEV) {
-      console.error(`[API Error] ${error.config?.url}`, error.response || error);
+  async (error) => {
+    const originalRequest = error.config;
+    const status = error.response ? error.response.status : null;
+
+    // Toast configuration
+    const toastStyle = {
+      style: {
+        background: '#EF4444',
+        color: '#FFFFFF',
+        fontSize: '14px',
+        fontFamily: 'Inter, sans-serif'
+      }
+    };
+
+    if (status === 401) {
+      // Token expired or invalid - redirect to login / clear local storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Prevent infinite loop if we are already attempting refresh or on login page
+      if (!originalRequest._retry && !window.location.pathname.includes('/login')) {
+        originalRequest._retry = true;
+        toast.error('Session expired. Please log in again.', toastStyle);
+        // Dispatch redirect to login in real implementation or route
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1500);
+      }
+    } else if (status === 403) {
+      toast.error('You do not have permission to perform this action.', toastStyle);
+    } else if (status === 429) {
+      toast.error('Too many requests. Please slow down and try again later.', toastStyle);
+    } else if (status >= 500) {
+      toast.error('Internal server error. Our engineering team has been notified.', toastStyle);
+    } else {
+      // Local operational errors
+      const errorMsg = error.response?.data?.message || 'Something went wrong. Please try again.';
+      toast.error(errorMsg, toastStyle);
     }
 
-    // Display error toast
-    toast.error(errorMessage);
-
-    return Promise.reject(errorResponse || error);
+    return Promise.reject(error.response?.data || error);
   }
 );
 
