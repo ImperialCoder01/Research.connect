@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { Share2, Lock, Mail, Eye, EyeOff } from 'lucide-react';
 import authService from '../../../services/auth.service';
-import { setOtpEmail } from '../../../redux/slices/authSlice';
+import { setOtpEmail, setOtpPurpose } from '../../../redux/slices/authSlice';
 import Input from '../../../components/common/inputs/Input';
 import Button from '../../../components/common/buttons/Button';
 
@@ -37,6 +37,7 @@ const LoginPage = () => {
           duration: 4000
         });
         dispatch(setOtpEmail(response.data.email));
+        dispatch(setOtpPurpose('login'));
         navigate('/otp');
       }
     } catch (error) {

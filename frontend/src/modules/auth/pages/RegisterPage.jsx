@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Share2, GraduationCap, Building2, HeartPulse, UserCheck, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
 import authService from '../../../services/auth.service';
-import { setOtpEmail } from '../../../redux/slices/authSlice';
+import { setOtpEmail, setOtpPurpose } from '../../../redux/slices/authSlice';
 import Input from '../../../components/common/inputs/Input';
 import Select from '../../../components/common/inputs/Select';
 import Checkbox from '../../../components/common/inputs/Checkbox';
@@ -107,6 +107,7 @@ const RegisterPage = () => {
       if (response.success) {
         toast.success('Registration pending. Verify the OTP code sent to your email.');
         dispatch(setOtpEmail(data.email));
+        dispatch(setOtpPurpose('registration'));
         navigate('/otp');
       }
     } catch (error) {

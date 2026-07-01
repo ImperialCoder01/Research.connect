@@ -12,7 +12,7 @@ const OtpVerificationPage = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   
-  const { otpEmail } = useSelector((state) => state.auth);
+  const { otpEmail, otpPurpose } = useSelector((state) => state.auth);
   
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -89,43 +89,50 @@ const OtpVerificationPage = () => {
 
     setLoading(true);
     try {
-      // First, try verifying login. If that fails because purpose is different or doesn't match, 
-      // check if it's registration.
-      // Wait, we can know if the user is in registration vs login based on where they navigated from, 
-      // but to make it foolproof, we can attempt login verification first, and if we get a specific error 
-      // or if we know we came from register, we verify registration.
-      // Better: we can try verifyRegistrationOtp if we came from register, or verifyLoginOtp for login.
-      // How do we know? We can check if user state is pending. Or we can just try verifyLoginOtp first; 
-      // if it fails or if it's a pending user, we try verifyRegistrationOtp!
-      // This is a highly robust approach. Let's do that!
       let response;
-      try {
-        response = await authService.verifyLoginOtp(otpEmail, otpCode);
-      } catch (err) {
-        // If login verify fails with NOT_FOUND or similar, or if it's an email verification error, 
-        // try verifying registration OTP.
-        if (err.errorCode === 'EMAIL_NOT_VERIFIED' || err.statusCode === 404 || err.errorCode === 'INVALID_OTP') {
-          try {
-            response = await authService.verifyRegistrationOtp(otpEmail, otpCode);
-          } catch (regErr) {
-            // Throw original or registration error
-            throw regErr;
+      const purpose = otpPurpose || 'login';
+
+      if (purpose === 'registration') {
+        try {
+          response = await authService.verifyRegistrationOtp(otpEmail, otpCode);
+        } catch (err) {
+          // If registration verify fails, try login verify as fallback just in case
+          const code = err?.error?.code;
+          if (code === 'INVALID_OTP' || code === 'NOT_FOUND' || err?.statusCode === 404) {
+            try {
+              response = await authService.verifyLoginOtp(otpEmail, otpCode);
+            } catch (loginErr) {
+              throw loginErr;
+            }
+          } else {
+            throw err;
           }
-        } else {
-          throw err;
+        }
+      } else {
+        try {
+          response = await authService.verifyLoginOtp(otpEmail, otpCode);
+        } catch (err) {
+          // If login verify fails, try registration verify as fallback
+          const code = err?.error?.code;
+          if (code === 'EMAIL_NOT_VERIFIED' || code === 'INVALID_OTP' || code === 'NOT_FOUND' || err?.statusCode === 404) {
+            try {
+              response = await authService.verifyRegistrationOtp(otpEmail, otpCode);
+            } catch (regErr) {
+              throw regErr;
+            }
+          } else {
+            throw err;
+          }
         }
       }
 
-      if (response.success) {
+      if (response && response.success) {
         toast.success(response.message || 'Verification successful!');
         dispatch(setCredentials(response.data));
         
-        // Clear otpEmail
-        dispatch(setOtpEmail(null));
-
         // Redirect based on whether user was pending (registration completion redirect to success page)
         // Or if it was simple login redirect to dashboard
-        if (response.message.toLowerCase().includes('registration') || response.message.toLowerCase().includes('verified')) {
+        if (purpose === 'registration' || response.message?.toLowerCase().includes('registration') || response.message?.toLowerCase().includes('verified')) {
           navigate('/success');
         } else {
           navigate('/dashboard');
@@ -143,11 +150,10 @@ const OtpVerificationPage = () => {
     if (resendCooldown > 0 || isResending) return;
     setIsResending(true);
     try {
-      // Try resending login OTP. If it fails due to not found / active, resend registration OTP.
-      try {
-        await authService.sendLoginOtp(otpEmail);
-      } catch (err) {
+      if (otpPurpose === 'registration') {
         await authService.sendRegistrationOtp(otpEmail);
+      } else {
+        await authService.sendLoginOtp(otpEmail);
       }
       toast.success('A new 6-digit verification code has been sent to your email.');
       setResendCooldown(60); // Reset timer

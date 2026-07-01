@@ -20,7 +20,8 @@ const initialState = {
   isAuthenticated: !!token,
   loading: false,
   error: null,
-  otpEmail: localStorage.getItem('otpEmail') || null
+  otpEmail: localStorage.getItem('otpEmail') || null,
+  otpPurpose: localStorage.getItem('otpPurpose') || null
 };
 
 const authSlice = createSlice({
@@ -38,9 +39,13 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.error = null;
       state.loading = false;
+      state.otpEmail = null;
+      state.otpPurpose = null;
 
       localStorage.setItem('token', accessToken);
       localStorage.setItem('user', JSON.stringify(user));
+      localStorage.removeItem('otpEmail');
+      localStorage.removeItem('otpPurpose');
       if (profile) {
         localStorage.setItem('profile', JSON.stringify(profile));
       }
@@ -61,6 +66,14 @@ const authSlice = createSlice({
         localStorage.removeItem('otpEmail');
       }
     },
+    setOtpPurpose(state, action) {
+      state.otpPurpose = action.payload;
+      if (action.payload) {
+        localStorage.setItem('otpPurpose', action.payload);
+      } else {
+        localStorage.removeItem('otpPurpose');
+      }
+    },
     setError(state, action) {
       state.error = action.payload;
       state.loading = false;
@@ -72,12 +85,14 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.error = null;
       state.otpEmail = null;
+      state.otpPurpose = null;
       state.loading = false;
 
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('profile');
       localStorage.removeItem('otpEmail');
+      localStorage.removeItem('otpPurpose');
     }
   }
 });
@@ -88,6 +103,7 @@ export const {
   updateProfileState,
   updateUserState,
   setOtpEmail,
+  setOtpPurpose,
   setError,
   logoutSuccess
 } = authSlice.actions;
