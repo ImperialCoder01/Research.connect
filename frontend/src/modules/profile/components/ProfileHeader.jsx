@@ -9,7 +9,6 @@ import {
   Edit2, 
   GraduationCap, 
   Award, 
-  Github, 
   Linkedin, 
   Globe, 
   Database,
@@ -50,8 +49,7 @@ const ProfileHeader = ({
   const socialIcons = {
     googleScholar: { icon: GraduationCap, label: 'Google Scholar', color: 'hover:bg-blue-50 hover:text-blue-600' },
     orcid: { icon: Award, label: 'ORCID', color: 'hover:bg-green-50 hover:text-green-600' },
-    github: { icon: Github, label: 'GitHub', color: 'hover:bg-slate-50 hover:text-slate-900' },
-    linkedin: { icon: Linkedin, label: 'LinkedIn', color: 'hover:bg-blue-50 hover:text-blue-700' },
+     linkedin: { icon: Linkedin, label: 'LinkedIn', color: 'hover:bg-blue-50 hover:text-blue-700' },
     researchGate: { icon: Bookmark, label: 'ResearchGate', color: 'hover:bg-cyan-50 hover:text-cyan-600' },
     scopus: { icon: Database, label: 'Scopus', color: 'hover:bg-orange-50 hover:text-orange-600' },
     website: { icon: Globe, label: 'Website', color: 'hover:bg-purple-50 hover:text-purple-600' }
@@ -120,7 +118,7 @@ const ProfileHeader = ({
             {Object.entries(socialIcons).map(([key, config]) => {
               const url = profile?.socialLinks?.[key];
               if (!url) return null;
-              if (!['googleScholar', 'orcid', 'github', 'linkedin', 'scopus'].includes(key)) return null;
+              if (!['googleScholar', 'orcid','linkedin', 'scopus'].includes(key)) return null;
               const Icon = config.icon;
               return (
                 <a

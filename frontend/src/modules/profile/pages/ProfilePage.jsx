@@ -27,7 +27,6 @@ import {
   Camera,
   Users,
   Linkedin,
-  Github
 } from 'lucide-react';
 
 import profileService from '../../../services/profile.service';
@@ -335,8 +334,7 @@ const ProfilePage = () => {
                             { label: 'ORCID', key: 'orcid', icon: Award, color: 'text-green-500 bg-green-50' },
                             { label: 'SCOPUS AUTHOR ID', key: 'scopus', icon: Database, color: 'text-orange-500 bg-orange-50' },
                             { label: 'LinkedIn', key: 'linkedin', icon: Linkedin, color: 'text-blue-600 bg-blue-50' },
-                            { label: 'GITHUB', key: 'github', icon: Github, color: 'text-slate-800 bg-slate-100' }
-                          ].map((network) => {
+                            ].map((network) => {
                             const rawValue = profile?.socialLinks?.[network.key] || '';
                             let valDisplay = rawValue;
                             if (rawValue && rawValue.startsWith('http')) {

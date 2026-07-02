@@ -12,7 +12,7 @@ const ProfileCompletion = ({ profile, user }) => {
     { label: 'Experience Details', completed: !!(profile?.experience && profile?.experience.length > 0) },
     { label: 'Publications Portfolio', completed: !!(profile?.metrics?.publicationsCount > 0 || (profile?.education && profile?.education.length > 0)) }, // Fallback check or true
     { label: 'Projects & Work', completed: !!(profile?.projects && profile?.projects.length > 0) },
-    { label: 'Social Portfolios', completed: !!(profile?.socialLinks?.linkedin || profile?.socialLinks?.github) }
+
   ];
 
   // SVG parameters for circular progress
