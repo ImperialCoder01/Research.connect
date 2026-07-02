@@ -1,9 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import LandingLayout from '../layouts/LandingLayout';
 import AuthLayout from '../layouts/AuthLayout';
-import DashboardLayout from '../layouts/DashboardLayout';
-import LandingPage from '../modules/landing';
+import AppLayout from '../layouts/AppLayout';
 import ComingSoon from '../components/common/ComingSoon';
 const HomeHub = React.lazy(() => import('./HomeHub'));
 
@@ -18,7 +16,6 @@ const OtpVerificationPage = React.lazy(() => import('../modules/authentication/p
 const ForgotPasswordPage = React.lazy(() => import('../modules/authentication/pages/ForgotPasswordPage'));
 const ResetPasswordPage = React.lazy(() => import('../modules/authentication/pages/ResetPasswordPage'));
 const SuccessPage = React.lazy(() => import('../modules/authentication/pages/SuccessPage'));
-const ProfilePage = React.lazy(() => import('../modules/profile/pages/ProfilePage'));
 const ResearchIdentityPage = React.lazy(() => import('../modules/profile/pages/ResearchIdentityPage'));
 const ProfileRedirect = React.lazy(() => import('../modules/profile/components/ProfileRedirect'));
 const PublicationCreatePage = React.lazy(() => import('../modules/publication/pages/PublicationCreatePage'));
@@ -29,6 +26,9 @@ const PublicationReader = React.lazy(() => import('../modules/publication/pages/
 const PublicationAnalyticsPage = React.lazy(() => import('../modules/publication/pages/PublicationAnalyticsPage'));
 const SearchPage = React.lazy(() => import('../modules/search/pages/SearchPage'));
 const MessagesRoute = React.lazy(() => import('./MessagesRoute'));
+
+// Profile module routes nested
+import profileRoutes from '../modules/profile/routes/profile.routes';
 
 const AppRoutes = () => {
   return (
@@ -75,10 +75,10 @@ const AppRoutes = () => {
           } />
         </Route>
 
-        {/* Dashboard & Modules Layout */}
+        {/* Dashboard & Modules Layout (No Sidebar) */}
         <Route element={
           <ProtectedRoute>
-            <DashboardLayout />
+            <AppLayout />
           </ProtectedRoute>
         }>
           <Route path="profile" element={<ProfileRedirect />} />
@@ -106,15 +106,11 @@ const AppRoutes = () => {
           <Route path="analytics" element={<ComingSoon title="System Analytics Coming Soon" />} />
         </Route>
 
-        {/* Public Profile Route */}
-        <Route element={<DashboardLayout />}>
-          <Route path="/profile/:profileSlug" element={<ProfilePage />} />
-          <Route path="/profile/:profileSlug/publications" element={<PublicationsLibraryPage />} />
-          <Route path="/profile/:profileSlug/projects" element={<ComingSoon title="Researcher Projects Coming Soon" />} />
-          <Route path="/profile/:profileSlug/patents" element={<ComingSoon title="Researcher Patents Coming Soon" />} />
-          <Route path="/profile/:profileSlug/datasets" element={<ComingSoon title="Researcher Datasets Coming Soon" />} />
-          <Route path="/profile/:profileSlug/books" element={<ComingSoon title="Researcher Books Coming Soon" />} />
-          <Route path="/profile/:profileSlug/analytics" element={<ComingSoon title="Researcher Analytics Coming Soon" />} />
+        {/* Profile Module Nested Routes (ProfileLayout handles sidebar) */}
+        {profileRoutes}
+
+        {/* Non-Profile Detail Routes (Uses normal AppLayout without sidebar) */}
+        <Route element={<AppLayout />}>
           <Route path="/publication/:publicationSlug" element={<PublicationDetailPage />} />
           {/* SEO-friendly canonical route — Phase 3 Publication Reader */}
           <Route path="/publications/:slug" element={<PublicationReader />} />
@@ -133,3 +129,4 @@ const AppRoutes = () => {
 };
 
 export default AppRoutes;
+

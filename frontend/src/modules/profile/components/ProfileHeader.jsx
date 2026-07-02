@@ -17,6 +17,15 @@ import {
   HeartHandshake
 } from 'lucide-react';
 import ProfileAvatar from './ProfileAvatar';
+import { 
+  GoogleScholarIcon, 
+  OrcidIcon, 
+  ScopusIcon, 
+  LinkedinIcon, 
+  ResearchGateIcon, 
+  WebsiteIcon 
+} from './BrandIcons';
+
 
 const ProfileHeader = ({ 
   profile, 
@@ -47,12 +56,12 @@ const ProfileHeader = ({
   };
   
   const socialIcons = {
-    googleScholar: { icon: GraduationCap, label: 'Google Scholar', color: 'hover:bg-blue-50 hover:text-blue-600' },
-    orcid: { icon: Award, label: 'ORCID', color: 'hover:bg-green-50 hover:text-green-600' },
-    linkedin: { icon: Linkedin, label: 'LinkedIn', color: 'hover:bg-blue-50 hover:text-blue-700' },
-    researchGate: { icon: Bookmark, label: 'ResearchGate', color: 'hover:bg-cyan-50 hover:text-cyan-600' },
-    scopus: { icon: Database, label: 'Scopus', color: 'hover:bg-orange-50 hover:text-orange-600' },
-    website: { icon: Globe, label: 'Website', color: 'hover:bg-purple-50 hover:text-purple-600' }
+    googleScholar: { icon: GoogleScholarIcon, label: 'Google Scholar', color: 'hover:bg-slate-50 border-slate-100 hover:border-blue-300' },
+    orcid: { icon: OrcidIcon, label: 'ORCID', color: 'hover:bg-slate-50 border-slate-100 hover:border-green-300' },
+    linkedin: { icon: LinkedinIcon, label: 'LinkedIn', color: 'hover:bg-slate-50 border-slate-100 hover:border-blue-400' },
+    researchGate: { icon: ResearchGateIcon, label: 'ResearchGate', color: 'hover:bg-slate-50 border-slate-100 hover:border-teal-300' },
+    scopus: { icon: ScopusIcon, label: 'Scopus', color: 'hover:bg-slate-50 border-slate-100 hover:border-orange-300' },
+    website: { icon: WebsiteIcon, label: 'Website', color: 'hover:bg-slate-50 border-slate-100 hover:border-indigo-300' }
   };
 
   return (
