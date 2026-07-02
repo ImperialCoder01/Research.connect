@@ -1,13 +1,37 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, RefreshCw, Trash2, ArrowRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import publicationService from '../../../services/publication.service';
+
+const LOADING_STEPS = [
+  'Uploading PDF to Secure Server...',
+  'Reading PDF Content...',
+  'Extracting Document Metadata...',
+  'Finding Authors and Affiliations...',
+  'Detecting Abstract...',
+  'Finding DOI & Scientific References...',
+  'Extracting Keywords using TF-IDF...',
+  'Analyzing Research Area & Taxonomy...',
+  'Auto Filling Form...'
+];
 
 const Step3Upload = ({ fileDetails, onUploadSuccess, onRemove, onSkip }) => {
   const [dragActive, setDragActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    let interval;
+    if (isUploading) {
+      setCurrentStepIndex(0);
+      interval = setInterval(() => {
+        setCurrentStepIndex((prev) => (prev < LOADING_STEPS.length - 1 ? prev + 1 : prev));
+      }, 1200);
+    }
+    return () => clearInterval(interval);
+  }, [isUploading]);
 
   const allowedExtensions = ['.pdf', '.docx', '.pptx', '.zip', '.csv', '.txt'];
 
@@ -39,49 +63,39 @@ const Step3Upload = ({ fileDetails, onUploadSuccess, onRemove, onSkip }) => {
     formData.append('file', file);
 
     try {
-      const response = await publicationService.uploadFile(formData, (progressEvent) => {
+      // Trigger both operations in parallel to optimize extraction speed
+      const uploadPromise = publicationService.uploadFile(formData, (progressEvent) => {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
         setUploadProgress(percentCompleted);
       });
 
-      if (response.success) {
-        toast.success('File uploaded successfully to Cloudinary!');
-        
-        // Call metadata extraction endpoint
-        const extractToast = toast.loading('Extracting document metadata...');
-        try {
-          const extractResponse = await publicationService.extractMetadata(formData);
-          toast.dismiss(extractToast);
-          
-          if (extractResponse.success) {
-            toast.success('Metadata extracted automatically!');
-            onUploadSuccess({
-              cloudinaryData: response.data,
-              extractedMetadata: extractResponse.data,
-              originalName: file.name
-            });
-          } else {
-            onUploadSuccess({
-              cloudinaryData: response.data,
-              extractedMetadata: null,
-              originalName: file.name
-            });
-          }
-        } catch (extractErr) {
-          console.error('Metadata extraction failed', extractErr);
-          toast.dismiss(extractToast);
-          onUploadSuccess({
-            cloudinaryData: response.data,
-            extractedMetadata: null,
-            originalName: file.name
-          });
-        }
+      const extractPromise = publicationService.extractMetadata(formData);
+
+      const [uploadResponse, extractResponse] = await Promise.all([
+        uploadPromise.catch(err => {
+          console.error('File upload failed', err);
+          return { success: false, message: err.message };
+        }),
+        extractPromise.catch(err => {
+          console.error('Metadata extraction failed', err);
+          return { success: false, data: null };
+        })
+      ]);
+
+      if (uploadResponse.success) {
+        toast.success('File uploaded and metadata extracted successfully!');
+        onUploadSuccess({
+          cloudinaryData: uploadResponse.data,
+          extractedMetadata: extractResponse.success && extractResponse.data ? extractResponse.data.extractedMetadata : null,
+          cacheId: extractResponse.success && extractResponse.data ? extractResponse.data.cacheId : null,
+          originalName: file.name
+        });
       } else {
-        toast.error(response.message || 'File upload failed.');
+        toast.error(uploadResponse.message || 'File upload failed.');
       }
     } catch (err) {
       console.error(err);
-      toast.error(err.message || 'Error occurred during file upload.');
+      toast.error('Error occurred during file upload.');
     } finally {
       setIsUploading(false);
     }
@@ -171,7 +185,7 @@ const Step3Upload = ({ fileDetails, onUploadSuccess, onRemove, onSkip }) => {
       ) : isUploading ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center min-h-[220px]">
           <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mb-4" />
-          <p className="text-sm font-bold text-slate-900">Uploading to Cloudinary...</p>
+          <p className="text-sm font-bold text-slate-900">{LOADING_STEPS[currentStepIndex]}</p>
           <div className="w-full max-w-md bg-slate-100 rounded-full h-2.5 mt-4 overflow-hidden relative">
             <div
               className="bg-blue-600 h-2.5 rounded-full transition-all duration-200"

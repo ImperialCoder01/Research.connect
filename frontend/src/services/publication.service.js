@@ -33,11 +33,16 @@ class PublicationService {
 
   // Extract Metadata from PDF/DOCX buffer
   async extractMetadata(formData) {
-    return await axiosInstance.post('/v1/publications/extract-metadata', formData, {
+    return await axiosInstance.post('/v1/publications/extract', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     });
+  }
+
+  // Retrieve cached metadata by ID
+  async getMetadataCache(id) {
+    return await axiosInstance.get(`/v1/publications/metadata/${id}`);
   }
 
   // Retrieve publications list (supports page, limit, userId filters)

@@ -254,13 +254,27 @@ class PublicationService {
 
       // 3.5 Save detailed metadata in publicationMetadata collection
       const PublicationMetadata = require('../../../models/PublicationMetadata');
-      const metadata = new PublicationMetadata({
-        publicationId: publication._id,
-        abstract: data.abstract || '',
-        references: data.references || [],
-        publisher: data.publisher || ''
-      });
-      await metadata.save({ session });
+      let metadataDoc = null;
+      if (data.metadataCacheId) {
+        try {
+          metadataDoc = await PublicationMetadata.findById(data.metadataCacheId);
+        } catch (e) {}
+      }
+      if (metadataDoc) {
+        metadataDoc.publicationId = publication._id;
+        metadataDoc.abstract = data.abstract || metadataDoc.abstract || '';
+        metadataDoc.references = data.references || metadataDoc.references || [];
+        metadataDoc.publisher = data.publisher || metadataDoc.publisher || '';
+        await metadataDoc.save({ session });
+      } else {
+        metadataDoc = new PublicationMetadata({
+          publicationId: publication._id,
+          abstract: data.abstract || '',
+          references: data.references || [],
+          publisher: data.publisher || ''
+        });
+        await metadataDoc.save({ session });
+      }
 
       // 4. Save file metadata if present
       if (data.fileDetails && data.fileDetails.secure_url) {

@@ -125,7 +125,6 @@ const PublicationSchema = new Schema(
     },
     googleScholarPublicationId: {
       type: String,
-      default: '',
       trim: true
     },
     paperURL: {
@@ -138,7 +137,6 @@ const PublicationSchema = new Schema(
     },
     doi: {
       type: String,
-      default: '',
       trim: true
     },
     volume: {
@@ -208,6 +206,16 @@ const PublicationSchema = new Schema(
     timestamps: true
   }
 );
+
+PublicationSchema.pre('save', function (next) {
+  if (this.doi === '' || this.doi === null) {
+    this.doi = undefined;
+  }
+  if (this.googleScholarPublicationId === '' || this.googleScholarPublicationId === null) {
+    this.googleScholarPublicationId = undefined;
+  }
+  next();
+});
 
 PublicationSchema.index({ doi: 1 }, { unique: true, sparse: true });
 PublicationSchema.index({ googleScholarPublicationId: 1 }, { unique: true, sparse: true });

@@ -113,7 +113,7 @@ class PublicationController {
     });
   });
 
-  // Extract Metadata from PDF Upload
+  // Extract Metadata from PDF Upload and cache in MongoDB
   extractMetadata = asyncHandler(async (req, res) => {
     if (!req.file) {
       throw new ValidationError('No file was uploaded.');
@@ -126,7 +126,38 @@ class PublicationController {
       req.file.mimetype
     );
 
-    return res.success('Metadata extracted successfully.', result);
+    // Cache the raw text and extraction metadata in publicationMetadata collection
+    const PublicationMetadata = require('../../../models/PublicationMetadata');
+    const cacheDoc = new PublicationMetadata({
+      rawText: req.file.buffer.toString('utf8').substring(0, 10000), // Keep a safe limit
+      extractedMetadata: result,
+      confidenceScores: {
+        title: result.title?.confidence || 0,
+        abstract: result.abstract?.confidence || 0,
+        doi: result.doi?.confidence || 0,
+        authors: result.authorsList?.confidence || 0,
+        journal: result.journal?.confidence || 0
+      },
+      abstract: result.abstract?.value || '',
+      publisher: result.publisher?.value || ''
+    });
+    await cacheDoc.save();
+
+    return res.success('Metadata extracted successfully.', {
+      cacheId: cacheDoc._id,
+      extractedMetadata: result
+    });
+  });
+
+  // Get cached metadata by ID
+  getMetadataCache = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const PublicationMetadata = require('../../../models/PublicationMetadata');
+    const cacheDoc = await PublicationMetadata.findById(id);
+    if (!cacheDoc) {
+      throw new NotFoundError('Cached metadata not found.');
+    }
+    return res.success('Cached metadata retrieved successfully.', cacheDoc);
   });
 
   // Get single publication by slug

@@ -60,6 +60,22 @@ router.post(
   publicationController.extractMetadata
 );
 
+// Alias /extract for Phase 1.5 spec
+router.post(
+  '/extract',
+  authMiddleware,
+  upload.single('file'),
+  validateFile,
+  publicationController.extractMetadata
+);
+
+// Get cached metadata by ID
+router.get(
+  '/metadata/:id',
+  authMiddleware,
+  publicationController.getMetadataCache
+);
+
 // 3. Upload file (Cloudinary)
 router.post(
   '/upload',

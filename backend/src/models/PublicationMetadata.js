@@ -6,9 +6,27 @@ const PublicationMetadataSchema = new Schema(
     publicationId: {
       type: Schema.Types.ObjectId,
       ref: 'Publication',
-      required: true,
-      index: true,
-      unique: true
+      index: true
+    },
+    rawText: {
+      type: String,
+      default: ''
+    },
+    extractedMetadata: {
+      type: Schema.Types.Mixed,
+      default: {}
+    },
+    confidenceScores: {
+      type: Schema.Types.Mixed,
+      default: {}
+    },
+    extractionVersion: {
+      type: String,
+      default: '1.5.0'
+    },
+    extractionDate: {
+      type: Date,
+      default: Date.now
     },
     abstract: {
       type: String,

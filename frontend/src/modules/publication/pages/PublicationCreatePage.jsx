@@ -53,7 +53,8 @@ const PublicationCreatePage = () => {
     keywords: [],
     visibility: 'Public',
     fileDetails: null,
-    extractionConfidences: null
+    extractionConfidences: null,
+    metadataCacheId: ''
   });
 
   // Read URL query parameter for publicationType
@@ -96,7 +97,7 @@ const PublicationCreatePage = () => {
     setStep(3);
   };
 
-  const handleUploadSuccess = ({ cloudinaryData, extractedMetadata, originalName }) => {
+  const handleUploadSuccess = ({ cloudinaryData, extractedMetadata, cacheId, originalName }) => {
     // 1. Save file details
     handleFieldChange('fileDetails', {
       ...cloudinaryData,
@@ -108,6 +109,7 @@ const PublicationCreatePage = () => {
       setFormData(prev => {
         const updated = {
           ...prev,
+          metadataCacheId: cacheId || '',
           fileDetails: {
             ...cloudinaryData,
             originalName
