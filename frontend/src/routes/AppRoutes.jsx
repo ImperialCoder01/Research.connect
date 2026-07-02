@@ -22,6 +22,7 @@ import AiWorkspacePage from '../modules/ai-workspace/pages/AiWorkspacePage';
 import ProfilePage from '../modules/profile/pages/ProfilePage';
 import ResearchIdentityPage from '../modules/profile/pages/ResearchIdentityPage';
 import ProfileRedirect from '../modules/profile/components/ProfileRedirect';
+import MessagesRoute from './MessagesRoute';
 
 const AppRoutes = () => {
   return (
@@ -73,6 +74,7 @@ const AppRoutes = () => {
         <Route path="profile" element={<ProfileRedirect />} />
         <Route path="research-identity" element={<ResearchIdentityPage />} />
         <Route path="publication" element={<ComingSoon title="Publication Management Coming Soon" />} />
+        <Route path="messages" element={<MessagesRoute />} />
         <Route path="search" element={<ComingSoon title="Research Discovery Search Coming Soon" />} />
         <Route path="settings" element={<ComingSoon title="System Settings Coming Soon" />} />
         <Route path="notifications" element={<ComingSoon title="Notifications Center Coming Soon" />} />
