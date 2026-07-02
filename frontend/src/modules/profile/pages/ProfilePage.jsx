@@ -893,12 +893,7 @@ const ProfilePage = () => {
               <p className="text-xs text-text-secondary italic">No co-authors indexed yet.</p>
             )}
           </div>
-
-<<<<<<< Updated upstream
-      
-=======
-       
->>>>>>> Stashed changes
+    
         </div>
 
       </div>
