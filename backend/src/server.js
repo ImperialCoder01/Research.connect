@@ -1,7 +1,6 @@
 require('dotenv').config();
-const app = require('./app');
-const { connectDB, closeDB } = require('./config/database/connection');
 const logger = require('./common/logger/winston');
+const { connectDB, closeDB } = require('./config/database/connection');
 const { syncDatabaseIndexes } = require('./config/database/indexes');
 
 const PORT = process.env.PORT || 5000;
@@ -11,20 +10,32 @@ const startServer = async () => {
     // 1. Establish Database Connection
     await connectDB();
 
-    // Seed AI Templates
-    const seederService = require('./modules/ai/services/seeder.service');
-    await seederService.seedTemplates();
-
-    // 2. Sync database indexes
-    if (process.env.NODE_ENV !== 'test') {
-      await syncDatabaseIndexes();
-    }
+    // 2. Express + Register Routes (loaded dynamically after DB connection)
+    const app = require('./app');
 
     // 3. Start Express Listener
-    const importQueueService = require('./modules/scholar/service/import-queue.service');
     const server = app.listen(PORT, () => {
       logger.info(`Research Connect server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-      importQueueService.runQueueWorker();
+      
+      // 4. Asynchronously spawn background tasks (Non-blocking)
+      setImmediate(async () => {
+        try {
+          // Sync database indexes (skips automatically outside development)
+          await syncDatabaseIndexes();
+        } catch (err) {
+          logger.error('Failed database index audit in background:', err);
+        }
+
+        try {
+          // Scholar Queue Worker
+          const importQueueService = require('./modules/scholar/service/import-queue.service');
+          importQueueService.runQueueWorker();
+        } catch (err) {
+          logger.error('Failed to run Scholar queue worker in background:', err);
+        }
+        
+        logger.info('Background workers initialized.');
+      });
     });
 
     // Handle Graceful Shutdowns

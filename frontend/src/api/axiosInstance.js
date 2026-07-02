@@ -7,6 +7,7 @@ import { updateToken, logoutSuccess } from '../redux/slices/authSlice';
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'  || '/api', 
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
@@ -98,7 +99,7 @@ axiosInstance.interceptors.response.use(
       isRefreshing = true;
 
       return new Promise(function(resolve, reject) {
-        axiosInstance.post('/v1/auth/refresh-token')
+        axiosInstance.post('/v1/auth/refresh-token', {}, { _retry: true })
           .then((res) => {
             if (res.success && res.data?.accessToken) {
               const newToken = res.data.accessToken;

@@ -364,10 +364,10 @@ class PublicationService {
     let publication;
     const mongoose = require('mongoose');
     if (slug && mongoose.Types.ObjectId.isValid(slug)) {
-      publication = await Publication.findById(slug);
+      publication = await Publication.findById(slug).lean();
     }
     if (!publication) {
-      publication = await Publication.findOne({ slug });
+      publication = await Publication.findOne({ slug }).lean();
     }
     if (!publication) {
       throw new NotFoundError('Publication not found.');
@@ -376,12 +376,12 @@ class PublicationService {
     // Hydrate sub-collections
     const PublicationMetadata = require('../../../models/PublicationMetadata');
     const [authors, files, keywords, researchAreas, metrics, metadata] = await Promise.all([
-      PublicationAuthor.find({ publicationId: publication._id }).sort({ order: 1 }),
-      PublicationFile.find({ publicationId: publication._id, isDeleted: { $ne: true } }),
-      PublicationKeyword.find({ publicationId: publication._id }),
-      PublicationResearchArea.find({ publicationId: publication._id }),
-      PublicationMetric.findOne({ publicationId: publication._id }),
-      PublicationMetadata.findOne({ publicationId: publication._id })
+      PublicationAuthor.find({ publicationId: publication._id }).sort({ order: 1 }).lean(),
+      PublicationFile.find({ publicationId: publication._id, isDeleted: { $ne: true } }).lean(),
+      PublicationKeyword.find({ publicationId: publication._id }).lean(),
+      PublicationResearchArea.find({ publicationId: publication._id }).lean(),
+      PublicationMetric.findOne({ publicationId: publication._id }).lean(),
+      PublicationMetadata.findOne({ publicationId: publication._id }).lean()
     ]);
 
     // Visibility / Draft / Soft-delete checks
@@ -419,8 +419,8 @@ class PublicationService {
           { upsert: true }
         );
 
+        await Publication.updateOne({ _id: publication._id }, { $inc: { views: 1 } });
         publication.views = (publication.views || 0) + 1;
-        await publication.save();
 
         await PublicationView.create({
           publicationId: publication._id,
@@ -442,7 +442,7 @@ class PublicationService {
     }
 
     return {
-      ...publication.toObject(),
+      ...publication,
       authorsList: authors,
       files,
       keywordsList: keywords.map(k => k.keyword),
@@ -470,7 +470,8 @@ class PublicationService {
       .populate('userId', 'firstName lastName fullName email profileImage institution department designation')
       .sort(sort)
       .skip(skip)
-      .limit(Number(limit));
+      .limit(Number(limit))
+      .lean();
 
     const [docs, total] = await Promise.all([
       query,
@@ -694,7 +695,7 @@ class PublicationService {
    * Increment file download analytic and metric
    */
   async trackDownload(id, clientInfo = {}) {
-    const publication = await Publication.findById(id);
+    const publication = await Publication.findById(id).lean();
     if (!publication) {
       throw new NotFoundError('Publication not found.');
     }
@@ -705,8 +706,8 @@ class PublicationService {
       { upsert: true }
     );
 
+    await Publication.updateOne({ _id: id }, { $inc: { downloads: 1 } });
     publication.downloads = (publication.downloads || 0) + 1;
-    await publication.save();
 
     await PublicationDownload.create({
       publicationId: id,

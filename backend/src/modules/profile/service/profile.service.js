@@ -46,6 +46,12 @@ class ProfileService {
    * Assemble/hydrate a fully populated profile object from all normalized collections
    */
   async getFullProfile(userId, isPublic = false) {
+    const { ProfileCache } = require('../../../cache/cache.service');
+    const cached = await ProfileCache.get(userId.toString());
+    if (cached) {
+      return cached;
+    }
+
     const user = await User.findById(userId);
     if (!user || user.isDeleted) {
       throw new NotFoundError('User not found.');
@@ -77,23 +83,23 @@ class ProfileService {
       citationGraph,
       derivedAnalytics
     ] = await Promise.all([
-      Education.find({ userId, isDeleted: { $ne: true } }),
-      Experience.find({ userId, isDeleted: { $ne: true } }),
-      Skill.find({ userId, isDeleted: { $ne: true } }),
-      Patent.find({ userId, isDeleted: { $ne: true } }),
-      Book.find({ userId, isDeleted: { $ne: true } }),
-      Dataset.find({ userId, isDeleted: { $ne: true } }),
-      Award.find({ userId, isDeleted: { $ne: true } }),
-      Certificate.find({ userId, isDeleted: { $ne: true } }),
-      SocialLink.findOne({ userId, isDeleted: { $ne: true } }),
-      ResearchMetric.findOne({ userId, isDeleted: { $ne: true } }),
-      ProfileCompletion.findOne({ userId }),
-      ResearchArea.find({ userId }),
-      Keyword.find({ userId }).sort({ count: -1 }),
-      Publication.find({ userId, isDeleted: { $ne: true } }).sort({ year: -1, createdAt: -1 }),
-      CoAuthor.find({ userId }),
-      CitationGraph.find({ userId }).sort({ year: 1 }),
-      DerivedAnalytics.findOne({ userId })
+      Education.find({ userId, isDeleted: { $ne: true } }).lean(),
+      Experience.find({ userId, isDeleted: { $ne: true } }).lean(),
+      Skill.find({ userId, isDeleted: { $ne: true } }).lean(),
+      Patent.find({ userId, isDeleted: { $ne: true } }).lean(),
+      Book.find({ userId, isDeleted: { $ne: true } }).lean(),
+      Dataset.find({ userId, isDeleted: { $ne: true } }).lean(),
+      Award.find({ userId, isDeleted: { $ne: true } }).lean(),
+      Certificate.find({ userId, isDeleted: { $ne: true } }).lean(),
+      SocialLink.findOne({ userId, isDeleted: { $ne: true } }).lean(),
+      ResearchMetric.findOne({ userId, isDeleted: { $ne: true } }).lean(),
+      ProfileCompletion.findOne({ userId }).lean(),
+      ResearchArea.find({ userId }).lean(),
+      Keyword.find({ userId }).sort({ count: -1 }).lean(),
+      Publication.find({ userId, isDeleted: { $ne: true } }).sort({ year: -1, createdAt: -1 }).lean(),
+      CoAuthor.find({ userId }).lean(),
+      CitationGraph.find({ userId }).sort({ year: 1 }).lean(),
+      DerivedAnalytics.findOne({ userId }).lean()
     ]);
 
     // Build default Social Links if none exists
@@ -107,13 +113,13 @@ class ProfileService {
       profileCompletion = await this.calculateAndSaveProfileCompletion(userId);
     }
 
-    let metrics = metricsObj ? metricsObj.toObject() : null;
+    let metrics = metricsObj ? (typeof metricsObj.toObject === 'function' ? metricsObj.toObject() : metricsObj) : null;
     if (!metricsObj) {
       const calculatedMetrics = await this.calculateAndSaveResearchMetrics(userId);
-      metrics = calculatedMetrics.toObject();
+      metrics = calculatedMetrics && typeof calculatedMetrics.toObject === 'function' ? calculatedMetrics.toObject() : calculatedMetrics;
     }
 
-    return {
+    const result = {
       profileId: profile._id,
       userId: user._id,
       username: user.username || '',
@@ -167,6 +173,9 @@ class ProfileService {
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt
     };
+
+    await ProfileCache.set(userId.toString(), result);
+    return result;
   }
 
   /**
@@ -576,6 +585,10 @@ class ProfileService {
     await this.calculateAndSaveProfileCompletion(userId);
     await this.calculateAndSaveResearchMetrics(userId);
 
+    // Invalidate Cache
+    const { ProfileCache: ProfileCacheInvalidate } = require('../../../cache/cache.service');
+    await ProfileCacheInvalidate.del(userId.toString());
+
     // 7. Log Activity
     await ActivityLog.create({
       userId,
@@ -607,6 +620,10 @@ class ProfileService {
     user.status = 'suspended';
     user.isActive = false;
     await user.save();
+
+    // Invalidate Cache
+    const { ProfileCache: ProfileCacheInvalidate } = require('../../../cache/cache.service');
+    await ProfileCacheInvalidate.del(userId.toString());
 
     return { success: true };
   }
