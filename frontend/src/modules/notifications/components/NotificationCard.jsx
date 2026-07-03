@@ -106,6 +106,28 @@ const NotificationCard = ({ notification }) => {
           <span className="text-[9px] font-bold text-slate-400 block pt-0.5">
             {formatTimeAgo(createdAt)}
           </span>
+          {notification.type === 'publication_uploaded' && (
+            <div className="flex gap-2 pt-2.5" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => {
+                  if (!isRead) markReadMutation.mutate();
+                  if (targetUrl) navigate(targetUrl);
+                }}
+                className="px-2.5 py-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition-all cursor-pointer active:scale-95"
+              >
+                Read Publication
+              </button>
+              <button
+                onClick={() => {
+                  if (!isRead) markReadMutation.mutate();
+                  if (actorId) navigate(`/profile/${actorId.profileSlug || actorId.username}`);
+                }}
+                className="px-2.5 py-1 border border-slate-200 bg-white hover:bg-slate-50 text-slate-650 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+              >
+                View Researcher
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

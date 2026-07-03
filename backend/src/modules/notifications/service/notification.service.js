@@ -1,3 +1,4 @@
+const Notification = require("../../../models/Notification");
 const notificationRepository = require("../repository/notification.repository");
 const Profile = require("../../../models/Profile");
 const { emitToUser } = require("../../../config/socket");
@@ -160,7 +161,6 @@ class NotificationService {
   }
 }
 
-// Inline import helper since Mongoose Model requires Notification name resolution
-const Notification = require("../../../models/Notification");
+
 
 module.exports = new NotificationService();

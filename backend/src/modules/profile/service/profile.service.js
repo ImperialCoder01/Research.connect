@@ -479,7 +479,7 @@ class ProfileService {
       throw new NotFoundError('Profile not found.');
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('+password');
     if (!user) {
       throw new NotFoundError('User not found.');
     }
@@ -636,7 +636,7 @@ class ProfileService {
       throw new NotFoundError('Profile not found.');
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('+password');
     if (!user) {
       throw new NotFoundError('User not found.');
     }

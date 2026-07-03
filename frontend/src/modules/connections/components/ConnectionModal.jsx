@@ -51,7 +51,7 @@ const ConnectionModal = ({ isOpen, onClose, onConfirm, isPending }) => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2.5 pt-2 border-t border-slate-100 pt-4">
+          <div className="flex gap-2.5 pt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}

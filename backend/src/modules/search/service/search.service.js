@@ -260,7 +260,7 @@ class SearchService {
 
   // ─── Researcher Search ────────────────────────────────────────────────────────
   async searchResearchers(params) {
-    const { q = '', page = 1, limit = 20, country, institution, researchArea } = params;
+    const { q = '', page = 1, limit = 20, country, institution, researchArea, currentUserId } = params;
     const pageNum = Math.max(1, parseInt(page, 10));
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
     const skip = (pageNum - 1) * limitNum;
@@ -319,19 +319,40 @@ class SearchService {
       User.countDocuments(finalUserFilter)
     ]);
 
-    // Attach profile details
+    // Attach profile details & compatibility score if currentUserId is present
     const userIds = users.map(u => u._id);
     const profiles = await Profile.find({ userId: { $in: userIds }, isDeleted: { $ne: true } }).lean();
 
-    const results = users.map(user => {
+    const recommendationsService = require('../../recommendations/service/recommendations.service');
+
+    const results = await Promise.all(users.map(async (user) => {
       const prof = profiles.find(p => p.userId.toString() === user._id.toString());
+      
+      let matchPercentage = 0;
+      let reasons = [];
+      if (currentUserId && currentUserId.toString() !== user._id.toString()) {
+        try {
+          const comp = await recommendationsService.calculateCompatibilityScore(currentUserId, user._id);
+          matchPercentage = comp.score;
+          reasons = comp.reasons;
+        } catch (err) {
+          console.error(`Failed to calculate compatibility for search result [${user._id}]:`, err);
+        }
+      }
+
       return {
         ...user,
         profile: prof || null,
         institution: prof?.institution || user.institution || '',
-        researchAreas: prof?.researchAreas || []
+        researchAreas: prof?.researchAreas || [],
+        matchPercentage,
+        reasons
       };
-    });
+    }));
+
+    if (currentUserId) {
+      results.sort((a, b) => b.matchPercentage - a.matchPercentage);
+    }
 
     return { results, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
   }

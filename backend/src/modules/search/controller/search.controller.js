@@ -42,7 +42,10 @@ class SearchController {
 
   // GET /api/v1/search/researchers
   searchResearchers = asyncHandler(async (req, res) => {
-    const results = await searchService.searchResearchers(req.query);
+    const results = await searchService.searchResearchers({
+      ...req.query,
+      currentUserId: req.user?.id
+    });
     return res.success('Researchers search completed.', results);
   });
 

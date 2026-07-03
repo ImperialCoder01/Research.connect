@@ -210,7 +210,7 @@ class ScholarService {
         await mainProfile.save();
       }
 
-      const mainUser = await User.findById(userId);
+      const mainUser = await User.findById(userId).select('+password');
       if (mainUser) {
         // Fallback update to user profileImage if not custom set
         mainUser.profileImage = mainUser.profileImage || data.author.thumbnail || '';

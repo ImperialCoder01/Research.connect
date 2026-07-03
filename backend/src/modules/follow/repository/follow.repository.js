@@ -168,7 +168,10 @@ class FollowRepository extends BaseRepository {
     
     // We can do this with an aggregation pipeline starting from follows where followingId = B.
     const pipeline = [
-      { $match: { followingId: castUserIdB } },
+      { $match: { 
+        followingId: castUserIdB,
+        followerId: { $nin: [castUserIdA, castUserIdB] }
+      } },
       // Check if followerId is followed by User A
       {
         $lookup: {
@@ -244,7 +247,10 @@ class FollowRepository extends BaseRepository {
     const castUserIdB = new mongoose.Types.ObjectId(userIdB);
 
     const result = await this.model.aggregate([
-      { $match: { followingId: castUserIdB } },
+      { $match: { 
+        followingId: castUserIdB,
+        followerId: { $nin: [castUserIdA, castUserIdB] }
+      } },
       {
         $lookup: {
           from: 'follows',

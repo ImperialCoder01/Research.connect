@@ -67,6 +67,10 @@ class RecommendationsService {
    * Calculates the compatibility score (0-100%) between two users.
    */
   async calculateCompatibilityScore(userId, targetUserId) {
+    const Connection = require('../../../models/Connection');
+    const Publication = require('../../../models/Publication');
+    const CoAuthor = require('../../../models/CoAuthor');
+
     // Fetch profiles for both users
     const [userProfile, targetProfile] = await Promise.all([
       Profile.findOne({ userId }).lean(),
@@ -77,107 +81,105 @@ class RecommendationsService {
       return { score: 0, reasons: ['Missing profile data'] };
     }
 
-    // Fetch connection and follow contexts
-    const [userFollows, userConnections, targetPublications] = await Promise.all([
-      Follow.find({ followerId: userId }).lean(),
+    const [userConnections, targetPublications, targetCoAuthors, userCoAuthors] = await Promise.all([
       Connection.find({
-        $or: [{ senderId: userId }, { receiverId: userId }],
-        status: 'accepted'
+        $or: [{ researcherA: userId }, { researcherB: userId }]
       }).lean(),
-      Publication.find({ userId: targetUserId, isDeleted: { $ne: true } }).lean()
+      Publication.find({ userId: targetUserId, isDeleted: { $ne: true }, status: 'published' }).select('keywords title abstract').lean(),
+      CoAuthor.find({ userId: targetUserId }).lean(),
+      CoAuthor.find({ userId }).lean()
     ]);
 
-    const userFollowsIds = userFollows.map(f => f.followingId.toString());
-    const userConnectionIds = userConnections.map(c =>
-      c.senderId.toString() === userId.toString() ? c.receiverId.toString() : c.senderId.toString()
+    const myConnectionIds = userConnections.map(c => 
+      c.researcherA.toString() === userId.toString() ? c.researcherB.toString() : c.researcherA.toString()
     );
 
-    const w = config.weights;
     let score = 0;
     const reasons = [];
 
-    // 1. Research Areas (30%)
-    const userAreas = (userProfile.researchAreas || []).map(a => (typeof a === 'string' ? a : a.name || '').toLowerCase().trim());
-    const targetAreas = (targetProfile.researchAreas || []).map(a => (typeof a === 'string' ? a : a.name || '').toLowerCase().trim());
-    const sharedAreas = userAreas.filter(a => targetAreas.includes(a));
+    const myAreas = (userProfile.researchAreas || []).map(a => a.name?.toLowerCase().trim()).filter(Boolean);
+    const targetAreas = (targetProfile.researchAreas || []).map(a => a.name?.toLowerCase().trim()).filter(Boolean);
+    const mySkills = (userProfile.skills || []).map(s => s.name?.toLowerCase().trim()).filter(Boolean);
+    const myName = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.toLowerCase().trim();
+
+    // 1. Common Research Areas (30%)
+    const sharedAreas = myAreas.filter(a => targetAreas.includes(a));
     if (sharedAreas.length > 0) {
-      const areaMatch = Math.min(1.0, sharedAreas.length / Math.max(1, userAreas.length));
-      score += w.researchAreas * areaMatch * 100;
-      reasons.push('Same Research Areas');
+      const areaWeight = Math.min(1.0, sharedAreas.length / 2);
+      score += 30 * areaWeight;
+      reasons.push(`Shared research area: ${sharedAreas[0]}`);
     }
 
-    // 2. Keywords (25%)
-    const userKeywords = (userProfile.skills || []).map(s => s.name.toLowerCase().trim());
-    const targetKeywords = (targetProfile.skills || []).map(s => s.name.toLowerCase().trim());
-    const sharedKeywords = userKeywords.filter(k => targetKeywords.includes(k));
+    // 2. Publication Keywords (20%)
+    const targetPubKeywords = [];
+    targetPublications.forEach(p => (p.keywords || []).forEach(k => targetPubKeywords.push(k.toLowerCase().trim())));
+    const sharedKeywords = mySkills.filter(k => targetPubKeywords.includes(k));
     if (sharedKeywords.length > 0) {
-      const keywordMatch = Math.min(1.0, sharedKeywords.length / 5); // Max weight if 5 or more matching keywords
-      score += w.keywords * keywordMatch * 100;
-      reasons.push('Same Keywords');
+      const keywordWeight = Math.min(1.0, sharedKeywords.length / 3);
+      score += 20 * keywordWeight;
+      reasons.push(`${sharedKeywords.length} matching publication keywords`);
     }
 
-    // 3. Publications (15%)
-    if (targetPublications.length > 0) {
-      // Check if user interests match target's publication keywords/areas
-      const targetPubKeywords = [];
-      targetPublications.forEach(p => (p.keywords || []).forEach(k => targetPubKeywords.push(k.toLowerCase().trim())));
-      const sharedPubKeywords = userKeywords.filter(k => targetPubKeywords.includes(k));
-      if (sharedPubKeywords.length > 0) {
-        const pubMatch = Math.min(1.0, sharedPubKeywords.length / 5);
-        score += w.publications * pubMatch * 100;
-        reasons.push('Overlap in Publication Topics');
-      }
+    // 3. Publication Topics (15%)
+    let topicMatches = 0;
+    targetPublications.forEach(p => {
+      const text = `${p.title || ''} ${p.abstract || ''}`.toLowerCase();
+      const hasMatch = mySkills.some(k => text.includes(k)) || myAreas.some(a => text.includes(a));
+      if (hasMatch) topicMatches++;
+    });
+    if (topicMatches > 0) {
+      score += 15 * Math.min(1.0, topicMatches / 2);
+      reasons.push('Overlap in publication topics');
     }
 
-    // 4. Institution (10%)
+    // 4. Institution Match (10%)
     if (userProfile.institution && targetProfile.institution && 
         userProfile.institution.toLowerCase().trim() === targetProfile.institution.toLowerCase().trim()) {
-      score += w.institution * 100;
-      reasons.push('Same Institution');
-    } else if (userProfile.country && targetProfile.country && 
-               userProfile.country.toLowerCase().trim() === targetProfile.country.toLowerCase().trim()) {
-      score += w.institution * 0.3 * 100; // partial points for same country
-      reasons.push('Same Country');
+      score += 10;
+      reasons.push(`Same institution: ${targetProfile.institution}`);
     }
 
-    // 5. Connections (5%)
-    // Find mutual connections
+    // 5. Mutual Connections (10%)
     const targetConnections = await Connection.find({
-      $or: [{ senderId: targetUserId }, { receiverId: targetUserId }],
-      status: 'accepted'
+      $or: [{ researcherA: targetUserId }, { researcherB: targetUserId }]
     }).lean();
     const targetConnectionIds = targetConnections.map(c =>
-      c.senderId.toString() === targetUserId.toString() ? c.receiverId.toString() : c.senderId.toString()
+      c.researcherA.toString() === targetUserId.toString() ? c.researcherB.toString() : c.researcherA.toString()
     );
-    const mutualConnections = userConnectionIds.filter(id => targetConnectionIds.includes(id));
+    const mutualConnections = myConnectionIds.filter(id => targetConnectionIds.includes(id));
     if (mutualConnections.length > 0) {
-      const connMatch = Math.min(1.0, mutualConnections.length / 3);
-      score += w.connections * connMatch * 100;
-      reasons.push(`${mutualConnections.length} Mutual Connection${mutualConnections.length > 1 ? 's' : ''}`);
+      const mutualConnCount = mutualConnections.length;
+      score += 10 * Math.min(1.0, mutualConnCount / 3);
+      reasons.push(`${mutualConnCount} mutual connection${mutualConnCount > 1 ? 's' : ''}`);
     }
 
-
-
-    // 7. Co-authors (5%)
-    // Check if they co-authored publications
-    let isCoAuthor = false;
-    const authorNameLower = `${userProfile.userId?.firstName} ${userProfile.userId?.lastName}`.toLowerCase().trim();
-    targetPublications.forEach(pub => {
-      if (pub.authors && pub.authors.toLowerCase().includes(authorNameLower)) {
-        isCoAuthor = true;
-      }
-    });
-    if (isCoAuthor) {
-      score += w.coAuthors * 100;
-      reasons.push('Co-authored Publications');
+    // 6. Common Co-Authors / Collaboration History (5%)
+    const myCoNames = userCoAuthors.map(c => c.name.toLowerCase());
+    const targetCoAuthNames = targetCoAuthors.map(co => co.name.toLowerCase());
+    const sharedCoAuthors = myCoNames.filter(name => targetCoAuthNames.includes(name));
+    const targetName = `${targetProfile.firstName || ''} ${targetProfile.lastName || ''}`.toLowerCase().trim();
+    const isCoAuthor = myCoNames.includes(targetName) || targetCoAuthNames.includes(myName);
+    if (isCoAuthor || sharedCoAuthors.length > 0) {
+      score += 5;
+      reasons.push('Collaboration history');
     }
 
-    // 8. Activity (5%)
-    const activityFactor = targetProfile.profileCompletion ? targetProfile.profileCompletion / 100 : 0.5;
-    score += w.activity * activityFactor * 100;
+    // 7. Country Match (5%)
+    if (userProfile.country && targetProfile.country && 
+        userProfile.country.toLowerCase().trim() === targetProfile.country.toLowerCase().trim()) {
+      score += 5;
+      reasons.push(`Same country: ${targetProfile.country}`);
+    }
+
+    // 8. Recent Activity (5%)
+    const targetUpdatedAt = targetProfile.updatedAt;
+    const isRecent = targetUpdatedAt && (Date.now() - new Date(targetUpdatedAt).getTime() < 7 * 24 * 60 * 60 * 1000);
+    score += 5 * (isRecent ? 1.0 : 0.5);
+
+    if (score === 0) score = 15;
 
     return {
-      score: Math.min(100, Math.max(0, Math.round(score))),
+      score: Math.min(100, Math.max(10, Math.round(score))),
       reasons
     };
   }

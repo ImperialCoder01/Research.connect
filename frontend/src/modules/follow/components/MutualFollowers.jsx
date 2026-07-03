@@ -9,7 +9,7 @@ const MutualFollowers = ({ mutualCount = 0, mutualPreview = [], className = '' }
         {mutualPreview.slice(0, 3).map((user, idx) => (
           <img
             key={user.userId || user._id || idx}
-            className="inline-block h-5.5 w-5.5 rounded-full ring-2 ring-white object-cover"
+            className="inline-block h-4 w-4 rounded-full ring-1 ring-white object-cover shadow-xs"
             src={user.profileImage || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"}
             alt={user.fullName || "User Avatar"}
           />

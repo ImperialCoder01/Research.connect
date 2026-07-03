@@ -406,29 +406,44 @@ class PublicationService {
           console.error('[METRICS RECALCULATION ERROR]:', metricsError);
         }
 
-        // Notify followers in the background
+        // Notify followers and connections in the background
         try {
           const Follow = require('../../../models/Follow');
+          const Connection = require('../../../models/Connection');
           const User = require('../../../models/User');
           const notificationService = require('../../notifications/service/notification.service');
           
           const actorUser = await User.findById(userId).select('firstName lastName').lean();
           const actorName = actorUser ? `${actorUser.firstName} ${actorUser.lastName}` : 'A researcher';
-          const followers = await Follow.find({ followingId: userId }).select('followerId').lean();
           
-          if (followers.length > 0) {
+          // 1. Get Followers
+          const followers = await Follow.find({ followingId: userId }).select('followerId').lean();
+          const followerIds = followers.map(f => f.followerId.toString());
+
+          // 2. Get Connections
+          const connections = await Connection.find({
+            $or: [{ researcherA: userId }, { researcherB: userId }]
+          }).lean();
+          const connectionIds = connections.map(c =>
+            c.researcherA.toString() === userId.toString() ? c.researcherB.toString() : c.researcherA.toString()
+          );
+
+          // 3. Merge and De-duplicate recipient IDs
+          const recipientIds = Array.from(new Set([...followerIds, ...connectionIds]));
+          
+          if (recipientIds.length > 0) {
             setImmediate(() => {
-              followers.forEach(async (f) => {
+              recipientIds.forEach(async (recipientId) => {
                 await notificationService.createNotification({
-                  recipientId: f.followerId,
+                  recipientId,
                   actorId: userId,
                   type: 'publication_uploaded',
                   title: 'New Publication Uploaded',
-                  message: `${actorName} published a new paper: "${publication.title}"`,
+                  message: `${actorName} published a new research paper: "${publication.title}"`,
                   targetType: 'Publication',
                   targetId: publication._id,
                   targetUrl: `/publication/${publication.slug}`
-                }).catch(err => console.error(`Failed to notify follower: ${err.message}`));
+                }).catch(err => console.error(`Failed to notify recipient [${recipientId}]: ${err.message}`));
               });
             });
           }

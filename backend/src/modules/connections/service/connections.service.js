@@ -118,10 +118,6 @@ class ConnectionsService {
       throw new ValidationError(`Cannot accept request in '${request.status}' state.`);
     }
 
-    // Update request status to accepted
-    request.status = 'accepted';
-    await request.save();
-
     // Create Connection
     const [researcherA, researcherB] = this._sortUserIds(request.senderId, request.receiverId);
     
@@ -149,6 +145,9 @@ class ConnectionsService {
       ]);
     }
 
+    // Delete Pending Request from DB
+    await ConnectionRequest.deleteOne({ _id: requestId });
+
     // Invalidate profile cache
     await Promise.all([
       ProfileCache.del(request.senderId.toString()),
@@ -172,7 +171,8 @@ class ConnectionsService {
       }).catch(err => console.error(`Failed to create connection accepted notification: ${err.message}`));
     }
 
-    return { request, connection: connectionDoc };
+    const acceptedRequestRepresentation = { ...request.toObject(), status: 'accepted' };
+    return { request: acceptedRequestRepresentation, connection: connectionDoc };
   }
 
   /**
