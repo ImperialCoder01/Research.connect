@@ -18,9 +18,27 @@ const startServer = async () => {
 
     // 3. Start Express Listener
     const importQueueService = require('./modules/scholar/service/import-queue.service');
+    const { Server } = require("socket.io");
+    
     const server = app.listen(PORT, () => {
       logger.info(`Research Connect server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
       importQueueService.runQueueWorker();
+    });
+
+    // 4. Initialize Socket.IO
+    const io = new Server(server, {
+      cors: {
+        origin: "*", // allow frontend to connect
+        methods: ["GET", "POST"]
+      }
+    });
+
+    io.on("connection", (socket) => {
+      logger.info(`New WebSocket connection established: ${socket.id}`);
+      
+      socket.on("disconnect", () => {
+        logger.info(`WebSocket disconnected: ${socket.id}`);
+      });
     });
 
     // Handle Graceful Shutdowns
