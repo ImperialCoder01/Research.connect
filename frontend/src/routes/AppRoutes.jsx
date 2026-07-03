@@ -25,7 +25,8 @@ const PublicationEditPage = React.lazy(() => import('../modules/publication/page
 const PublicationReader = React.lazy(() => import('../modules/publication/pages/PublicationReader'));
 const PublicationAnalyticsPage = React.lazy(() => import('../modules/publication/pages/PublicationAnalyticsPage'));
 const SearchPage = React.lazy(() => import('../modules/search/pages/SearchPage'));
-const CertificatesPage = React.lazy(() => import('../modules/certificates/pages/CertificatesPage'));
+const CertificatesPage   = React.lazy(() => import('../modules/certificates/pages/CertificatesPage'));
+const AchievementsPage   = React.lazy(() => import('../modules/achievements/pages/AchievementsPage'));
 const MessagesPage = React.lazy(() => import('../modules/messages/pages/MessagesPage'));
 
 // Social Collaboration Modules
@@ -131,7 +132,8 @@ const AppRoutes = () => {
           <Route path="notifications" element={<NotificationCenter />} />
           <Route path="admin" element={<ComingSoon title="Administration Panel Coming Soon" />} />
           <Route path="analytics" element={<ComingSoon title="System Analytics Coming Soon" />} />
-          <Route path="certificates" element={<CertificatesPage />} />
+          <Route path="certificates"  element={<CertificatesPage />} />
+          <Route path="achievements" element={<AchievementsPage />} />
 
           {/* Phase 8 — Activity Feed Routes */}
           <Route path="feed" element={<HomeFeedV2 />} />
