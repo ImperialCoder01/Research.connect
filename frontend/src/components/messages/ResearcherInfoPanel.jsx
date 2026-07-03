@@ -6,6 +6,7 @@ import { ResearcherSkeleton } from './Skeletons';
 import { useCountUp } from '../../hooks/useCountUp';
 import { Beaker, Cloud, Globe } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { MOCK_USERS } from '../../data/mockData';
 
 function IconByName({ name, className }) {
   if (name === 'beaker') return <Beaker size={16} className={className} />;
@@ -25,6 +26,15 @@ export default function ResearcherInfoPanel() {
   useEffect(() => {
     if (!userId) {
       setProfile(null);
+      return;
+    }
+
+    if (String(userId).startsWith('user-')) {
+      const mockUser = MOCK_USERS[userId];
+      if (mockUser) {
+        setProfile(mockUser);
+      }
+      setIsLoading(false);
       return;
     }
 

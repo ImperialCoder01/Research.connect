@@ -77,7 +77,9 @@ export function MessagingProvider({ children }) {
     setConversations((prev) =>
       prev.map((c) => (c.id === convId ? { ...c, unreadCount: 0 } : c))
     );
-    messagingApi.markConversationRead?.(convId).catch(() => {});
+    if (!String(convId).startsWith('conv-')) {
+      messagingApi.markConversationRead?.(convId).catch(() => {});
+    }
 
     // Agar pehle se load nahi hain toh messages laao
     if (!messages.has(convId)) {
