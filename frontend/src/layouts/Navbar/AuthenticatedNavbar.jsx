@@ -192,9 +192,9 @@ const AuthenticatedNavbar = () => {
               )}
             </div>
 
-            {/* Messages Chat Toggle */}
+            {/* Messages Link */}
             <button
-              onClick={() => dispatch(setChatOpen(true))}
+              onClick={() => navigate(user?.profileSlug ? `/profile/${user.profileSlug}/messages` : '/messages')}
               className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-all relative"
               title="Messages"
             >
