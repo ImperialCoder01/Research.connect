@@ -83,9 +83,10 @@ export default function ChatHeader() {
       <div className="flex items-center gap-2 anim-slide-up-stagger" style={{ animationDelay: '80ms' }}>
         {/* Back button */}
         <button 
-          onClick={() => selectConversation(null)}
-          className="md:hidden p-2 -ml-2 rounded-xl text-[#64748B] hover:bg-[#EEF2FF] hover:text-[#2563EB] transition-colors"
-          aria-label="Back to conversations"
+          onClick={() => navigate('/')}
+          className="p-2 -ml-2 rounded-xl text-[#64748B] hover:bg-[#EEF2FF] hover:text-[#2563EB] transition-colors"
+          aria-label="Back to main window"
+          title="Back to main window"
         >
           <ArrowLeft size={20} />
         </button>
