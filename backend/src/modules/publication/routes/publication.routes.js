@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
 const publicationController = require('../controller/publication.controller');
 const { authMiddleware, optionalAuth } = require('../../../common/middlewares/auth.middleware');
 const { savePublicationValidator } = require('../validator/publication.validator');
@@ -9,44 +8,7 @@ const citationRoutes = require('./citation.routes');
 const analyticsRoutes = require('./analytics.routes');
 const analyticsController = require('../controller/analytics.controller');
 const responseCache = require('../../../cache/response-cache.middleware');
-
-// Configure Multer for memory storage with a 100MB limit
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 100 * 1024 * 1024 // 100 MB limit
-  }
-});
-
-// Middleware to validate file type and size before sending to Cloudinary
-const validateFile = (req, res, next) => {
-  if (!req.file) {
-    return next();
-  }
-
-  const allowedExtensions = ['.pdf', '.docx', '.doc', '.rtf', '.txt'];
-  const allowedMimeTypes = [
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/msword',
-    'application/rtf',
-    'text/plain'
-  ];
-
-  const originalName = req.file.originalname || '';
-  const extension = originalName.substring(originalName.lastIndexOf('.')).toLowerCase();
-
-  const isExtensionValid = allowedExtensions.includes(extension);
-  const isMimeValid = allowedMimeTypes.includes(req.file.mimetype);
-
-  if (!isExtensionValid || !isMimeValid) {
-    throw new ValidationError(
-      'Unsupported file format. Supported formats: PDF, DOCX, DOC, RTF, TXT.'
-    );
-  }
-
-  next();
-};
+const { upload: universalUpload, validateUpload } = require('../../upload/middleware/upload.middleware');
 
 // 1. Get My Publications (Drafts, Trash portfolio)
 router.get('/my', authMiddleware, publicationController.getMyPublications);
@@ -55,8 +17,8 @@ router.get('/my', authMiddleware, publicationController.getMyPublications);
 router.post(
   '/extract-metadata',
   authMiddleware,
-  upload.single('file'),
-  validateFile,
+  universalUpload.single('file'),
+  validateUpload,
   publicationController.extractMetadata
 );
 
@@ -64,8 +26,8 @@ router.post(
 router.post(
   '/extract',
   authMiddleware,
-  upload.single('file'),
-  validateFile,
+  universalUpload.single('file'),
+  validateUpload,
   publicationController.extractMetadata
 );
 
@@ -86,8 +48,8 @@ router.get('/formats', publicationController.getFormats);
 router.post(
   '/upload',
   authMiddleware,
-  upload.single('file'),
-  validateFile,
+  universalUpload.single('file'),
+  validateUpload,
   publicationController.uploadFile
 );
 

@@ -47,10 +47,19 @@ const scholarSyncLimiter = rateLimit({
   message: createMessage('Google Scholar portfolio synchronization is throttled to 3 times per 10 minutes.', 'SYNC_THROTTLED')
 });
 
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 50, // Limit each IP to 50 uploads per 15 minutes
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: createMessage('Too many file uploads from this IP. Please try again after 15 minutes.', 'UPLOAD_THROTTLED')
+});
+
 module.exports = {
   globalLimiter,
   authLimiter,
   otpLimiter,
   searchLimiter,
-  scholarSyncLimiter
+  scholarSyncLimiter,
+  uploadLimiter
 };

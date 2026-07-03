@@ -53,22 +53,15 @@ class PublicationController {
       await validatePDFBuffer(req.file.buffer, req.file.originalname);
     }
 
-    // Generate publicationId BEFORE upload — used as the Cloudinary path component.
-    // This guarantees a unique, collision-resistant public_id in Cloudinary.
-    const publicationId = generatePublicationId();
-    const researcherId = String(req.user._id);
-
-    const result = await cloudinaryService.uploadFileBuffer(
-      req.file.buffer,
-      req.file.originalname,
-      researcherId,
-      publicationId,
-      mimeType
-    );
+    const uploadService = require('../../upload/service/upload.service');
+    const result = await uploadService.uploadFile({
+      file: req.file,
+      userId: req.user._id,
+      purpose: 'publication-pdf'
+    });
 
     return res.success('File uploaded to Cloudinary successfully.', {
-      // publicationId is returned so client can include it in the create-publication payload
-      publicationId,
+      publicationId: result.resourceId,
       secure_url: result.secure_url,
       public_id: result.public_id,
       asset_id: result.asset_id,
@@ -76,8 +69,7 @@ class PublicationController {
       bytes: result.bytes,
       format: result.format,
       pages: result.pages || 0,
-      folder: result.folder,
-      uploadDurationMs: result.uploadDurationMs
+      folder: result.folder
     });
   });
 

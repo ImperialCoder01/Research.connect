@@ -17,12 +17,30 @@ class ProfileService {
   }
 
   // Specific PATCH routes for micro-saves / real-time updates
-  async updateBanner(coverImage) {
-    return await axiosInstance.patch('/v1/profile/banner', { coverImage });
+  async updateBanner(coverImageOrFile) {
+    if (coverImageOrFile instanceof File) {
+      const formData = new FormData();
+      formData.append('file', coverImageOrFile);
+      return await axiosInstance.patch('/v1/profile/banner', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+    }
+    return await axiosInstance.patch('/v1/profile/banner', { coverImage: coverImageOrFile });
   }
 
-  async updateAvatar(profileImage) {
-    return await axiosInstance.patch('/v1/profile/avatar', { profileImage });
+  async updateAvatar(profileImageOrFile) {
+    if (profileImageOrFile instanceof File) {
+      const formData = new FormData();
+      formData.append('file', profileImageOrFile);
+      return await axiosInstance.patch('/v1/profile/avatar', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+    }
+    return await axiosInstance.patch('/v1/profile/avatar', { profileImage: profileImageOrFile });
   }
 
   async updateBasic(data) {

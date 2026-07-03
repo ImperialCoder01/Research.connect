@@ -11,7 +11,7 @@ const options = {
   heartbeatFrequencyMS: 10000, // Send heartbeats every 10 seconds
   serverSelectionTimeoutMS: 5000,
   retryWrites: true,
-  compressors: 'snappy,zlib',
+  compressors: 'zlib',
   readPreference: 'primary',
   w: 'majority'
 };
@@ -86,7 +86,7 @@ const closeDB = async () => {
   
   logger.info('Closing Mongoose connection...');
   try {
-    await mongoose.close();
+    await mongoose.disconnect();
     logger.info('Mongoose connection closed successfully.');
   } catch (error) {
     logger.error('Error during Mongoose connection closure:', error);

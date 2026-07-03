@@ -4,10 +4,16 @@ const profileController = require('../controller/profile.controller');
 const { authMiddleware } = require('../../../common/middlewares/auth.middleware');
 const { updateProfileValidator } = require('../validator/profile.validator');
 const { scholarSyncLimiter } = require('../../../config/rateLimiter');
-const upload = require('../../../common/utils/fileUpload');
+const { upload: universalUpload, validateUpload } = require('../../upload/middleware/upload.middleware');
 
 // File Upload Endpoint (for Profile avatars and banners)
-router.post('/upload', authMiddleware, upload.single('file'), profileController.uploadFile);
+router.post(
+  '/upload',
+  authMiddleware,
+  universalUpload.single('file'),
+  (req, res, next) => { if (req.file) return validateUpload(req, res, next); next(); },
+  profileController.uploadFile
+);
 
 // Profile detail retrieval for the logged in user (defined before dynamic slug to avoid collision)
 router.get('/me', authMiddleware, profileController.getProfile);
@@ -25,8 +31,18 @@ router.use(authMiddleware);
 // Bulk and specific PUT/PATCH endpoints for profile updates
 router.put('/', updateProfileValidator, profileController.updateProfile);
 router.patch('/', updateProfileValidator, profileController.updateProfile);
-router.patch('/banner', profileController.updateBanner);
-router.patch('/avatar', profileController.updateAvatar);
+router.patch(
+  '/banner',
+  universalUpload.single('file'),
+  (req, res, next) => { if (req.file) return validateUpload(req, res, next); next(); },
+  profileController.updateBanner
+);
+router.patch(
+  '/avatar',
+  universalUpload.single('file'),
+  (req, res, next) => { if (req.file) return validateUpload(req, res, next); next(); },
+  profileController.updateAvatar
+);
 router.patch('/basic', updateProfileValidator, profileController.updateBasic);
 router.patch('/about', updateProfileValidator, profileController.updateAbout);
 router.patch('/skills', updateProfileValidator, profileController.updateSkills);

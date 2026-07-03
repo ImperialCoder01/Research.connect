@@ -141,37 +141,32 @@ const ProfileOverview = () => {
   };
 
   const handleUploadAvatar = async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
     const loadingToast = toast.loading('Uploading profile image...');
     try {
-      const uploadRes = await profileService.uploadFile(formData);
-      if (uploadRes.success) {
-        const imageUrl = uploadRes.data.url;
-        const res = await profileService.updateAvatar(imageUrl);
-        if (res.success) {
-          toast.success('Profile avatar updated successfully!', { id: loadingToast });
-          // Update Query cache and Redux state
-          queryClient.setQueryData(['profile', username], (old) => {
-            if (!old) return old;
-            return {
-              ...old,
-              data: { ...old.data, profileImage: imageUrl }
-            };
-          });
-          if (isOwnProfile) {
-            dispatch(updateProfileState({ ...profile, profileImage: imageUrl }));
-            dispatch(updateUserState({
-              ...currentUser,
-              profileImage: imageUrl
-            }));
-          }
-          refetch();
-        } else {
-          toast.error('Failed to update avatar profile record', { id: loadingToast });
+      const res = await profileService.updateAvatar(file);
+      if (res.success) {
+        toast.success('Profile avatar updated successfully!', { id: loadingToast });
+        const updatedProfile = res.data;
+        const imageUrl = updatedProfile.profileImage;
+        
+        // Update Query cache and Redux state
+        queryClient.setQueryData(['profile', username], (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            data: updatedProfile
+          };
+        });
+        if (isOwnProfile) {
+          dispatch(updateProfileState(updatedProfile));
+          dispatch(updateUserState({
+            ...currentUser,
+            profileImage: imageUrl
+          }));
         }
+        refetch();
       } else {
-        toast.error('Failed to upload file to server', { id: loadingToast });
+        toast.error('Failed to update avatar profile record', { id: loadingToast });
       }
     } catch (err) {
       console.error(err);
@@ -180,33 +175,27 @@ const ProfileOverview = () => {
   };
 
   const handleUploadCover = async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
     const loadingToast = toast.loading('Uploading cover banner...');
     try {
-      const uploadRes = await profileService.uploadFile(formData);
-      if (uploadRes.success) {
-        const coverUrl = uploadRes.data.url;
-        const res = await profileService.updateBanner(coverUrl);
-        if (res.success) {
-          toast.success('Cover banner updated successfully!', { id: loadingToast });
-          // Update Query cache and Redux state
-          queryClient.setQueryData(['profile', username], (old) => {
-            if (!old) return old;
-            return {
-              ...old,
-              data: { ...old.data, coverImage: coverUrl }
-            };
-          });
-          if (isOwnProfile) {
-            dispatch(updateProfileState({ ...profile, coverImage: coverUrl }));
-          }
-          refetch();
-        } else {
-          toast.error('Failed to update banner profile record', { id: loadingToast });
+      const res = await profileService.updateBanner(file);
+      if (res.success) {
+        toast.success('Cover banner updated successfully!', { id: loadingToast });
+        const updatedProfile = res.data;
+
+        // Update Query cache and Redux state
+        queryClient.setQueryData(['profile', username], (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            data: updatedProfile
+          };
+        });
+        if (isOwnProfile) {
+          dispatch(updateProfileState(updatedProfile));
         }
+        refetch();
       } else {
-        toast.error('Failed to upload file to server', { id: loadingToast });
+        toast.error('Failed to update banner profile record', { id: loadingToast });
       }
     } catch (err) {
       console.error(err);

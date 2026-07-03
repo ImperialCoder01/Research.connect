@@ -19,6 +19,9 @@ const feedModule = require("./modules/feed");
 const publicationModule = require("./modules/publication");
 const messageModule = require("./modules/message");
 const searchModule = require("./modules/search");
+const uploadModule = require("./modules/upload");
+const projectModule = require("./modules/project");
+const datasetModule = require("./modules/dataset");
 
 const app = express();
 
@@ -63,6 +66,9 @@ app.use("/api/v1", feedModule.routes);
 app.use("/api/v1/publications", publicationModule.routes);
 app.use("/api/v1/messages", messageModule.routes);
 app.use("/api/v1/search", searchModule.routes);
+app.use("/api/v1/uploads", uploadModule.routes);
+app.use("/api/v1/projects", projectModule.routes);
+app.use("/api/v1/datasets", datasetModule.routes);
 
 // Default root redirect to /api
 app.get("/", (req, res) => {

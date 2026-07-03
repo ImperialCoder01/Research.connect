@@ -25,14 +25,32 @@ class ProfileController {
 
   // Update cover banner image
   updateBanner = asyncHandler(async (req, res) => {
-    const { coverImage } = req.body;
+    let coverImage = req.body.coverImage;
+    if (req.file) {
+      const uploadService = require('../../upload/service/upload.service');
+      const uploadDoc = await uploadService.uploadFile({
+        file: req.file,
+        userId: req.user._id,
+        purpose: 'profile-banner'
+      });
+      coverImage = uploadDoc.secure_url;
+    }
     const profile = await profileService.updateProfile(req.user._id, { coverImage });
     return res.success('Profile cover banner updated successfully.', profile);
   });
 
   // Update profile avatar image
   updateAvatar = asyncHandler(async (req, res) => {
-    const { profileImage } = req.body;
+    let profileImage = req.body.profileImage;
+    if (req.file) {
+      const uploadService = require('../../upload/service/upload.service');
+      const uploadDoc = await uploadService.uploadFile({
+        file: req.file,
+        userId: req.user._id,
+        purpose: 'profile-avatar'
+      });
+      profileImage = uploadDoc.secure_url;
+    }
     const profile = await profileService.updateProfile(req.user._id, { profileImage });
     return res.success('Profile avatar photo updated successfully.', profile);
   });
@@ -127,10 +145,18 @@ class ProfileController {
     if (!req.file) {
       throw new ValidationError('No file was uploaded.');
     }
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    const uploadService = require('../../upload/service/upload.service');
+    const purpose = req.body.purpose || req.query.purpose || 'profile-avatar';
+    const result = await uploadService.uploadFile({
+      file: req.file,
+      userId: req.user._id,
+      purpose
+    });
     return res.success('File uploaded successfully.', {
-      url: fileUrl,
-      filename: req.file.filename
+      url: result.secure_url,
+      filename: result.original_filename,
+      asset_id: result.asset_id,
+      public_id: result.public_id
     });
   });
 
