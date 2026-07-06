@@ -95,8 +95,7 @@ const ProfileOverview = () => {
     { id: 'timeline', name: 'Education & Experience', icon: Layers },
     { id: 'skills', name: 'Skills', icon: HeartHandshake },
     { id: 'patents', name: 'Patents', icon: ShieldCheck },
-    { id: 'books', name: 'Books', icon: BookOpen },
-    { id: 'awards', name: 'Awards & Certificates', icon: Award }
+    { id: 'books', name: 'Books', icon: BookOpen }
   ];
 
   const handleSaveProfile = async (formData) => {
@@ -579,59 +578,6 @@ const ProfileOverview = () => {
                   </div>
                 )}
 
-                {activeTab === 'awards' && (
-                  <div className="space-y-6">
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider pl-2">Awards & Honors</h4>
-                      {profile?.awards && profile.awards.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {profile.awards.map((aw, i) => (
-                            <div key={i} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm space-y-1.5 relative overflow-hidden">
-                              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/5 rounded-bl-full pointer-events-none flex items-center justify-center">
-                                <Award className="w-5 h-5 text-indigo-600 opacity-20 -mt-4 -mr-4" />
-                              </div>
-                              <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100 pr-8">{aw.title}</h5>
-                              <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">{aw.organization} ({aw.year})</p>
-                              {aw.description && (
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{aw.description}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
-                          <p className="text-xs font-bold text-slate-400 uppercase">No awards declared yet</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-4 pt-6 border-t border-slate-200 dark:border-slate-800">
-                      <h4 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider pl-2">Certificates</h4>
-                      {profile?.certificates && profile.certificates.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {profile.certificates.map((cert, i) => (
-                            <div key={i} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm flex items-start gap-3">
-                              <ShieldCheck className="w-5 h-5 text-emerald-500 mt-0.5" />
-                              <div className="space-y-1 flex-grow">
-                                <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100">{cert.name}</h5>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">{cert.organization} | {cert.issueDate || 'N/A'}</p>
-                                {cert.credentialUrl && (
-                                  <a href={cert.credentialUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline block pt-0.5">
-                                    Verify Credential &rarr;
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
-                          <p className="text-xs font-bold text-slate-400 uppercase">No certificates uploaded yet</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </motionFramer.div>
             </AnimatePresenceFramer>
           </div>

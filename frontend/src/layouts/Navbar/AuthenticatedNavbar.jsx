@@ -438,12 +438,6 @@ const AuthenticatedNavbar = () => {
                     <Link to={user?.profileSlug ? `/profile/${user.profileSlug}` : '/profile'} onClick={() => setProfileOpen(false)} className="px-4 py-2 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
                       <User className="w-4 h-4 text-slate-400" /> My Profile
                     </Link>
-                    <Link to="/certificates" onClick={() => setProfileOpen(false)} className="px-4 py-2 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
-                      <Award className="w-4 h-4 text-slate-400" /> Certificates
-                    </Link>
-                    <Link to="/achievements" onClick={() => setProfileOpen(false)} className="px-4 py-2 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
-                      <Award className="w-4 h-4 text-slate-400" /> Achievements
-                    </Link>
                     <Link to="/help" onClick={() => setProfileOpen(false)} className="px-4 py-2 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2.5 transition-colors">
                       <HelpCircle className="w-4 h-4 text-slate-400" /> Help Center
                     </Link>
