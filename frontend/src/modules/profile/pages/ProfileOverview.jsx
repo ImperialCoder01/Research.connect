@@ -21,41 +21,12 @@ import {
   Eye, 
   Linkedin,
   BookMarked,
-  Activity,
-  ArrowUpDown
+  Activity
 } from 'lucide-react';
 
 import profileService from '../../../services/profile.service';
 import publicationService from '../../../services/publication.service';
 import { updateProfileState, updateUserState } from '../../../redux/slices/authSlice';
-
-const PUB_CATEGORIES = ['General Paper', 'Conference Paper', 'Patent', 'Book Chapter', 'Book'];
-
-const getPublicationCategory = (pub) => {
-  const explicitType = (pub.publicationType || '').trim().toLowerCase();
-  const normalizedMatch = PUB_CATEGORIES.find((c) => c.toLowerCase() === explicitType);
-  if (normalizedMatch) return normalizedMatch;
-
-  const haystack = [pub.publication, pub.journal, pub.conference, pub.publisher]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  if (explicitType === 'patent' || haystack.includes('patent')) return 'Patent';
-  if (explicitType === 'book chapter' || haystack.includes('book chapter') || haystack.includes('chapter in')) return 'Book Chapter';
-  if (explicitType === 'book' || (haystack.includes('book') && !haystack.includes('chapter'))) return 'Book';
-  if (
-    explicitType === 'conference' ||
-    pub.conference ||
-    haystack.includes('proceedings') ||
-    haystack.includes('conference') ||
-    haystack.includes('symposium') ||
-    haystack.includes('workshop')
-  ) {
-    return 'Conference Paper';
-  }
-  return 'General Paper';
-};
 import { 
   GoogleScholarIcon, 
   OrcidIcon, 
@@ -90,8 +61,6 @@ const ProfileOverview = () => {
   const [pubsPage, setPubsPage] = useState(1);
   const [hasMorePubs, setHasMorePubs] = useState(false);
   const [loadingPubs, setLoadingPubs] = useState(false);
-  const [pubTypeFilter, setPubTypeFilter] = useState('All');
-  const [yearSort, setYearSort] = useState('desc');
 
   useEffect(() => {
     const fetchPubs = async () => {
@@ -126,8 +95,7 @@ const ProfileOverview = () => {
     { id: 'timeline', name: 'Education & Experience', icon: Layers },
     { id: 'skills', name: 'Skills', icon: HeartHandshake },
     { id: 'patents', name: 'Patents', icon: ShieldCheck },
-    { id: 'books', name: 'Books', icon: BookOpen },
-    { id: 'awards', name: 'Awards & Certificates', icon: Award }
+    { id: 'books', name: 'Books', icon: BookOpen }
   ];
 
   const handleSaveProfile = async (formData) => {
@@ -374,7 +342,7 @@ const ProfileOverview = () => {
                             return (
                               <div key={network.key} className="flex items-center justify-between gap-3 text-xs py-2 border-b border-slate-100 last:border-0">
                                 <div className="flex items-center gap-2">
-                                  <div className={`p-1.5 rounded-lg flex items-center justify-center ${network.color}`}>
+                                  <div className={`p-1.5 rounded-lg border border-slate-300 flex items-center justify-center ${network.color}`}>
                                     <Icon className="w-3.5 h-3.5" />
                                   </div>
                                   <span className="font-extrabold text-[#475569]">{network.label}</span>
@@ -424,132 +392,90 @@ const ProfileOverview = () => {
                     )}
 
                     {/* Dynamic Publications Card */}
-                    {/* Dynamic Publications Card */}
-<div className="space-y-4 pt-6 border-t border-slate-200">
-  <div className="flex items-center justify-between gap-3 flex-wrap">
-    <h3 className="text-base font-black text-[#0F172A] tracking-tight">Publications Portfolio</h3>
-    <div className="flex items-center gap-2">
-      <select
-        value={pubTypeFilter}
-        onChange={(e) => setPubTypeFilter(e.target.value)}
-        className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[#475569] focus:outline-none focus:border-[#2563EB] cursor-pointer"
-      >
-        <option value="All">All Types</option>
-        {PUB_CATEGORIES.map((c) => (
-          <option key={c} value={c}>{c}</option>
-        ))}
-      </select>
-      <button
-        onClick={() => setYearSort((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
-        className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[#475569] hover:bg-slate-50 transition-colors"
-      >
-        <ArrowUpDown className="w-3 h-3" />
-        Year: {yearSort === 'desc' ? 'Newest' : 'Oldest'}
-      </button>
-    </div>
-  </div>
-  
-  {(() => {
-    const filteredPubs = (pubTypeFilter === 'All'
-      ? [...pubsList]
-      : pubsList.filter((p) => getPublicationCategory(p) === pubTypeFilter)
-    ).sort((a, b) => 
-      yearSort === 'desc' 
-        ? (b.year || 0) - (a.year || 0) 
-        : (a.year || 0) - (b.year || 0)
-    );
+                    <div className="space-y-4 pt-6 border-t border-slate-200">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-base font-black text-[#0F172A] tracking-tight">Publications Portfolio</h3>
+                        <span className="text-[10px] bg-[#DBEAFE] text-[#2563EB] border border-[#DBEAFE] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                          Real-time Output
+                        </span>
+                      </div>
+                      
+                      {pubsList.length > 0 ? (
+                        <div className="space-y-3.5">
+                          {pubsList.map((pub) => {
+                            const id = pub.id || pub._id;
+                            const isScholarImport = !!pub.googleScholarPublicationId;
+                            const hasPDF = !!pub.cloudinaryFileUrl;
+                            return (
+                              <div key={id} className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="space-y-1.5 flex-grow text-left">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-[9px] font-black bg-blue-50 text-[#2563EB] px-2.5 py-0.5 rounded-md uppercase tracking-wider">
+                                      {pub.publicationType || 'Article'}
+                                    </span>
+                                    {isScholarImport && (
+                                      <span className="text-[8px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-md">Scholar</span>
+                                    )}
+                                    {hasPDF && (
+                                      <span className="text-[8px] font-black bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-md">PDF</span>
+                                    )}
+                                  </div>
+                                  <h4 
+                                    className="text-sm font-extrabold text-[#0F172A] leading-snug hover:text-[#2563EB] cursor-pointer transition-colors"
+                                    onClick={() => navigate(`/publication/${pub.slug || pub._id}`)}
+                                  >
+                                    {pub.title}
+                                  </h4>
+                                  <p className="text-[11px] text-[#475569] font-semibold">
+                                    By {pub.authors}
+                                  </p>
+                                  {(pub.publication || pub.journal || pub.conference) && (
+                                    <p className="text-[10px] text-slate-400 font-medium italic">
+                                      {pub.publication || pub.journal || pub.conference} {pub.year ? `(${pub.year})` : ''}
+                                    </p>
+                                  )}
+                                  {pub.doi && (
+                                    <span className="text-[9px] bg-slate-50 border border-slate-150 text-slate-500 font-bold px-2 py-0.5 rounded inline-block">
+                                      DOI: {pub.doi}
+                                    </span>
+                                  )}
+                                </div>
 
-    return filteredPubs.length > 0 ? (
-      <div className="space-y-3.5">
-        {filteredPubs.map((pub) => {
-          const id = pub.id || pub._id;
-          const isScholarImport = !!pub.googleScholarPublicationId;
-          const hasPDF = !!pub.cloudinaryFileUrl;
-
-          return (
-            <div key={id} className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col md:flex-row md:items-start justify-between gap-4">
-              <div className="space-y-1.5 flex-grow text-left">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[9px] font-black bg-blue-50 text-[#2563EB] px-2.5 py-0.5 rounded-md uppercase tracking-wider">
-                    {getPublicationCategory(pub)}
-                  </span>
-                  {isScholarImport && (
-                    <span className="text-[8px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-md">Scholar</span>
-                  )}
-                  {hasPDF && (
-                    <span className="text-[8px] font-black bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-md">PDF</span>
-                  )}
-                  {/* Prominent Year Display */}
-                  {pub.year && (
-                    <span className="text-[10px] font-black bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-md border border-slate-200">
-                      {pub.year}
-                    </span>
-                  )}
-                </div>
-
-                <h4 
-                  className="text-sm font-extrabold text-[#0F172A] leading-snug hover:text-[#2563EB] cursor-pointer transition-colors"
-                  onClick={() => navigate(`/publication/${pub.slug || pub._id}`)}
-                >
-                  {pub.title}
-                </h4>
-
-                <p className="text-[11px] text-[#475569] font-semibold">
-                  By {pub.authors}
-                </p>
-
-                {/* Journal/Conference info */}
-                {(pub.publication || pub.journal || pub.conference) && (
-                  <p className="text-[10px] text-slate-400 font-medium italic">
-                    {pub.publication || pub.journal || pub.conference}
-                  </p>
-                )}
-
-                {pub.doi && (
-                  <span className="text-[9px] bg-slate-50 border border-slate-150 text-slate-500 font-bold px-2 py-0.5 rounded inline-block">
-                    DOI: {pub.doi}
-                  </span>
-                )}
-              </div>
-
-              {/* Stats & Actions */}
-              <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-3 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
-                <div className="flex items-center gap-2.5 text-[10px] font-bold text-[#475569]">
-                  <span className="flex items-center gap-0.5"><Eye className="w-3.5 h-3.5 text-slate-400" /> {pub.views || 0} Reads</span>
-                  <span className="flex items-center gap-0.5"><Download className="w-3.5 h-3.5 text-slate-400" /> {pub.downloads || 0} Downloads</span>
-                  {pub.citations > 0 && <span className="flex items-center gap-0.5"><Award className="w-3.5 h-3.5 text-amber-500" /> {pub.citations} Citations</span>}
-                </div>
-                <button
-                  onClick={() => navigate(`/publication/${pub.slug || pub._id}`)}
-                  className="text-xs font-bold text-[#2563EB] bg-[#DBEAFE] hover:bg-[#DBEAFE]/80 px-4 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
-                >
-                  Read Output
-                </button>
-              </div>
-            </div>
-          );
-        })}
-        
-        {hasMorePubs && (
-          <button
-            onClick={() => setPubsPage((prev) => prev + 1)}
-            disabled={loadingPubs}
-            className="w-full text-center py-2.5 border border-slate-200 bg-slate-50 hover:bg-[#EDE9FE]/40 text-xs font-black text-[#475569] hover:text-[#4F46E5] uppercase tracking-wider rounded-xl transition-all duration-200 active:scale-[0.98] mt-4 flex items-center justify-center gap-1.5"
-          >
-            {loadingPubs ? 'Loading...' : 'Load More Publications'}
-          </button>
-        )}
-      </div>
-    ) : (
-      <div className="text-center py-12 bg-[#F8FAFC] border border-slate-200 rounded-2xl shadow-sm">
-        <FileText className="w-8 h-8 text-slate-400 mx-auto mb-2 opacity-50" />
-        <p className="text-xs font-bold text-slate-500 uppercase">
-          {pubTypeFilter === 'All' ? 'No publications published yet' : `No ${pubTypeFilter} found`}
-        </p>
-      </div>
-    );
-  })()}
-</div>
+                                {/* Stats & Actions */}
+                                <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-3 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
+                                  <div className="flex items-center gap-2.5 text-[10px] font-bold text-[#475569]">
+                                    <span className="flex items-center gap-0.5"><Eye className="w-3.5 h-3.5 text-slate-400" /> {pub.views || 0} Reads</span>
+                                    <span className="flex items-center gap-0.5"><Download className="w-3.5 h-3.5 text-slate-400" /> {pub.downloads || 0} Downloads</span>
+                                    {pub.citations > 0 && <span className="flex items-center gap-0.5"><Award className="w-3.5 h-3.5 text-amber-500" /> {pub.citations} Citations</span>}
+                                  </div>
+                                  <button
+                                    onClick={() => navigate(`/publication/${pub.slug || pub._id}`)}
+                                    className="text-xs font-bold text-[#2563EB] bg-[#DBEAFE] hover:bg-[#DBEAFE]/80 px-4 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
+                                  >
+                                    Read Output
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          
+                          {hasMorePubs && (
+                            <button
+                              onClick={() => setPubsPage((prev) => prev + 1)}
+                              disabled={loadingPubs}
+                              className="w-full text-center py-2.5 border border-slate-200 bg-slate-50 hover:bg-[#EDE9FE]/40 text-xs font-black text-[#475569] hover:text-[#4F46E5] uppercase tracking-wider rounded-xl transition-all duration-200 active:scale-[0.98] mt-4 flex items-center justify-center gap-1.5"
+                            >
+                              {loadingPubs ? 'Loading...' : 'Load More Publications'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 bg-[#F8FAFC] border border-slate-200 rounded-2xl shadow-sm">
+                          <FileText className="w-8 h-8 text-slate-400 mx-auto mb-2 opacity-50" />
+                          <p className="text-xs font-bold text-slate-500 uppercase">No publications published yet</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -652,59 +578,6 @@ const ProfileOverview = () => {
                   </div>
                 )}
 
-                {activeTab === 'awards' && (
-                  <div className="space-y-6">
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider pl-2">Awards & Honors</h4>
-                      {profile?.awards && profile.awards.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {profile.awards.map((aw, i) => (
-                            <div key={i} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm space-y-1.5 relative overflow-hidden">
-                              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/5 rounded-bl-full pointer-events-none flex items-center justify-center">
-                                <Award className="w-5 h-5 text-indigo-600 opacity-20 -mt-4 -mr-4" />
-                              </div>
-                              <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100 pr-8">{aw.title}</h5>
-                              <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">{aw.organization} ({aw.year})</p>
-                              {aw.description && (
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{aw.description}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
-                          <p className="text-xs font-bold text-slate-400 uppercase">No awards declared yet</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-4 pt-6 border-t border-slate-200 dark:border-slate-800">
-                      <h4 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider pl-2">Certificates</h4>
-                      {profile?.certificates && profile.certificates.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {profile.certificates.map((cert, i) => (
-                            <div key={i} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm flex items-start gap-3">
-                              <ShieldCheck className="w-5 h-5 text-emerald-500 mt-0.5" />
-                              <div className="space-y-1 flex-grow">
-                                <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100">{cert.name}</h5>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">{cert.organization} | {cert.issueDate || 'N/A'}</p>
-                                {cert.credentialUrl && (
-                                  <a href={cert.credentialUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline block pt-0.5">
-                                    Verify Credential &rarr;
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
-                          <p className="text-xs font-bold text-slate-400 uppercase">No certificates uploaded yet</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </motionFramer.div>
             </AnimatePresenceFramer>
           </div>
@@ -743,7 +616,7 @@ const ProfileOverview = () => {
               }
 
               return (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 max-h-[340px] overflow-y-auto pr-1">
                   {activeMetrics.map((item) => {
                     const Icon = item.icon;
                     return (
