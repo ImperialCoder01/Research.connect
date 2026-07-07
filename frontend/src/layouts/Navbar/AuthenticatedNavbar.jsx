@@ -170,13 +170,6 @@ const AuthenticatedNavbar = () => {
             </Link>
           </div>
 
-          {/* Quick Links */}
-          <div className="hidden lg:flex items-center space-x-2 text-xs font-semibold text-slate-600">
-            <Link to="/" className="px-3 py-2 rounded-lg hover:bg-slate-55 hover:text-blue-600 transition-all duration-150">Home</Link>
-            <Link to="/#research" className="px-3 py-2 rounded-lg hover:bg-slate-55 hover:text-blue-600 transition-all duration-150">Research</Link>
-            <Link to="/#communities" className="px-3 py-2 rounded-lg hover:bg-slate-55 hover:text-blue-600 transition-all duration-150">Communities</Link>
-          </div>
-
           {/* Large Global Search with Autocomplete */}
           <div ref={searchContainerRef} className="flex-grow max-w-xl relative hidden md:block">
             <form onSubmit={handleSearchSubmit} className="relative w-full">
@@ -330,15 +323,6 @@ const AuthenticatedNavbar = () => {
                   </button>
                   <button onClick={() => { setCreateOpen(false); navigate('/projects/create'); }} className="w-full px-4 py-2.5 hover:bg-slate-55 hover:text-blue-600 text-left flex items-center gap-2">
                     <Briefcase className="w-4 h-4 text-slate-400 shrink-0" /> Create Research Project
-                  </button>
-                  <button onClick={() => { setCreateOpen(false); navigate('/datasets/create'); }} className="w-full px-4 py-2.5 hover:bg-slate-55 hover:text-blue-600 text-left flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-slate-400 shrink-0" /> Share Dataset
-                  </button>
-                  <button onClick={() => { setCreateOpen(false); navigate('/questions/create'); }} className="w-full px-4 py-2.5 hover:bg-slate-55 hover:text-blue-600 text-left flex items-center gap-2">
-                    <HelpCircle className="w-4 h-4 text-slate-400 shrink-0" /> Ask Question
-                  </button>
-                  <button onClick={() => { setCreateOpen(false); navigate('/communities/create'); }} className="w-full px-4 py-2.5 hover:bg-slate-55 hover:text-blue-600 text-left flex items-center gap-2">
-                    <Users className="w-4 h-4 text-slate-400 shrink-0" /> Create Community
                   </button>
                   <button onClick={() => { setCreateOpen(false); navigate('/collaborations/create'); }} className="w-full px-4 py-2.5 hover:bg-slate-55 hover:text-blue-600 text-left flex items-center gap-2">
                     <Plus className="w-4 h-4 text-slate-400 shrink-0" /> Create Collaboration
