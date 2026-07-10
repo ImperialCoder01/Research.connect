@@ -309,6 +309,112 @@ class MessageController {
       next(err);
     }
   }
+
+  /**
+   * Start a call log
+   */
+  async startCall(req, res, next) {
+    try {
+      const { type, targetUserId, conversationId } = req.body;
+      const data = await messageService.logCallStart(req.user.id, { type, targetUserId, conversationId });
+      res.status(200).json({
+        success: true,
+        message: 'Call started successfully',
+        data,
+        error: null
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * End a call log
+   */
+  async endCall(req, res, next) {
+    try {
+      const { callId, status } = req.body;
+      const data = await messageService.logCallEnd(req.user.id, callId, status);
+      res.status(200).json({
+        success: true,
+        message: 'Call ended successfully',
+        data,
+        error: null
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Get call history
+   */
+  async getCallHistory(req, res, next) {
+    try {
+      const data = await messageService.getCallHistory(req.user.id);
+      res.status(200).json({
+        success: true,
+        message: 'Call history retrieved successfully',
+        data,
+        error: null
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Create a group conversation
+   */
+  async createGroup(req, res, next) {
+    try {
+      const { name, description, participantIds } = req.body;
+      const data = await messageService.createGroup(req.user.id, name, description, participantIds);
+      res.status(200).json({
+        success: true,
+        message: 'Group created successfully',
+        data,
+        error: null
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Invite member to group
+   */
+  async inviteToGroup(req, res, next) {
+    try {
+      const { conversationId, participantIds } = req.body;
+      const data = await messageService.inviteToGroup(req.user.id, conversationId, participantIds);
+      res.status(200).json({
+        success: true,
+        message: 'Members invited successfully',
+        data,
+        error: null
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Get shared files list
+   */
+  async getSharedFiles(req, res, next) {
+    try {
+      const data = await messageService.getSharedFiles(req.user.id);
+      res.status(200).json({
+        success: true,
+        message: 'Shared files retrieved successfully',
+        data,
+        error: null
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new MessageController();

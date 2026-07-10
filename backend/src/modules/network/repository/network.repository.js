@@ -418,6 +418,14 @@ class NetworkRepository {
         },
         { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
         {
+          $lookup: {
+            from: 'google_scholar_profiles',
+            localField: 'senderId',
+            foreignField: 'userId',
+            as: 'googleScholar'
+          }
+        },
+        {
           $project: {
             _id: 1,
             senderId: 1,
@@ -425,6 +433,7 @@ class NetworkRepository {
             note: 1,
             status: 1,
             createdAt: 1,
+            hasGoogleScholar: { $gt: [{ $size: '$googleScholar' }, 0] },
             user: {
               _id: 1,
               firstName: 1,
@@ -439,9 +448,12 @@ class NetworkRepository {
               institution: 1,
               department: 1,
               country: 1,
+              bio: 1,
+              skills: 1,
               researchAreas: 1,
               connectionsCount: 1,
-              followersCount: 1
+              followersCount: 1,
+              metrics: 1
             }
           }
         },
@@ -468,6 +480,14 @@ class NetworkRepository {
         },
         { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
         {
+          $lookup: {
+            from: 'google_scholar_profiles',
+            localField: 'receiverId',
+            foreignField: 'userId',
+            as: 'googleScholar'
+          }
+        },
+        {
           $project: {
             _id: 1,
             senderId: 1,
@@ -475,6 +495,7 @@ class NetworkRepository {
             note: 1,
             status: 1,
             createdAt: 1,
+            hasGoogleScholar: { $gt: [{ $size: '$googleScholar' }, 0] },
             user: {
               _id: 1,
               firstName: 1,
@@ -489,9 +510,12 @@ class NetworkRepository {
               institution: 1,
               department: 1,
               country: 1,
+              bio: 1,
+              skills: 1,
               researchAreas: 1,
               connectionsCount: 1,
-              followersCount: 1
+              followersCount: 1,
+              metrics: 1
             }
           }
         },

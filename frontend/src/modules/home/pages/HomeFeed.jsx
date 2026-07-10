@@ -109,7 +109,7 @@ const HomeFeed = () => {
       return null;
     },
     retry: false,
-    staleTime: 30 * 60 * 1000
+    staleTime: 5000
   });
 
   const suggestedResearchers = suggestionsData || [];
@@ -269,7 +269,10 @@ const HomeFeed = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await queryClient.refetchQueries({ queryKey: ['feed', activeTab] });
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ['feed', activeTab] }),
+      queryClient.invalidateQueries({ queryKey: ['scholarProfile'] })
+    ]);
     setRefreshing(false);
     toast.success('Feed refreshed!');
   };
@@ -280,6 +283,7 @@ const HomeFeed = () => {
       const res = await scholarService.reimport();
       if (res.success) {
         toast.success('Scholar Sync started in background!');
+        queryClient.invalidateQueries({ queryKey: ['scholarProfile'] });
         navigate('/research-identity');
       }
     } catch (err) {
