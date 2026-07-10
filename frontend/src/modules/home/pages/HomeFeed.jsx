@@ -1086,36 +1086,6 @@ const HomeFeed = () => {
           {/* 6. Google Scholar Analytics */}
           {renderGoogleScholarAnalytics()}
 
-          {/* 7. AI Research Insight */}
-          {sidebarData?.aiInsight && (
-            <div className="bg-[#EDE9FE]/50 border border-[#EDE9FE] p-6 rounded-[18px] shadow-sm space-y-4">
-              <h3 className="font-bold text-xs text-[#4F46E5] uppercase tracking-wider flex items-center gap-1.5">
-                <BrainCircuit className="w-4 h-4 text-[#4F46E5] animate-pulse" /> AI Research Insight
-              </h3>
-              <div className="space-y-3 text-xs text-[#475569] font-normal">
-                <p className="leading-relaxed">
-                  "{sidebarData.aiInsight.insight}"
-                </p>
-                <div className="pt-2 border-t border-[#EDE9FE] space-y-2 text-[11px]">
-                  <div className="flex justify-between">
-                    <span className="font-bold text-[#475569]/80">Research Gap:</span>
-                    <span className="font-semibold text-[#0F172A]">{sidebarData.aiInsight.researchGap}</span>
-                  </div>
-                  {sidebarData.aiInsight.suggestedPaperTitle !== 'N/A' && (
-                    <div className="flex justify-between">
-                      <span className="font-bold text-[#475569]/80">Suggested Paper:</span>
-                      <span 
-                        onClick={() => navigate(`/publication/${sidebarData.aiInsight.suggestedPaperSlug}`)}
-                        className="underline cursor-pointer hover:text-[#2563EB] truncate max-w-[150px] font-semibold text-[#0F172A]"
-                      >
-                        {sidebarData.aiInsight.suggestedPaperTitle}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 8. Upcoming Conferences */}
           <div className="bg-[#FFFFFF] border border-[#E2E8F0] p-6 rounded-[18px] shadow-sm space-y-4">
