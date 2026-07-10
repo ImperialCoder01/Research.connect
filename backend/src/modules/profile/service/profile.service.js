@@ -165,7 +165,18 @@ class ProfileService {
   }
 
   async getProfileBySlug(profileSlug) {
-    const user = await User.findOne({ profileSlug, isDeleted: { $ne: true } }).lean();
+    if (!profileSlug || profileSlug === 'undefined') {
+      throw new ValidationError('Invalid profile slug provided.');
+    }
+
+    const query = { isDeleted: { $ne: true } };
+    if (mongoose.Types.ObjectId.isValid(profileSlug)) {
+      query.$or = [{ _id: profileSlug }, { profileSlug }];
+    } else {
+      query.profileSlug = profileSlug;
+    }
+
+    const user = await User.findOne(query).lean();
     if (!user) {
       throw new NotFoundError(`Profile not found for slug: ${profileSlug}`);
     }

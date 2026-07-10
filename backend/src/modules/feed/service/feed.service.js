@@ -305,7 +305,8 @@ class FeedService {
     const followingIds = followingDocs.map(f => f.followingId.toString());
 
     // Query all profiles of other researchers
-    const allProfiles = await Profile.find({ userId: { $ne: userId } }).populate('userId', 'firstName lastName fullName email profileImage institution department designation');
+    const allProfiles = await Profile.find({ userId: { $ne: userId } })
+      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug username');
     const userSkills = userProfile ? userProfile.skills.map(s => s.name.toLowerCase()) : [];
 
     const suggestions = allProfiles.map(p => {
@@ -337,6 +338,7 @@ class FeedService {
 
     return filtered.map(item => ({
       userId: item.profile.userId?._id,
+      profileSlug: item.profile.userId?.profileSlug || item.profile.userId?.username,
       name: item.profile.userId?.fullName || `${item.profile.userId?.firstName} ${item.profile.userId?.lastName}`,
       avatar: item.profile.profileImage || item.profile.userId?.profileImage,
       institution: item.profile.institution,

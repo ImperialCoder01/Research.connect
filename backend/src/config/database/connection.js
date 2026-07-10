@@ -56,7 +56,10 @@ const connectDB = async () => {
 
 mongoose.connection.on('connected', () => logger.info('MongoDB connected.'));
 mongoose.connection.on('error', (err) => logger.error('MongoDB error:', err));
-mongoose.connection.on('disconnected', () => logger.warn('MongoDB disconnected.'));
+mongoose.connection.on('disconnected', () => {
+  logger.warn('MongoDB disconnected.');
+  connectionPromise = null; // Clear cached connection promise on disconnect
+});
 
 const checkHealth = () => {
   const readyState = mongoose.connection.readyState;

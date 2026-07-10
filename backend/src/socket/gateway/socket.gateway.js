@@ -33,7 +33,7 @@ class SocketGateway {
 
     // 2. Handle connections
     this.io.on('connection', async (socket) => {
-      const userId = socket.user.id || socket.user._id;
+      const userId = socket.user.userId || socket.user.id || socket.user._id;
       const socketId = socket.id;
 
       // Parse user-agent info if available
