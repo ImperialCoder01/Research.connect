@@ -4,6 +4,8 @@ const { socketAuthMiddleware, socketRateLimiter } = require('../middleware/socke
 const presenceManager = require('../presence/presence.manager');
 const roomManager = require('../rooms/room.manager');
 const SocketSession = require('../sessions/SocketSession');
+const env = require('../../config/environment');
+const { parseBrowser, parsePlatform, getDeviceType } = require('../../common/utils/userAgent.helper');
 
 class SocketGateway {
   constructor() {
@@ -17,9 +19,10 @@ class SocketGateway {
   init(server) {
     this.io = new Server(server, {
       cors: {
-        origin: '*', // Adjust for environment security needs
+        origin: env.clientUrl,
         methods: ['GET', 'POST']
       },
+
       pingTimeout: 20000,
       pingInterval: 25000
     });
@@ -37,14 +40,14 @@ class SocketGateway {
       const userAgentStr = socket.handshake.headers['user-agent'] || '';
       const ip = socket.handshake.address || '';
       
-      const browser = this.parseBrowser(userAgentStr);
-      const platform = this.parsePlatform(userAgentStr);
+      const browser = parseBrowser(userAgentStr);
+      const platform = parsePlatform(userAgentStr);
 
       logger.info(`🔌 Enterprise Socket connected: User ${userId} (${socketId}) on ${platform}/${browser}`);
 
       // Set user online
       await presenceManager.setUserOnline(userId, socketId, {
-        device: this.getDeviceType(userAgentStr),
+        device: getDeviceType(userAgentStr),
         platform,
         browser,
         ip
@@ -147,30 +150,7 @@ class SocketGateway {
       this.io.to(roomId).emit(event, data);
     }
   }
-
-  // Parses user agent details
-  parseBrowser(ua) {
-    if (/chrome|crios/i.test(ua)) return 'Chrome';
-    if (/firefox|fxios/i.test(ua)) return 'Firefox';
-    if (/safari/i.test(ua) && !/chrome/i.test(ua)) return 'Safari';
-    if (/msie|trident/i.test(ua)) return 'Internet Explorer';
-    return 'Other';
-  }
-
-  parsePlatform(ua) {
-    if (/windows/i.test(ua)) return 'Windows';
-    if (/macintosh|mac os x/i.test(ua)) return 'macOS';
-    if (/iphone|ipad|ipod/i.test(ua)) return 'iOS';
-    if (/android/i.test(ua)) return 'Android';
-    if (/linux/i.test(ua)) return 'Linux';
-    return 'Other';
-  }
-
-  getDeviceType(ua) {
-    if (/mobile|iphone|android.*mobile/i.test(ua)) return 'mobile';
-    if (/ipad|tablet/i.test(ua)) return 'tablet';
-    return 'desktop';
-  }
 }
 
 module.exports = new SocketGateway();
+

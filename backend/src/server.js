@@ -21,11 +21,14 @@ const startServer = async () => {
       
       // 4. Asynchronously spawn background tasks (Non-blocking)
       setImmediate(async () => {
-        try {
-          // Sync database indexes (skips automatically outside development)
-          await syncDatabaseIndexes();
-        } catch (err) {
-          logger.error('Failed database index audit in background:', err);
+        if (process.env.SYNC_INDEXES === 'true') {
+          try {
+            await syncDatabaseIndexes();
+          } catch (err) {
+            logger.error('Failed database index audit in background:', err);
+          }
+        } else {
+          logger.info('Database index syncing skipped (SYNC_INDEXES is not set to true).');
         }
 
         try {
