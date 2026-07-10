@@ -38,6 +38,11 @@ const connectDB = async () => {
       logger.info('Attempting to connect to MongoDB...');
       await mongoose.connect(MONGO_URI, options);
       retryCount = 0;
+      
+      // Asynchronously trigger database seeding check
+      const { seedData } = require('./seeder');
+      seedData().catch(err => logger.error('Seeder execution error:', err));
+
       return mongoose.connection;
     } catch (error) {
       retryCount++;

@@ -447,7 +447,7 @@ const PublicationsLibraryPage = () => {
         {/* 1. Header Area */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 pb-6">
           <div className="space-y-1">
-            {profileSlug && (
+            {profileSlug && profileSlug !== 'undefined' && (
               <button
                 onClick={() => navigate(`/profile/${profileSlug}`)}
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors mb-1.5"
