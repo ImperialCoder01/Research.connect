@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   ToggleLeft,
   ToggleRight,
@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Handshake,
 } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { TAG_STYLES } from "../data";
 import Avatar from "./Avatar";
 
@@ -19,6 +20,7 @@ export default function ProjectCard({
   onViewApplications,
   onClick,
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   // Some projects don't define an icon — fall back to a sensible default
   // instead of letting React blow up on <undefined />.
   const Icon = project.icon || Users;
@@ -31,6 +33,18 @@ export default function ProjectCard({
   // triggering the "open details drawer" click on the card itself.
   function stop(e) {
     e.stopPropagation();
+  }
+
+  async function copyProjectLink(e) {
+    stop(e);
+    const id = project.slug || project.id || project._id;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/projects/${id}`);
+      toast.success("Project link copied");
+    } catch {
+      toast.error("Could not copy the project link");
+    }
+    setMenuOpen(false);
   }
 
   return (
@@ -135,12 +149,16 @@ export default function ProjectCard({
           >
             View Project
           </button>
-          <button
-            onClick={stop}
-            className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"
-          >
-            <MoreHorizontal size={16} />
-          </button>
+          <div className="relative">
+            <button
+              onClick={(e) => { stop(e); setMenuOpen((open) => !open); }}
+              aria-label="Project actions"
+              className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50"
+            ><MoreHorizontal size={16} /></button>
+            {menuOpen && <div className="absolute right-0 top-9 z-20 w-36 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+              <button onClick={copyProjectLink} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50">Copy link</button>
+            </div>}
+          </div>
         </div>
         {project.openToCollaboration &&
           (hasApplied ? (

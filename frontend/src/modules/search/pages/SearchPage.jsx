@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, BookOpen, Users, Building2, Mic2, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, BookOpen, Users, Building2, Mic2, FolderKanban, SlidersHorizontal, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import searchService from '../../../services/search.service';
@@ -17,6 +17,7 @@ const TABS = [
   { key: 'authors',      label: 'Authors',       icon: Users },
   { key: 'journals',     label: 'Journals',      icon: Building2 },
   { key: 'conferences',  label: 'Conferences',   icon: Mic2 },
+  { key: 'projects',     label: 'Projects',      icon: FolderKanban },
 ];
 
 const DEFAULT_FILTERS = {
@@ -178,14 +179,22 @@ const SearchPage = () => {
     staleTime: 60 * 1000,
   });
 
+  const projectsQuery = useQuery({
+    queryKey: ['search-projects', query, sort, page],
+    queryFn: () => searchService.searchProjects({ q: query, sort, page, limit: 15 }),
+    enabled: (activeTab === 'all' || activeTab === 'projects') && !!query,
+    staleTime: 30 * 1000,
+  });
+
   const activeFilterCount = countActiveFilters(filters);
 
   const pubResults = pubQuery.data?.data || {};
   const authResults = authQuery.data?.data || {};
   const journalResults = journalsQuery.data?.data || {};
   const confResults = confsQuery.data?.data || {};
+  const projectResults = projectsQuery.data?.data || {};
 
-  const isLoading = pubQuery.isFetching || authQuery.isFetching || journalsQuery.isFetching || confsQuery.isFetching;
+  const isLoading = pubQuery.isFetching || authQuery.isFetching || journalsQuery.isFetching || confsQuery.isFetching || projectsQuery.isFetching;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
@@ -284,6 +293,9 @@ const SearchPage = () => {
                     {(activeTab === 'authors') && authResults.total !== undefined && (
                       <span><strong className="text-gray-900">{authResults.total?.toLocaleString()}</strong> authors</span>
                     )}
+                    {(activeTab === 'projects') && projectResults.total !== undefined && (
+                      <span><strong className="text-gray-900">{projectResults.total?.toLocaleString()}</strong> projects</span>
+                    )}
                     {' '}for <strong className="text-gray-900">"{query}"</strong>
                   </p>
                   {isLoading && <div className="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />}
@@ -308,6 +320,18 @@ const SearchPage = () => {
                         </>
                       : query && !pubQuery.isLoading && <EmptyState query={query} />
                   }
+                </div>
+              )}
+
+              {(activeTab === 'all' || activeTab === 'projects') && projectResults.results?.length > 0 && (
+                <div className="space-y-4 mt-8">
+                  {activeTab === 'all' && <h2 className="text-base font-bold text-gray-900 flex items-center gap-2"><FolderKanban className="w-5 h-5 text-blue-600" /> Projects</h2>}
+                  {projectResults.results.map((project) => (
+                    <button key={project._id} onClick={() => navigate(`/projects/${project.slug || project._id}`)} className="block w-full rounded-2xl border border-gray-200 bg-white p-5 text-left transition hover:border-blue-300 hover:shadow-md">
+                      <div className="flex items-start justify-between gap-4"><div><p className="text-base font-bold text-gray-900">{project.title}</p><p className="mt-1 line-clamp-2 text-sm text-gray-500">{project.description}</p><div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">{project.researchDomain || 'Research'}</span>{project.tags?.slice(0, 3).map((tag) => <span key={tag} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{tag}</span>)}</div></div><span className="whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-600">{project.status}</span></div>
+                    </button>
+                  ))}
+                  {activeTab === 'projects' && <Pagination page={projectResults.page || page} totalPages={projectResults.totalPages || 1} onPageChange={setPage} />}
                 </div>
               )}
 

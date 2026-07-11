@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -30,6 +31,7 @@ const TAB_TO_CATEGORY = {
 const ITEMS_PER_PAGE = 4;
 
 export default function ProjectsPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("All Projects");
   const [search, setSearch] = useState("");
   const [projects, setProjects] = useState(PROJECTS);
@@ -315,7 +317,7 @@ export default function ProjectsPage() {
 
             {/* Right sidebar */}
             <aside className="w-full flex-shrink-0 space-y-5 xl:w-80">
-              <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
+              <button onClick={() => navigate("/projects/create")} className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
                 <Plus size={16} /> Create New Project
               </button>
 

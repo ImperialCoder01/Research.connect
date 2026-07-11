@@ -34,6 +34,11 @@ class SearchController {
     return res.success('Publications search completed.', results);
   });
 
+  searchProjects = asyncHandler(async (req, res) => {
+    const results = await searchService.searchProjects(req.query);
+    return res.success('Projects search completed.', results);
+  });
+
   // GET /api/v1/search/authors
   searchAuthors = asyncHandler(async (req, res) => {
     const results = await searchService.searchAuthors(req.query);
