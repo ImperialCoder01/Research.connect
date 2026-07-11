@@ -131,7 +131,7 @@ const AuthenticatedNavbar = () => {
 
   return (
     <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300">
-      <div className="max-w-[95%] xl:max-w-[92%] mx-auto px-2 sm:px-4 lg:px-6">
+      <div className="max-w-[95%] xl:max-w-[92%] mx-auto px-1.5 sm:px-4 lg:px-6">
         {mobileSearchOpen ? (
           <div className="flex items-center h-16 gap-2 md:hidden">
             <form onSubmit={handleSearchSubmit} className="flex-grow relative">
@@ -156,15 +156,15 @@ const AuthenticatedNavbar = () => {
             </button>
           </div>
         ) : (
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex items-center justify-between h-16 gap-2 sm:gap-4">
 
           {/* Logo - Far Left */}
-          <div className="flex-shrink-0 flex items-center -ml-3 sm:-ml-2">
-            <Link to="/" className="flex items-center gap-1.5">
-              <span className="hidden sm:flex p-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white items-center justify-center">
-                <Share2 className="w-5 h-5" />
+          <div className="flex-shrink-0 flex items-center -ml-1 sm:-ml-2">
+            <Link to="/" className="flex items-center gap-1 sm:gap-1.5">
+              <span className="flex p-1.5 sm:p-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white items-center justify-center shrink-0">
+                <Share2 className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
               </span>
-              <span className="font-bold text-base sm:text-xl tracking-tight text-slate-900">
+              <span className="font-bold text-sm sm:text-xl tracking-tight text-slate-900 whitespace-nowrap">
                 Research <span className="text-blue-600">Connect</span>
               </span>
             </Link>
@@ -295,22 +295,22 @@ const AuthenticatedNavbar = () => {
           </div>
 
           {/* Utility Buttons - spaced out */}
-          <div className="flex items-center gap-x-4">
+          <div className="flex items-center gap-x-1 sm:gap-x-2.5 md:gap-x-4">
 
             {/* Mobile Search Trigger */}
             <button
               onClick={() => setMobileSearchOpen(true)}
-              className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-all md:hidden"
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-all md:hidden shrink-0"
               aria-label="Search"
             >
-              <Search className="w-5 h-5" />
+              <Search className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
             </button>
 
             {/* Create Dropdown */}
-            <div className="relative" ref={createRef}>
+            <div className="relative shrink-0" ref={createRef}>
               <button
                 onClick={() => setCreateOpen(!createOpen)}
-                className="flex items-center gap-0.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] sm:text-xs px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-md shadow-sm active:scale-[0.98] transition-all"
+                className="flex items-center gap-0.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] sm:text-xs px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-md shadow-sm active:scale-[0.98] transition-all"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Create</span>
@@ -341,17 +341,17 @@ const AuthenticatedNavbar = () => {
             </div>
 
             {/* Requests, Messages, Notifications - spaced out */}
-            <div className="flex items-center gap-x-2.5">
+            <div className="flex items-center gap-x-0.5 sm:gap-x-1.5 md:gap-x-2.5">
               {/* Requests */}
-              <div className="relative" ref={reqRef}>
+              <div className="relative shrink-0" ref={reqRef}>
                 <button
                   onClick={() => setReqOpen(!reqOpen)}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-all relative cursor-pointer"
+                  className="p-1 sm:p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-all relative cursor-pointer"
                   title="Requests"
                 >
-                  <UserPlus className="w-5 h-5" />
+                  <UserPlus className="w-[18px] h-[18px] sm:w-5 sm:h-5" />
                   {receivedRequests && receivedRequests.length > 0 && (
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
+                    <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
                   )}
                 </button>
                 {reqOpen && (

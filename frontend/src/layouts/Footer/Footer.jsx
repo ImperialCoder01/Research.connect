@@ -2,6 +2,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Share2, Twitter, Linkedin, Mail, Github, ArrowRight } from 'lucide-react';
 
+const legalLinks = [
+  { label: 'Privacy Policy', href: '/privacy' },
+  { label: 'Terms of Service', href: '/terms' },
+];
+
 const footerLinks = {
   Platform: [
     { label: 'Features', href: '#features' },
@@ -122,10 +127,10 @@ const Footer = () => {
             © {new Date().getFullYear()} Research Connect. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
-            {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item) => (
-              <a key={item} href="#" className="text-slate-500 text-xs hover:text-slate-300 transition-colors">
-                {item}
-              </a>
+            {legalLinks.map(({ label, href }) => (
+              <Link key={label} to={href} className="text-slate-500 text-xs hover:text-slate-300 transition-colors">
+                {label}
+              </Link>
             ))}
           </div>
         </div>
