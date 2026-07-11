@@ -90,7 +90,7 @@ class NotificationService extends BaseService {
   }
 
   async updateSettings(recipientId, settings) {
-    const allowedKeys = ['follow', 'connection', 'publication', 'comment', 'mention', 'system'];
+    const allowedKeys = ['follow', 'connection', 'publication', 'comment', 'mention', 'system', 'emailAlerts', 'weeklyDigest', 'newMessages'];
     const updates = Object.keys(settings || {}).reduce((acc, key) => {
       if (allowedKeys.includes(key)) {
         acc[key] = Boolean(settings[key]);
@@ -115,6 +115,15 @@ class NotificationService extends BaseService {
       { new: true, upsert: true, setDefaultsOnInsert: true }
     ).lean();
 
+    try {
+      const { ProfileCache } = require('../../../cache/cache.service');
+      if (ProfileCache) {
+        await ProfileCache.del(recipientId.toString());
+      }
+    } catch (err) {
+      logger.error(`Failed to invalidate ProfileCache: ${err.message}`);
+    }
+
     return profile.notificationSettings;
   }
 
@@ -134,6 +143,9 @@ class NotificationService extends BaseService {
       comment: true,
       mention: true,
       system: true,
+      emailAlerts: true,
+      weeklyDigest: true,
+      newMessages: true,
       ...(profile?.notificationSettings || {})
     };
   }
@@ -145,7 +157,10 @@ class NotificationService extends BaseService {
       publication: true,
       comment: true,
       mention: true,
-      system: true
+      system: true,
+      emailAlerts: true,
+      weeklyDigest: true,
+      newMessages: true
     };
   }
 
