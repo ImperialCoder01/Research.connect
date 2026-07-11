@@ -464,21 +464,38 @@ class ScholarService {
           }
         }
 
-        // Execute bulk database updates
-        if (bulkUpdateOps.length > 0) {
-          await publicationRepository.bulkUpdate(bulkUpdateOps);
+        // Execute bulk database updates and inserts in a single high-performance bulkWrite call
+        const bulkOps = [...bulkUpdateOps];
+        const successfulPubIds = new Set();
+
+        for (const pubDoc of newPubsToCreate) {
+          bulkOps.push({
+            insertOne: {
+              document: pubDoc
+            }
+          });
+          successfulPubIds.add(pubDoc._id.toString());
         }
 
-        // Insert new publications individually for granular error tracking
-        const successfulPubIds = new Set();
-        for (const pubDoc of newPubsToCreate) {
+        if (bulkOps.length > 0) {
           try {
-            await publicationRepository.model.create(pubDoc);
-            successfulPubIds.add(pubDoc._id.toString());
-          } catch (pubErr) {
-            logger.error(`[Scholar] Failed to insert publication "${pubDoc.title}": ${pubErr.message}`);
-            failedPublications.push({ title: pubDoc.title, error: pubErr.message });
-            importedPublicationsCount--; // Correct the count
+            await publicationRepository.model.bulkWrite(bulkOps, { ordered: false });
+          } catch (bulkErr) {
+            logger.error(`[Scholar] Bulk write publications failed or returned partial errors: ${bulkErr.message}`);
+            // Check for individual write errors and populate failedPublications/importedPublicationsCount
+            if (bulkErr.writeErrors) {
+              bulkErr.writeErrors.forEach(we => {
+                const op = bulkOps[we.index];
+                if (op && op.insertOne) {
+                  const title = op.insertOne.document.title;
+                  const pubId = op.insertOne.document._id.toString();
+                  logger.error(`[Scholar] Failed to insert publication "${title}": ${we.errmsg}`);
+                  failedPublications.push({ title, error: we.errmsg });
+                  successfulPubIds.delete(pubId);
+                  importedPublicationsCount--;
+                }
+              });
+            }
           }
         }
 
@@ -488,7 +505,7 @@ class ScholarService {
           try {
             await publicationAuthorRepository.model.insertMany(validAuthors, { ordered: false });
           } catch (authorErr) {
-            logger.warn(`[Scholar] Some author records failed to insert: ${authorErr.message}`);
+            logger.warn(`[Scholar] Some author records failed to insert during bulk save: ${authorErr.message}`);
           }
         }
 
@@ -499,7 +516,7 @@ class ScholarService {
             const PublicationMetric = require('../../../models/PublicationMetric');
             await PublicationMetric.insertMany(validMetrics, { ordered: false });
           } catch (metricErr) {
-            logger.warn(`[Scholar] Some metric records failed to insert: ${metricErr.message}`);
+            logger.warn(`[Scholar] Some metric records failed to insert during bulk save: ${metricErr.message}`);
           }
         }
       }
@@ -602,6 +619,19 @@ class ScholarService {
       }
 
       await updateProgress(100, 'Academic portfolio synchronized successfully!');
+
+      // Invalidate Redis/in-memory caches to update UI immediately
+      try {
+        const { ProfileCache, FeedCache, ScholarCache } = require('../../../cache/cache.service');
+        await Promise.all([
+          ProfileCache.del(String(userId)),
+          ScholarCache.del(String(userId)),
+          FeedCache.flush()
+        ]);
+        logger.info(`[ScholarSync] Redis cache invalidated successfully for user: ${userId}`);
+      } catch (cacheErr) {
+        logger.error(`[ScholarSync] Redis cache invalidation failed: ${cacheErr.message}`);
+      }
     } catch (err) {
       // Record Sync History failure
       await syncHistoryRepository.create({
