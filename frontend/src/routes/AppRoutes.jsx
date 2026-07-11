@@ -54,6 +54,10 @@ const BookmarksFeed = React.lazy(() => import('../modules/feed/pages/BookmarksFe
 // Profile module routes nested
 import profileRoutes from '../modules/profile/routes/profile.routes';
 
+// Legal pages
+const TermsOfServicePage = React.lazy(() => import('../modules/legal/pages/TermsOfServicePage'));
+const PrivacyPolicyPage = React.lazy(() => import('../modules/legal/pages/PrivacyPolicyPage'));
+
 const AppRoutes = () => {
   return (
     <React.Suspense fallback={
@@ -96,6 +100,8 @@ const AppRoutes = () => {
 
         {/* Public Root Route — handles guest landing page or auth redirect to /home */}
         <Route path="/" element={<HomeHub />} />
+        <Route path="/terms" element={<TermsOfServicePage />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
         {/* Dashboard & Modules Layout (No Sidebar) */}
         <Route element={

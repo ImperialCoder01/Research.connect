@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { setQuery } from '../../../redux/slices/searchSlice';
@@ -1308,8 +1308,15 @@ const HomeFeed = () => {
             <div>
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4">Resources</h4>
               <ul className="space-y-2.5 text-xs text-slate-500 font-semibold">
-                {['Privacy Policy', 'Terms of Service', 'Support Forum', 'Contact Us'].map(link => (
-                  <li key={link} className="hover:text-blue-600 transition-colors cursor-pointer">{link}</li>
+                {[
+                  { label: 'Privacy Policy', to: '/privacy' },
+                  { label: 'Terms of Service', to: '/terms' },
+                  { label: 'Support Forum', to: '#' },
+                  { label: 'Contact Us', to: '#' },
+                ].map(({ label, to }) => (
+                  <li key={label}>
+                    <Link to={to} className="hover:text-blue-600 transition-colors cursor-pointer">{label}</Link>
+                  </li>
                 ))}
               </ul>
             </div>
