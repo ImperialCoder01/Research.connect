@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useQueryClient } from '@tanstack/react-query';
@@ -65,7 +65,8 @@ import {
   ScopusIcon, 
   LinkedinIcon 
 } from '../components/BrandIcons';
-import { compressImage } from '../../../utils/imageCompressor';
+import { compressImage, compressBanner } from '../../../utils/imageCompressor';
+import ImageUploadModal from '../components/ImageUploadModal';
 
 // Subcomponents
 import ProfileHeader from '../components/ProfileHeader';
@@ -88,6 +89,12 @@ const ProfileOverview = () => {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('about');
   const [showAllCoAuthors, setShowAllCoAuthors] = useState(false);
+
+  // Upload modal state
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [bannerModalOpen, setBannerModalOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
   const [pubsList, setPubsList] = useState([]);
   const [pubsPage, setPubsPage] = useState(1);
@@ -206,71 +213,89 @@ const ProfileOverview = () => {
     }
   };
 
-  const handleUploadAvatar = async (file) => {
-    const loadingToast = toast.loading('Compressing profile image...');
+  const handleUploadAvatar = useCallback(async (file) => {
+    setUploading(true);
+    setUploadProgress(0);
+    const loadingToast = toast.loading('Compressing profile image…');
     try {
-      // Validate and compress the file client-side
-      const compressedFile = await compressImage(file);
-      toast.loading('Uploading compressed profile image...', { id: loadingToast });
-      const res = await profileService.updateAvatar(compressedFile);
+      // Compress to 512×512 WebP with center-crop (avatar preset)
+      const compressedFile = await compressImage(file, 'avatar');
+      toast.loading('Uploading to Cloudflare R2…', { id: loadingToast });
+
+      const res = await profileService.updateAvatar(compressedFile, (progressEvent) => {
+        const pct = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+        setUploadProgress(pct);
+      });
+
       if (res.success) {
-        toast.success('Profile avatar updated successfully!', { id: loadingToast });
+        toast.success('Profile photo updated!', { id: loadingToast });
         const updatedProfile = res.data;
         const imageUrl = updatedProfile.profileImage;
-        
-        // Update Query cache and Redux state
+
+        // Optimistic: update React Query cache immediately
         queryClient.setQueryData(['profile', username], (old) => {
           if (!old) return old;
-          return {
-            ...old,
-            data: updatedProfile
-          };
+          return { ...old, data: updatedProfile };
         });
+
+        // Update Redux state so Navbar + all components reflect instantly
         if (isOwnProfile) {
           dispatch(updateProfileState(updatedProfile));
-          dispatch(updateUserState({
-            ...currentUser,
-            profileImage: imageUrl
-          }));
+          dispatch(updateUserState({ ...currentUser, profileImage: imageUrl }));
         }
+
+        setAvatarModalOpen(false);
         refetch();
       } else {
-        toast.error('Failed to update avatar profile record', { id: loadingToast });
+        toast.error('Upload failed. Please retry.', { id: loadingToast });
       }
     } catch (err) {
-      console.error(err);
+      console.error('[ProfileOverview] Avatar upload error:', err);
       toast.error(err.message || 'Failed to upload profile photo', { id: loadingToast });
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
     }
-  };
+  }, [username, isOwnProfile, currentUser, dispatch, queryClient, refetch]);
 
-  const handleUploadCover = async (file) => {
-    const loadingToast = toast.loading('Uploading cover banner...');
+  const handleUploadCover = useCallback(async (file) => {
+    setUploading(true);
+    setUploadProgress(0);
+    const loadingToast = toast.loading('Compressing banner…');
     try {
-      const res = await profileService.updateBanner(file);
+      // Compress to 1920×480 WebP (banner preset)
+      const compressedFile = await compressImage(file, 'banner');
+      toast.loading('Uploading banner to Cloudflare R2…', { id: loadingToast });
+
+      const res = await profileService.updateBanner(compressedFile, (progressEvent) => {
+        const pct = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+        setUploadProgress(pct);
+      });
+
       if (res.success) {
-        toast.success('Cover banner updated successfully!', { id: loadingToast });
+        toast.success('Cover banner updated!', { id: loadingToast });
         const updatedProfile = res.data;
 
-        // Update Query cache and Redux state
+        // Optimistic: update React Query cache
         queryClient.setQueryData(['profile', username], (old) => {
           if (!old) return old;
-          return {
-            ...old,
-            data: updatedProfile
-          };
+          return { ...old, data: updatedProfile };
         });
-        if (isOwnProfile) {
-          dispatch(updateProfileState(updatedProfile));
-        }
+
+        if (isOwnProfile) dispatch(updateProfileState(updatedProfile));
+        setBannerModalOpen(false);
         refetch();
       } else {
-        toast.error('Failed to update banner profile record', { id: loadingToast });
+        toast.error('Banner upload failed. Please retry.', { id: loadingToast });
       }
     } catch (err) {
-      console.error(err);
+      console.error('[ProfileOverview] Banner upload error:', err);
       toast.error(err.message || 'Failed to upload cover banner', { id: loadingToast });
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
     }
-  };
+  }, [username, isOwnProfile, dispatch, queryClient, refetch]);
 
   const handleFollow = () => {
     toast.success('Successfully followed researcher!');
@@ -282,19 +307,44 @@ const ProfileOverview = () => {
 
   return (
     <div className="space-y-6">
-      {/* Profile Header (Cover image, Banner, Avatar) ONLY visible on this main Overview page */}
+      {/* Profile Header */}
       <ProfileHeader
         profile={profile}
         user={profile}
         onEdit={() => setIsEditOpen(true)}
         onShare={() => setIsShareOpen(true)}
-        onFollow={handleFollow}
-        onConnect={handleConnect}
-        onAvatarChange={handleUploadAvatar}
-        onCoverChange={handleUploadCover}
+        onFollow={() => toast.success('Successfully followed researcher!')}
+        onConnect={() => toast.success('Connection request sent!')}
+        onAvatarChange={() => setAvatarModalOpen(true)}
+        onCoverChange={() => setBannerModalOpen(true)}
         isOwnProfile={isOwnProfile}
         onSync={() => navigate(`/profile/${username}/research-identity`)}
       />
+
+      {/* Avatar Upload Modal */}
+      <ImageUploadModal
+        isOpen={avatarModalOpen}
+        onClose={() => !uploading && setAvatarModalOpen(false)}
+        onUpload={handleUploadAvatar}
+        title="Update Profile Photo"
+        hint="Drag & drop your photo here or click to browse"
+        aspectHint="Square (1:1) · Will be cropped to 512×512"
+        uploading={uploading}
+        progress={uploadProgress}
+      />
+
+      {/* Banner Upload Modal */}
+      <ImageUploadModal
+        isOpen={bannerModalOpen}
+        onClose={() => !uploading && setBannerModalOpen(false)}
+        onUpload={handleUploadCover}
+        title="Update Cover Banner"
+        hint="Drag & drop your banner image here or click to browse"
+        aspectHint="Wide (16:3) · Recommended 1920×480px"
+        uploading={uploading}
+        progress={uploadProgress}
+      />
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left/Center Main Column */}

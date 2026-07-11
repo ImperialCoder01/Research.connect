@@ -55,6 +55,22 @@ class ProfileController {
     return res.success('Profile avatar photo updated successfully.', profile);
   });
 
+  // Delete profile photo and reset to default
+  deletePhoto = asyncHandler(async (req, res) => {
+    const uploadService = require('../../upload/service/upload.service');
+    await uploadService.deleteProfilePhoto(req.user._id);
+    const profile = await profileService.getProfile(req.user._id);
+    return res.success('Profile photo removed successfully.', profile);
+  });
+
+  // Delete profile banner and reset to default
+  deleteBanner = asyncHandler(async (req, res) => {
+    const uploadService = require('../../upload/service/upload.service');
+    await uploadService.deleteProfileBanner(req.user._id);
+    const profile = await profileService.getProfile(req.user._id);
+    return res.success('Profile banner removed and reset to default.', profile);
+  });
+
   // Update basic details (First Name, Last Name, Headline, etc.)
   updateBasic = asyncHandler(async (req, res) => {
     const { firstName, lastName, designation, headline, country, state, city, institution, department, displayName } = req.body;

@@ -42,6 +42,12 @@ router.patch(
   (req, res, next) => { if (req.file) return validateUpload(req, res, next); next(); },
   profileController.updateAvatar
 );
+
+// Delete profile photo (removes from R2 + clears MongoDB URL)
+router.delete('/photo', profileController.deletePhoto);
+
+// Delete profile banner (removes from R2 + resets to default)
+router.delete('/banner', profileController.deleteBanner);
 router.patch('/basic', updateProfileValidator, profileController.updateBasic);
 router.patch('/about', updateProfileValidator, profileController.updateAbout);
 router.patch('/skills', updateProfileValidator, profileController.updateSkills);
