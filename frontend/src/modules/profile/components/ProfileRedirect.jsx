@@ -6,7 +6,7 @@ const ProfileRedirect = () => {
   const { user } = useSelector((state) => state.auth);
 
   if (user) {
-    const slug = user.profileSlug && user.profileSlug !== 'undefined' ? user.profileSlug : (user.username || 'me');
+    const slug = user.slug || (user.profileSlug && user.profileSlug !== 'undefined' ? user.profileSlug : null) || user.username || 'me';
     return <Navigate to={`/profile/${slug}`} replace />;
   }
 

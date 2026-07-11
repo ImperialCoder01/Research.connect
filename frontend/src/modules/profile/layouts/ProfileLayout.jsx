@@ -18,7 +18,11 @@ const ProfileLayout = () => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Determine if viewing own profile
-  const isOwnProfile = currentUser && (currentUser.profileSlug === username || currentUser.username === username);
+  const isOwnProfile = currentUser && (
+    currentUser.slug === username ||
+    currentUser.profileSlug === username ||
+    currentUser.username === username
+  );
 
   // Query to fetch profile details (hydrated from all collections)
   const { data: profileData, isLoading, error, refetch } = useQuery({
