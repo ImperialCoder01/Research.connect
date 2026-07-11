@@ -20,7 +20,7 @@ const ProfileSidebar = ({ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobile
     { name: 'Profile', path: `/profile/${profileSlug}`, icon: User, end: true },
     { name: 'Research Identity', path: `/profile/${profileSlug}/research-identity`, icon: Globe },
     { name: 'Publications', path: `/profile/${profileSlug}/publications`, icon: FileText },
-    { name: 'Projects', path: `/profile/${profileSlug}/projects`, icon: Briefcase },
+    { name: 'Projects', path: '/projects', icon: Briefcase },
     { name: 'My Network', path: '/network', icon: Users },
     { name: 'Messages', path: '/messages', icon: MessageSquare },
     { name: 'Followers', path: `/profile/${profileSlug}/followers`, icon: UserCheck },

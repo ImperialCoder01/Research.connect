@@ -1,35 +1,18 @@
-const uploadService = require('../../upload/service/upload.service');
+const Project = require('../models/Project');
 const asyncHandler = require('../../../common/middlewares/asyncHandler.middleware');
-const { ValidationError } = require('../../../common/errors/AppError');
-
-class ProjectController {
-  /**
-   * Upload project image/file
-   */
-  uploadFile = asyncHandler(async (req, res) => {
-    if (!req.file) {
-      throw new ValidationError('No file was uploaded.');
-    }
-
-    const { projectId } = req.body;
-
-    const result = await uploadService.uploadFile({
-      file: req.file,
-      userId: req.user._id,
-      purpose: 'project-image',
-      resourceId: projectId
-    });
-
-    return res.success('Project file uploaded successfully.', {
-      projectId: result.resourceId,
-      secure_url: result.secure_url,
-      public_id: result.public_id,
-      asset_id: result.asset_id,
-      resource_type: result.resource_type,
-      bytes: result.bytes,
-      format: result.format
-    }, 201);
-  });
-}
-
-module.exports = new ProjectController();
+const { NotFoundError, ForbiddenError } = require('../../../common/errors/AppError');
+const githubService = require('../services/github.service');
+const get = async (id) => { const project = await Project.findOne({ $or: [{ _id: id }, { slug: id }] }); if (!project) throw new NotFoundError('Project not found.'); return project; };
+const permitted = (project, user) => project.owner.toString() === user._id.toString() || user.role === 'admin';
+exports.create = asyncHandler(async (req, res) => res.success('Project created successfully.', await Project.create({ ...req.body, owner: req.user._id, userId: req.user._id }), 201));
+exports.list = asyncHandler(async (req, res) => { const { page = 1, limit = 12, search, status, domain, owner, sort = '-createdAt' } = req.query; const query = { isArchived: req.query.archived === 'true' }; if (search) query.$text = { $search: search }; if (status) query.status = status; if (domain) query.researchDomain = domain; if (owner === 'me') query.owner = req.user._id; const [projects, total] = await Promise.all([Project.find(query).populate('owner', 'name avatar').sort(sort).skip((page - 1) * limit).limit(Number(limit)), Project.countDocuments(query)]); res.success('Projects retrieved successfully.', { projects, pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / limit) } }); });
+exports.detail = asyncHandler(async (req, res) => res.success('Project retrieved successfully.', await get(req.params.id)));
+exports.update = asyncHandler(async (req, res) => { const project = await get(req.params.id); if (!permitted(project, req.user)) throw new ForbiddenError('Only the project owner can edit this project.'); Object.assign(project, req.body); await project.save(); res.success('Project updated successfully.', project); });
+exports.remove = asyncHandler(async (req, res) => { const project = await get(req.params.id); if (!permitted(project, req.user)) throw new ForbiddenError('Only the project owner can delete this project.'); await project.deleteOne(); res.success('Project deleted successfully.'); });
+exports.archive = asyncHandler(async (req, res) => { const project = await get(req.params.id); if (!permitted(project, req.user)) throw new ForbiddenError('Only the project owner can archive this project.'); project.isArchived = !project.isArchived; project.status = project.isArchived ? 'Archived' : 'Draft'; await project.save(); res.success('Project archive state updated.', project); });
+exports.status = asyncHandler(async (req, res) => { const project = await get(req.params.id); if (!permitted(project, req.user)) throw new ForbiddenError('Only the project owner can update status.'); project.status = req.body.status; await project.save(); res.success('Project status updated.', project); });
+exports.progress = asyncHandler(async (req, res) => { const project = await get(req.params.id); if (!permitted(project, req.user)) throw new ForbiddenError('Only the project owner can update progress.'); project.progress = req.body.progress; await project.save(); res.success('Project progress updated.', project); });
+exports.addMember = asyncHandler(async (req, res) => { const project = await get(req.params.id); if (!permitted(project, req.user)) throw new ForbiddenError('Only the project owner can add members.'); project.collaborators.push(req.body); await project.save(); res.success('Member added successfully.', project); });
+exports.removeMember = asyncHandler(async (req, res) => { const project = await get(req.params.id); if (!permitted(project, req.user)) throw new ForbiddenError('Only the project owner can remove members.'); project.collaborators.id(req.params.memberId).deleteOne(); await project.save(); res.success('Member removed successfully.', project); });
+exports.syncGitHub = asyncHandler(async (req, res) => { const project = await get(req.params.id); if (!permitted(project, req.user)) throw new ForbiddenError('Only the project owner can sync GitHub data.'); const repository = await githubService.getRepository(req.body.githubUrl || project.githubUrl); project.githubUrl = repository.url; project.githubRepository = { ...repository, syncedAt: new Date() }; if (!project.description && repository.description) project.description = repository.description; await project.save(); res.success('GitHub repository synced successfully.', project); });
+exports.stats = asyncHandler(async (req, res) => { const rows = await Project.aggregate([{ $match: { owner: req.user._id, isArchived: false } }, { $group: { _id: '$status', count: { $sum: 1 }, collaborators: { $sum: { $size: '$collaborators' } } } }]); const value = (status) => rows.find((row) => row._id === status)?.count || 0; res.success('Project dashboard statistics retrieved.', { totalProjects: rows.reduce((n, row) => n + row.count, 0), collaborators: rows.reduce((n, row) => n + row.collaborators, 0), activeProjects: value('Active') + value('In Progress'), completed: value('Completed'), breakdown: rows }); });

@@ -7,6 +7,7 @@ const SearchHistory = require('../../../models/SearchHistory');
 const SearchAnalytic = require('../../../models/SearchAnalytic');
 const User = require('../../../models/User');
 const Profile = require('../../../models/Profile');
+const Project = require('../../project/models/Project');
 const { ValidationError } = require('../../../common/errors/AppError');
 
 // Sanitize a query string to prevent regex injection
@@ -19,6 +20,17 @@ const sanitizeQuery = (q = '') => {
 const buildRegex = (q, options = 'i') => new RegExp(sanitizeQuery(q), options);
 
 class SearchService {
+
+  async searchProjects(params) {
+    const { q = '', status, domain, tags, owner, page = 1, limit = 20, sort = 'relevance' } = params;
+    const pageNum = Math.max(1, parseInt(page, 10)); const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+    const filter = { isArchived: false, visibility: 'Public' };
+    if (q.trim()) filter.$text = { $search: q.trim() };
+    if (status) filter.status = status; if (domain) filter.researchDomain = buildRegex(domain); if (tags) filter.tags = { $in: String(tags).split(',').map(buildRegex) }; if (owner) filter.owner = owner;
+    const sortMap = { newest: { createdAt: -1 }, oldest: { createdAt: 1 }, alphabetical: { title: 1 }, updated: { updatedAt: -1 }, relevance: filter.$text ? { score: { $meta: 'textScore' }, updatedAt: -1 } : { updatedAt: -1 } };
+    const [results, total] = await Promise.all([Project.find(filter, filter.$text ? { score: { $meta: 'textScore' } } : {}).populate('owner', 'firstName lastName fullName profileSlug avatar').sort(sortMap[sort] || sortMap.relevance).skip((pageNum - 1) * limitNum).limit(limitNum).lean(), Project.countDocuments(filter)]);
+    return { results, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+  }
 
   // ─── Core Publication Search ─────────────────────────────────────────────────
   async searchPublications(params) {
@@ -463,12 +475,12 @@ class SearchService {
 
   // ─── Autocomplete ────────────────────────────────────────────────────────────
   async getAutocomplete(query) {
-    if (!query || query.trim().length < 2) return { publications: [], authors: [], journals: [], conferences: [], keywords: [] };
+    if (!query || query.trim().length < 2) return { publications: [], authors: [], journals: [], conferences: [], keywords: [], projects: [] };
 
     const regex = buildRegex(query);
     const baseFilter = { isDeleted: { $ne: true }, status: 'published', visibility: 'Public' };
 
-    const [publications, authors, journalDocs, conferenceDocs, keywordDocs] = await Promise.all([
+    const [publications, authors, journalDocs, conferenceDocs, keywordDocs, projects] = await Promise.all([
       Publication.find(
         { ...baseFilter, title: regex },
         { title: 1, slug: 1, publicationType: 1, authors: 1, year: 1 }
@@ -488,7 +500,8 @@ class SearchService {
         { $group: { _id: '$keyword', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
         { $limit: 5 }
-      ])
+      ]),
+      Project.find({ isArchived: false, visibility: 'Public', $text: { $search: query } }, { title: 1, slug: 1, researchDomain: 1, status: 1 }).limit(5).lean()
     ]);
 
     return {
@@ -497,6 +510,7 @@ class SearchService {
       journals: journalDocs.filter(Boolean),
       conferences: conferenceDocs.filter(Boolean),
       keywords: keywordDocs.map(k => k._id),
+      projects: projects.map(p => ({ id: p._id, title: p.title, slug: p.slug, domain: p.researchDomain, status: p.status })),
     };
   }
 

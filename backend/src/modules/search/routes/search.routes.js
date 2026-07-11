@@ -13,6 +13,7 @@ router.get('/', searchLimiter, optionalAuth, responseCache(15), searchController
 
 // GET /api/v1/search/publications
 router.get('/publications', searchLimiter, optionalAuth, responseCache(15), searchController.searchPublications);
+router.get('/projects', searchLimiter, optionalAuth, responseCache(15), searchController.searchProjects);
 
 // GET /api/v1/search/authors
 router.get('/authors', searchLimiter, optionalAuth, responseCache(30), searchController.searchAuthors);
