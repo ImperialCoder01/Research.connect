@@ -5,6 +5,7 @@ import AppLayout from '../layouts/AppLayout';
 import ComingSoon from '../components/common/ComingSoon';
 import ProjectsPage from "../modules/project/pages/ProjectsPage";
 import HomeFeed from '../modules/home/pages/HomeFeed';
+import AboutUs from '../pages/AboutUs/AboutUs';
 import MessagesView from '../modules/message/components/MessagesView';
 const HomeHub = React.lazy(() => import('./HomeHub'));
 
@@ -138,6 +139,8 @@ const AppRoutes = () => {
           <Route path="messages/:conversationId" element={<MessagesPage />} />
           <Route path="messages/new" element={<MessagesPage />} />
           <Route path="search" element={<SearchPage />} />
+          <Route path="/about" element={<AboutUs />} />
+          
           
           {/* Social Collaboration Module Routes */}
           <Route path="network" element={<NetworkPage />} />

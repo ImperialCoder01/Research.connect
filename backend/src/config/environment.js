@@ -64,7 +64,8 @@ module.exports = {
 
   serpApi: {
     key: process.env.SERP_API_KEY || ''
-  }
+  },
+  dnsServers: process.env.DNS_SERVERS || ''
 };
 
 

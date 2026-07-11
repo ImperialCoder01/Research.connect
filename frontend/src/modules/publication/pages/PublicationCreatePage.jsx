@@ -224,7 +224,8 @@ const PublicationCreatePage = () => {
         queryClient.invalidateQueries({ queryKey: ['feed'] });
 
         // Redirect to profile or draft manager
-        navigate(user?.profileSlug ? `/profile/${user.profileSlug}` : '/profile');
+        const profileTarget = user?.slug || user?.profileSlug || user?.username;
+        navigate(profileTarget ? `/profile/${profileTarget}` : '/profile');
       } else {
         toast.error(response.message || 'Failed to save draft.', { id: loadingToast });
       }

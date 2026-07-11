@@ -204,7 +204,7 @@ const PublicationEditPage = () => {
         queryClient.invalidateQueries({ queryKey: ['publication', slug] });
         queryClient.invalidateQueries({ queryKey: ['publication-edit', slug] });
 
-        navigate(`/profile/${currentUser.profileSlug}/publications`);
+        navigate(`/profile/${currentUser.slug || currentUser.profileSlug || currentUser.username}/publications`);
       } else {
         toast.error(response.message || 'Failed to update draft.', { id: loadingToast });
       }

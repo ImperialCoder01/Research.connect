@@ -13,7 +13,7 @@ const ProfileSidebar = ({ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobile
   const { username } = useParams();
   const { user } = useSelector((state) => state.auth);
 
-  const profileSlug = username || user?.profileSlug || 'me';
+  const profileSlug = username || user?.slug || user?.profileSlug || 'me';
 
   const links = [
     { name: 'Home Feed', path: '/', icon: Home, end: true },

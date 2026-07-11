@@ -292,8 +292,8 @@ PublicationSchema.pre('save', async function (next) {
   next();
 });
 
-PublicationSchema.index({ doi: 1 }, { unique: true, sparse: true });
-PublicationSchema.index({ googleScholarPublicationId: 1 }, { unique: true, sparse: true });
+PublicationSchema.index({ userId: 1, doi: 1 }, { unique: true, sparse: true });
+PublicationSchema.index({ userId: 1, googleScholarPublicationId: 1 }, { unique: true, sparse: true });
 PublicationSchema.index({ publicationType: 1 });
 PublicationSchema.index({ createdAt: -1 });
 PublicationSchema.index({ isDeleted: 1 });

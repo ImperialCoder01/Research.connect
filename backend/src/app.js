@@ -32,16 +32,15 @@ const collaborationRoutes = require("./modules/collaborations/routes/collaborati
 const identityRoutes = require("./modules/identity/routes/identity.routes");
 const recommendationsModule = require("./modules/recommendations");
 
+const gatewayRouter = require("./gateway");
+
 const app = express();
 
 // Disable X-Powered-By
 app.disable("x-powered-by");
 
-// Request ID assignment
-app.use(requestIdMiddleware);
-
-// Security configuration (Helmet, CORS, Limiter)
-app.use(securityMiddlewares);
+// Mount the API Gateway
+app.use(gatewayRouter);
 
 // Compression
 app.use(compression());
