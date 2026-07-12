@@ -1,70 +1,142 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const researchIdentitySchema = new mongoose.Schema(
+const ResearchIdentitySchema = new Schema(
   {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
+    userId: {
+      type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Research identities must belong to a user'],
+      required: true,
       unique: true,
-      index: true,
+      index: true
     },
-    googleScholar: {
+    preferredName: {
+      type: String,
+      trim: true
+    },
+    profileSlug: {
       type: String,
       trim: true,
-      default: '',
+      unique: true,
+      index: true
+    },
+    googleScholarId: {
+      type: String,
+      trim: true,
+      index: true
+    },
+    googleScholarUrl: {
+      type: String,
+      trim: true
     },
     orcid: {
       type: String,
       trim: true,
-      default: '',
+      index: true
     },
-    scopus: {
+    scopusId: {
       type: String,
       trim: true,
-      default: '',
+      index: true
     },
-    semanticScholar: {
+    openAlexId: {
       type: String,
       trim: true,
-      default: '',
+      index: true
     },
-    crossref: {
+    crossrefId: {
       type: String,
       trim: true,
-      default: '',
+      index: true
     },
-    researchGate: {
+    semanticScholarId: {
       type: String,
       trim: true,
-      default: '',
+      index: true
     },
-    dblp: {
+    dblpUrl: {
       type: String,
-      trim: true,
-      default: '',
+      trim: true
     },
-    linkedin: {
+    researchGateUrl: {
       type: String,
-      trim: true,
-      default: '',
+      trim: true
+    },
+    linkedinUrl: {
+      type: String,
+      trim: true
     },
     github: {
       type: String,
-      trim: true,
-      default: '',
+      trim: true
     },
-    website: {
+    personalWebsite: {
       type: String,
-      trim: true,
-      default: '',
+      trim: true
     },
+    universityProfile: {
+      type: String,
+      trim: true
+    },
+    biography: {
+      type: String,
+      trim: true
+    },
+    languages: {
+      type: [String],
+      default: []
+    },
+    academicPositions: [
+      {
+        title: { type: String, required: true },
+        institution: { type: String, required: true },
+        department: { type: String },
+        startDate: { type: Date },
+        endDate: { type: Date },
+        isCurrent: { type: Boolean, default: false }
+      }
+    ],
+    grants: [
+      {
+        title: { type: String, required: true },
+        agency: { type: String, required: true },
+        amount: { type: Number, default: 0 },
+        currency: { type: String, default: 'USD' },
+        startDate: { type: Date },
+        endDate: { type: Date }
+      }
+    ],
+    teaching: [
+      {
+        courseName: { type: String, required: true },
+        institution: { type: String, required: true },
+        role: { type: String },
+        year: { type: String }
+      }
+    ],
+    syncSchedule: {
+      type: String,
+      enum: ['manual', 'daily', 'weekly', 'monthly'],
+      default: 'manual'
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    deletedAt: {
+      type: Date
+    },
+    deletedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User'
+    }
   },
   {
     timestamps: true,
-    collection: 'profile_links',
+    collection: 'researchIdentities'
   }
 );
 
-const ResearchIdentity = mongoose.model('ResearchIdentity', researchIdentitySchema);
-export default ResearchIdentity;
+const ResearchIdentity = mongoose.model('ResearchIdentity', ResearchIdentitySchema);
+module.exports = ResearchIdentity;

@@ -1,82 +1,31 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const keywordSchema = new mongoose.Schema(
+const KeywordSchema = new Schema(
   {
-    keyword: {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true
+    },
+    name: {
       type: String,
-      required: [true, 'Keyword is required'],
-      unique: true,
-      trim: true,
-      lowercase: true,
-      index: true,
+      required: true,
+      trim: true
     },
-    slug: {
-      type: String,
-      unique: true,
-      lowercase: true,
-    },
-    description: {
-      type: String,
-      trim: true,
-      default: '',
-    },
-    category: {
-      type: String,
-      trim: true,
-      default: 'General',
-      index: true,
-    },
-    parentKeyword: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Keyword',
-      default: null,
-      index: true,
-    },
-    synonyms: {
-      type: [String],
-      default: [],
-    },
-    popularityScore: {
+    count: {
       type: Number,
-      default: 0,
-      index: true,
-    },
-    numberOfResearchers: {
-      type: Number,
-      default: 0,
-      index: true,
-    },
-    numberOfPublications: {
-      type: Number,
-      default: 0,
-      index: true,
-    },
-    isTrending: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
+      default: 1
+    }
   },
   {
-    timestamps: true,
-    collection: 'keywords',
+    timestamps: true
   }
 );
 
-// Text Index for keyword searching and synonym matching
-keywordSchema.index({ keyword: 'text', synonyms: 'text', description: 'text' });
+KeywordSchema.index({ userId: 1, name: 1 }, { unique: true });
 
-// Pre-save hook to generate URL slug from keyword
-keywordSchema.pre('save', function (next) {
-  if (this.isModified('keyword')) {
-    this.slug = this.keyword
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/[\s-]+/g, '-');
-  }
-  next();
-});
+const Keyword = mongoose.model('Keyword', KeywordSchema);
 
-const Keyword = mongoose.model('Keyword', keywordSchema);
-export default Keyword;
+module.exports = Keyword;

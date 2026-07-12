@@ -1,85 +1,58 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const publicationAuthorSchema = new mongoose.Schema(
+const PublicationAuthorSchema = new Schema(
   {
-    publication: {
-      type: mongoose.Schema.Types.ObjectId,
+    publicationId: {
+      type: Schema.Types.ObjectId,
       ref: 'Publication',
-      required: [true, 'Author must belong to a publication'],
-      index: true,
+      required: true,
+      index: true
     },
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      index: true, // If author is a registered user
-    },
-    authorName: {
+    authorId: {
       type: String,
-      required: [true, 'Author name is required'],
-      trim: true,
-    },
-    affiliation: {
-      type: String,
-      trim: true,
       default: '',
+      index: true
     },
-    orcid: {
+    name: {
       type: String,
-      trim: true,
-      default: '',
-    },
-    department: {
-      type: String,
-      trim: true,
-      default: '',
-    },
-    country: {
-      type: String,
-      trim: true,
-      default: '',
+      required: true,
+      trim: true
     },
     email: {
       type: String,
-      trim: true,
-      lowercase: true,
       default: '',
+      trim: true
     },
-    authorOrder: {
-      type: Number,
-      required: [true, 'Author order is required'], // 1 for first author, 2 for second, etc.
+    institution: {
+      type: String,
+      default: ''
     },
-    correspondingAuthor: {
+    department: {
+      type: String,
+      default: ''
+    },
+    isCoAuthor: {
       type: Boolean,
-      default: false,
+      default: false
     },
+    isCorresponding: {
+      type: Boolean,
+      default: false
+    },
+    order: {
+      type: Number,
+      default: 0
+    }
   },
   {
     timestamps: true,
+    collection: 'publicationAuthors'
   }
 );
 
-// Enforce unique author order per publication
-publicationAuthorSchema.index({ publication: 1, authorOrder: 1 }, { unique: true });
+PublicationAuthorSchema.index({ publicationId: 1, authorId: 1 });
 
-// Helper to trigger recalculate on author save/delete
-const triggerProfileRecalculate = async function (doc) {
-  if (doc.user) {
-    try {
-      const Profile = mongoose.model('Profile');
-      await Profile.recalculateMetrics(doc.user);
-    } catch (err) {
-      console.error(`Failed to recalculate profile metrics for user ${doc.user}: ${err.message}`);
-    }
-  }
-};
+const PublicationAuthor = mongoose.model('PublicationAuthor', PublicationAuthorSchema);
 
-publicationAuthorSchema.post('save', async function (doc) {
-  await triggerProfileRecalculate(doc);
-});
-
-publicationAuthorSchema.post('remove', async function (doc) {
-  await triggerProfileRecalculate(doc);
-});
-
-const PublicationAuthor = mongoose.model('PublicationAuthor', publicationAuthorSchema);
-export default PublicationAuthor;
+module.exports = PublicationAuthor;

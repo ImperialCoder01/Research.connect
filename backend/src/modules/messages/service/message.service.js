@@ -28,11 +28,11 @@ class MessageService {
       throw new ValidationError('Cannot chat with yourself.');
     }
 
-    // Enforce connection check (disabled to allow messaging anyone)
-    // const isConnected = await this.checkConnected(userId, targetUserId);
-    // if (!isConnected) {
-    //   throw new ValidationError('You can only message connected researchers.');
-    // }
+    // Enforce connection check
+    const isConnected = await this.checkConnected(userId, targetUserId);
+    if (!isConnected) {
+      throw new ValidationError('You can only message connected researchers.');
+    }
 
     return await messageRepository.findOrCreateConversation(userId, targetUserId);
   }
@@ -58,11 +58,11 @@ class MessageService {
       throw new ValidationError('Either conversationId or receiverId must be supplied.');
     }
 
-    // Double check connection status (disabled to allow messaging anyone)
-    // const isConnected = await this.checkConnected(userId, receiverId);
-    // if (!isConnected) {
-    //   throw new ValidationError('You can only message connected researchers.');
-    // }
+    // Double check connection status
+    const isConnected = await this.checkConnected(userId, receiverId);
+    if (!isConnected) {
+      throw new ValidationError('You can only message connected researchers.');
+    }
 
     // Create the message
     const message = new Message({
@@ -286,7 +286,7 @@ class MessageService {
 
     // Fetch reactions count
     const reactions = await MessageReaction.find({ messageId })
-      .populate('userId', 'firstName lastName username')
+      .populate('userId', 'firstName lastName username profileSlug slug')
       .lean();
 
     const updatePayload = {
@@ -344,7 +344,7 @@ class MessageService {
 
     // Populate conversation
     const populated = await Conversation.findById(conv._id)
-      .populate('participants', 'firstName lastName username profileImage')
+      .populate('participants', 'firstName lastName username profileSlug slug profileImage')
       .populate('lastMessage')
       .lean();
 
@@ -399,7 +399,7 @@ class MessageService {
     }
 
     return await Conversation.findById(conversationId)
-      .populate('participants', 'firstName lastName username profileImage')
+      .populate('participants', 'firstName lastName username profileSlug slug profileImage')
       .populate('lastMessage')
       .lean();
   }
@@ -442,8 +442,8 @@ class MessageService {
   async getCallHistory(userId) {
     const castUserId = new mongoose.Types.ObjectId(userId);
     return await Call.find({ participants: castUserId })
-      .populate('initiatorId', 'firstName lastName username profileImage')
-      .populate('participants', 'firstName lastName username profileImage')
+      .populate('initiatorId', 'firstName lastName username profileSlug slug profileImage')
+      .populate('participants', 'firstName lastName username profileSlug slug profileImage')
       .sort({ createdAt: -1 })
       .lean();
   }

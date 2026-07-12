@@ -1,30 +1,28 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const followSchema = new mongoose.Schema(
+const FollowSchema = new Schema(
   {
     followerId: {
-       type: mongoose.Schema.Types.ObjectId,
-       ref: 'User',
-       required: [true, 'Follower user ID is required'],
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true
     },
     followingId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Following user ID is required'],
-      index: true,
-    },
+      required: true,
+      index: true
+    }
   },
   {
-    timestamps: { createdAt: true, updatedAt: false }, // Only store createdAt
-    collection: 'following',
+    timestamps: true
   }
 );
 
-// Compound Unique Index to prevent duplicate follows
-followSchema.index({ followerId: 1, followingId: 1 }, { unique: true });
+FollowSchema.index({ followerId: 1, followingId: 1 }, { unique: true });
 
-// Index for sorting follows by date
-followSchema.index({ createdAt: -1 });
+const Follow = mongoose.model('Follow', FollowSchema);
 
-const Follow = mongoose.model('Follow', followSchema);
-export default Follow;
+module.exports = Follow;

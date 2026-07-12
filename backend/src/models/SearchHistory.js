@@ -1,30 +1,50 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const searchHistorySchema = new mongoose.Schema(
+const SearchHistorySchema = new Schema(
   {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
+    userId: {
+      type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Search history must belong to a user'],
-      index: true,
+      required: true,
+      index: true
     },
-    keyword: {
+    query: {
       type: String,
-      required: [true, 'Search keyword is required'],
+      required: true,
       trim: true,
+      maxlength: 500
     },
     filters: {
-      type: mongoose.Schema.Types.Mixed,
-      default: {},
+      type: Schema.Types.Mixed,
+      default: {}
     },
+    resultCount: {
+      type: Number,
+      default: 0
+    },
+    searchType: {
+      type: String,
+      enum: ['all', 'publications', 'authors', 'journals', 'conferences'],
+      default: 'all'
+    },
+    isFavorite: {
+      type: Boolean,
+      default: false
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false
+    }
   },
   {
-    timestamps: { createdAt: true, updatedAt: false }, // Only need search timestamp
+    timestamps: true,
+    collection: 'searchHistories'
   }
 );
 
-// Compound Index: Optimizes pulling history for a user sorted by latest first
-searchHistorySchema.index({ user: 1, createdAt: -1 });
+SearchHistorySchema.index({ userId: 1, createdAt: -1 });
+SearchHistorySchema.index({ userId: 1, isFavorite: 1 });
+SearchHistorySchema.index({ userId: 1, query: 1 });
 
-const SearchHistory = mongoose.model('SearchHistory', searchHistorySchema);
-export default SearchHistory;
+module.exports = mongoose.model('SearchHistory', SearchHistorySchema);

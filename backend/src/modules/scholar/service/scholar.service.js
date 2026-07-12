@@ -19,6 +19,7 @@ const Profile = require('../../../models/Profile');
 const User = require('../../../models/User');
 const SyncHistory = require('../../../models/SyncHistory');
 const DerivedAnalytics = require('../../../models/DerivedAnalytics');
+const Upload = require('../../../models/Upload');
 const { ValidationError, NotFoundError, AppError } = require('../../../common/errors/AppError');
 const logger = require('../../../common/logger/winston');
 
@@ -167,8 +168,72 @@ class ScholarService {
       const i10Index = data.cited_by?.table?.[2]?.i10_index?.all || 0;
       importedCitationsCount = totalCitations;
 
-      // Delete any other scholar profiles connected to this user to avoid conflicts
-      await googleScholarProfileRepository.model.deleteMany({ userId, authorId: { $ne: authorId } });
+      // Check if there is an existing scholar profile for this user
+      const existingScholarProfile = await googleScholarProfileRepository.model.findOne({ userId });
+      const isDifferentProfile = existingScholarProfile && existingScholarProfile.authorId !== authorId;
+
+      if (isDifferentProfile) {
+        logger.info(`[ScholarSync] Different profile detected for user ${userId}. Old: ${existingScholarProfile.authorId}, New: ${authorId}. Cleaning up old profile data...`);
+
+        // 1. Find and delete all publications imported from Google Scholar
+        const scholarPubs = await publicationRepository.model.find({
+          userId,
+          $or: [
+            { googleScholarVerified: true },
+            { googleScholarPublicationId: { $exists: true, $ne: null } }
+          ]
+        });
+
+        const scholarPubIds = scholarPubs.map(p => p._id);
+
+        if (scholarPubIds.length > 0) {
+          // Delete publication authors associated with these publications
+          await publicationAuthorRepository.model.deleteMany({ publicationId: { $in: scholarPubIds } });
+
+          // Delete metrics associated with these publications
+          const PublicationMetric = require('../../../models/PublicationMetric');
+          await PublicationMetric.deleteMany({ publicationId: { $in: scholarPubIds } });
+
+          // Delete publications themselves
+          await publicationRepository.model.deleteMany({ _id: { $in: scholarPubIds } });
+        }
+
+        // 2. Delete scholar metrics
+        const AcademicMetrics = require('../../../models/AcademicMetrics');
+        await AcademicMetrics.deleteMany({ userId, provider: 'google_scholar' });
+
+        // 3. Delete co-authors
+        await coAuthorRepository.deleteByUserId(userId);
+
+        // 4. Delete citation graph
+        await citationGraphRepository.deleteByUserId(userId);
+
+        // 5. Delete keywords
+        const Keyword = require('../../../models/Keyword');
+        await Keyword.deleteMany({ userId });
+
+        // 6. Delete research areas
+        const ResearchArea = require('../../../models/ResearchArea');
+        await ResearchArea.deleteMany({ userId });
+
+        // 7. Delete sync history
+        const SyncHistory = require('../../../models/SyncHistory');
+        await SyncHistory.deleteMany({ userId });
+
+        // 8. Delete derived analytics
+        const DerivedAnalytics = require('../../../models/DerivedAnalytics');
+        await DerivedAnalytics.deleteMany({ userId });
+
+        // 9. Delete research metrics
+        const ResearchMetric = require('../../../models/ResearchMetric');
+        await ResearchMetric.deleteMany({ userId });
+
+        // 10. Delete old google scholar profiles
+        await googleScholarProfileRepository.model.deleteMany({ userId });
+      } else {
+        // Same profile: delete any other conflicting profiles if they somehow exist
+        await googleScholarProfileRepository.model.deleteMany({ userId, authorId: { $ne: authorId } });
+      }
 
       // Google Scholar profile details - upsert by authorId (globally unique) instead of userId
       await googleScholarProfileRepository.model.findOneAndUpdate(
@@ -195,6 +260,21 @@ class ScholarService {
         { upsert: true, new: true }
       );
 
+      // Check if the user has custom-uploaded a profile image to Cloudflare R2
+      const activeAvatarUpload = await Upload.findOne({ userId, purpose: 'profile-avatar', isDeleted: { $ne: true } });
+      let profileImageVal;
+      if (activeAvatarUpload) {
+        profileImageVal = {
+          url: activeAvatarUpload.secure_url,
+          objectKey: activeAvatarUpload.public_id || '',
+          mimeType: activeAvatarUpload.mimetype || 'image/jpeg',
+          fileSize: activeAvatarUpload.bytes || 0,
+          uploadedAt: activeAvatarUpload.createdAt || new Date()
+        };
+      } else {
+        profileImageVal = data.author.thumbnail || '';
+      }
+
       // Sync basic profile data back to main researcher profile using Data Source Tracking
       const mainProfile = await Profile.findOne({ userId });
       if (mainProfile) {
@@ -209,7 +289,7 @@ class ScholarService {
           }
           profile[field] = val;
           profile.dataSourceTracking.set(field, {
-            value: val,
+            value: typeof val === 'object' ? val.url : val,
             source: 'google_scholar',
             lastSyncedAt: new Date(),
             userModified: false
@@ -218,14 +298,13 @@ class ScholarService {
 
         syncField(mainProfile, 'institution', data.author.affiliation || '');
         syncField(mainProfile, 'displayName', data.author.name || '');
-        syncField(mainProfile, 'profileImage', data.author.thumbnail || '');
+        syncField(mainProfile, 'profileImage', profileImageVal);
         await mainProfile.save();
       }
 
       const mainUser = await User.findById(userId).select('+password');
       if (mainUser) {
-        // Fallback update to user profileImage if not custom set
-        mainUser.profileImage = mainUser.profileImage || data.author.thumbnail || '';
+        mainUser.profileImage = profileImageVal;
         await mainUser.save();
       }
 
@@ -382,12 +461,14 @@ class ScholarService {
             // Step 1: Lookup missing DOI
             if (!pubDoi) {
               pubDoi = await enrichmentService.lookupDOI(article.title, article.year, article.authors);
+              await new Promise(resolve => setTimeout(resolve, 400)); // Respect external API rate limits
             }
 
             // Step 2: Fetch enriched metadata from external providers
             let enrichedMeta = {};
             try {
               enrichedMeta = await enrichmentService.fetchMetadata(pubDoi, article.title);
+              await new Promise(resolve => setTimeout(resolve, 400)); // Respect external API rate limits
               if (enrichedMeta && Object.keys(enrichedMeta).length > 0) {
                 enrichedCount++;
               }
@@ -462,21 +543,38 @@ class ScholarService {
           }
         }
 
-        // Execute bulk database updates
-        if (bulkUpdateOps.length > 0) {
-          await publicationRepository.bulkUpdate(bulkUpdateOps);
+        // Execute bulk database updates and inserts in a single high-performance bulkWrite call
+        const bulkOps = [...bulkUpdateOps];
+        const successfulPubIds = new Set();
+
+        for (const pubDoc of newPubsToCreate) {
+          bulkOps.push({
+            insertOne: {
+              document: pubDoc
+            }
+          });
+          successfulPubIds.add(pubDoc._id.toString());
         }
 
-        // Insert new publications individually for granular error tracking
-        const successfulPubIds = new Set();
-        for (const pubDoc of newPubsToCreate) {
+        if (bulkOps.length > 0) {
           try {
-            await publicationRepository.model.create(pubDoc);
-            successfulPubIds.add(pubDoc._id.toString());
-          } catch (pubErr) {
-            logger.error(`[Scholar] Failed to insert publication "${pubDoc.title}": ${pubErr.message}`);
-            failedPublications.push({ title: pubDoc.title, error: pubErr.message });
-            importedPublicationsCount--; // Correct the count
+            await publicationRepository.model.bulkWrite(bulkOps, { ordered: false });
+          } catch (bulkErr) {
+            logger.error(`[Scholar] Bulk write publications failed or returned partial errors: ${bulkErr.message}`);
+            // Check for individual write errors and populate failedPublications/importedPublicationsCount
+            if (bulkErr.writeErrors) {
+              bulkErr.writeErrors.forEach(we => {
+                const op = bulkOps[we.index];
+                if (op && op.insertOne) {
+                  const title = op.insertOne.document.title;
+                  const pubId = op.insertOne.document._id.toString();
+                  logger.error(`[Scholar] Failed to insert publication "${title}": ${we.errmsg}`);
+                  failedPublications.push({ title, error: we.errmsg });
+                  successfulPubIds.delete(pubId);
+                  importedPublicationsCount--;
+                }
+              });
+            }
           }
         }
 
@@ -486,7 +584,7 @@ class ScholarService {
           try {
             await publicationAuthorRepository.model.insertMany(validAuthors, { ordered: false });
           } catch (authorErr) {
-            logger.warn(`[Scholar] Some author records failed to insert: ${authorErr.message}`);
+            logger.warn(`[Scholar] Some author records failed to insert during bulk save: ${authorErr.message}`);
           }
         }
 
@@ -497,7 +595,7 @@ class ScholarService {
             const PublicationMetric = require('../../../models/PublicationMetric');
             await PublicationMetric.insertMany(validMetrics, { ordered: false });
           } catch (metricErr) {
-            logger.warn(`[Scholar] Some metric records failed to insert: ${metricErr.message}`);
+            logger.warn(`[Scholar] Some metric records failed to insert during bulk save: ${metricErr.message}`);
           }
         }
       }
@@ -559,6 +657,40 @@ class ScholarService {
       await updateProgress(95, 'Recalculating derived analytics and profile stats...');
       await this.calculateDerivedAnalytics(userId);
 
+      // Update AcademicMetrics (scholar_metrics)
+      try {
+        const AcademicMetrics = require('../../../models/AcademicMetrics');
+        await AcademicMetrics.findOneAndUpdate(
+          { userId, provider: 'google_scholar' },
+          {
+            userId,
+            provider: 'google_scholar',
+            publications: articles.length,
+            citations: totalCitations,
+            hIndex,
+            i10Index,
+            isDeleted: false
+          },
+          { upsert: true, new: true }
+        );
+
+        await AcademicMetrics.findOneAndUpdate(
+          { userId, provider: 'aggregate' },
+          {
+            userId,
+            provider: 'aggregate',
+            publications: articles.length,
+            citations: totalCitations,
+            hIndex,
+            i10Index,
+            isDeleted: false
+          },
+          { upsert: true, new: true }
+        );
+      } catch (metricsErr) {
+        logger.error('Error updating AcademicMetrics: ' + metricsErr.message);
+      }
+
       try {
         const profileService = require('../../profile/service/profile.service');
         await profileService.calculateAndSaveProfileCompletion(userId);
@@ -600,6 +732,34 @@ class ScholarService {
       }
 
       await updateProgress(100, 'Academic portfolio synchronized successfully!');
+
+      // Invalidate Redis/in-memory caches to update UI immediately
+      try {
+        const { ProfileCache, FeedCache, ScholarCache, LookupCache } = require('../../../cache/cache.service');
+        await Promise.all([
+          ProfileCache.del(String(userId)),
+          ScholarCache.del(String(userId)),
+          FeedCache.flush()
+        ]);
+        if (LookupCache && LookupCache.invalidate) {
+          await LookupCache.invalidate();
+        }
+        logger.info(`[ScholarSync] Redis cache invalidated successfully for user: ${userId}`);
+      } catch (cacheErr) {
+        logger.error(`[ScholarSync] Redis cache invalidation failed: ${cacheErr.message}`);
+      }
+
+      // Emit Socket.IO events for instant UI update
+      try {
+        const socket = require('../../../socket');
+        if (socket) {
+          socket.emitToUser(String(userId), 'scholarImported', { userId: String(userId), authorId });
+          socket.emitToUser(String(userId), 'scholarSyncCompleted', { userId: String(userId), authorId });
+          socket.emitToUser(String(userId), 'profileUpdated', { userId: String(userId) });
+        }
+      } catch (sockErr) {
+        logger.warn(`[ScholarSync] Socket emit failed: ${sockErr.message}`);
+      }
     } catch (err) {
       // Record Sync History failure
       await syncHistoryRepository.create({
@@ -757,7 +917,7 @@ class ScholarService {
   async getProfile(userId) {
     const profile = await googleScholarProfileRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundError('Google Scholar profile details not found. Please sync your profile.');
+      throw new NotFoundError('Complete Your profile and link Google Scholar');
     }
     return profile;
   }

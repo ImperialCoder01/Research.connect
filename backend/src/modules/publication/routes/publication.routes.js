@@ -44,7 +44,7 @@ router.get('/types', publicationController.getTypes);
 // Get all publication formats
 router.get('/formats', publicationController.getFormats);
 
-// 3. Upload file (Cloudinary)
+// 3. Upload file (Cloudflare R2)
 router.post(
   '/upload',
   authMiddleware,
@@ -78,6 +78,11 @@ router.get('/:slug', optionalAuth, responseCache(30), publicationController.getP
 // 10. Update publication
 router.patch('/:id', authMiddleware, publicationController.updatePublication);
 router.put('/:id', authMiddleware, publicationController.updatePublication);
+
+// 10.5. Upload/Delete publication document/paper PDF
+router.post('/:id/upload-paper', authMiddleware, universalUpload.single('file'), validateUpload, publicationController.uploadPaper);
+router.patch('/:id/document', authMiddleware, universalUpload.single('file'), validateUpload, publicationController.uploadPaper);
+router.delete('/:id/document', authMiddleware, publicationController.deletePaper);
 
 // 11. Delete publication
 router.delete('/:id', authMiddleware, publicationController.deletePublication);

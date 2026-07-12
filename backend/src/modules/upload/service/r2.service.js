@@ -1,5 +1,6 @@
 const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 const env = require('../../../config/environment');
@@ -32,32 +33,41 @@ const getResourceTypeFromMime = (mimeType) => {
   return 'raw';
 };
 
+/**
+ * Returns the R2 storage folder path based on purpose.
+ * Spec folder structure:
+ *   research-connect/profiles/{userId}/profile/
+ *   research-connect/profiles/{userId}/banner/
+ */
 const getFolderForPurpose = (purpose, userId, resourceId) => {
   const cleanUserId = String(userId).replace(/[^a-zA-Z0-9]/g, '');
   const cleanResourceId = String(resourceId || '').replace(/[^a-zA-Z0-9_-]/g, '_');
 
   switch (purpose) {
     case 'profile-avatar':
-      return `profile/avatar/${cleanUserId}`;
+      return `research-connect/profiles/${cleanUserId}/profile`;
     case 'profile-banner':
-      return `profile/banner/${cleanUserId}`;
+      return `research-connect/profiles/${cleanUserId}/banner`;
     case 'publication-pdf':
+      return `research-connect/publications/${cleanResourceId}/paper`;
+    case 'publication-attachment':
+      return `research-connect/publications/${cleanResourceId}/attachments`;
     case 'publication-cover':
-      return `publications/${cleanResourceId}`;
+      return `research-connect/publications/${cleanResourceId}/cover`;
     case 'project-image':
-      return `projects/${cleanResourceId}`;
+      return `research-connect/projects/${cleanResourceId}`;
     case 'dataset':
-      return `datasets/${cleanResourceId}`;
+      return `research-connect/datasets/${cleanResourceId}`;
     case 'certificate':
-      return `certificates/${cleanUserId}`;
+      return `research-connect/certificates/${cleanUserId}`;
     case 'institution-logo':
-      return `institutions/${cleanResourceId}`;
+      return `research-connect/institutions/${cleanResourceId}`;
     case 'patent-document':
-      return `patents/${cleanResourceId}`;
+      return `research-connect/patents/${cleanResourceId}`;
     case 'thesis':
-      return `thesis/${cleanResourceId}`;
+      return `research-connect/thesis/${cleanResourceId}`;
     default:
-      return `misc/${cleanUserId}`;
+      return `research-connect/misc/${cleanUserId}`;
   }
 };
 
@@ -66,13 +76,12 @@ const getFolderForPurpose = (purpose, userId, resourceId) => {
  */
 const getAccessUrl = async (key, purpose) => {
   if (!isR2Configured) {
-    // Local uploads directory URL
     const serverUrl = env.serverUrl || 'http://localhost:5000';
     return `${serverUrl}/uploads/${key}`;
   }
 
   const publicPurposes = ['profile-avatar', 'profile-banner', 'publication-cover', 'project-image', 'institution-logo', 'book-cover'];
-  
+
   if (publicPurposes.includes(purpose)) {
     if (env.r2.publicUrl) {
       return `${env.r2.publicUrl}/${key}`;
@@ -95,22 +104,33 @@ const getAccessUrl = async (key, purpose) => {
 
 /**
  * Upload a file buffer to R2 (or local fallback).
+ * Uses UUID-based filename to prevent enumeration and collisions.
  */
 const uploadFileBuffer = async (fileBuffer, originalName, userId, purpose, resourceId, mimeType) => {
   const uploadStart = Date.now();
   const folder = getFolderForPurpose(purpose, userId, resourceId);
   const resourceType = getResourceTypeFromMime(mimeType);
 
-  const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-  const publicIdSuffix = originalName
-    ? originalName.substring(0, originalName.lastIndexOf('.')).replace(/[^a-zA-Z0-9_-]/g, '_')
-    : 'file';
-  const extension = originalName ? path.extname(originalName).toLowerCase() : '';
-  const filename = `${publicIdSuffix}_${uniqueSuffix}${extension}`;
-  const key = `${folder}/${filename}`;
+  // Use UUID for all filenames to prevent collisions and enumeration attacks
+  const uuid = uuidv4();
+  const extension = originalName ? path.extname(originalName).toLowerCase() : '.bin';
+  
+  // For profile images, always use purpose-based semantic name
+  let filename;
+  if (purpose === 'profile-avatar') {
+    filename = `profile-${uuid}${extension}`;
+  } else if (purpose === 'profile-banner') {
+    filename = `banner-${uuid}${extension}`;
+  } else {
+    const namePrefix = originalName
+      ? originalName.substring(0, originalName.lastIndexOf('.')).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50)
+      : 'file';
+    filename = `${namePrefix}-${uuid}${extension}`;
+  }
 
+  const key = `${folder}/${filename}`;
   const format = extension ? extension.replace('.', '') : '';
-  const assetId = `r2_${uniqueSuffix}`;
+  const assetId = `r2_${uuid.replace(/-/g, '')}`;
 
   log.info(`[R2 UPLOAD] Starting upload`, {
     key,
@@ -128,10 +148,12 @@ const uploadFileBuffer = async (fileBuffer, originalName, userId, purpose, resou
       Key: key,
       Body: fileBuffer,
       ContentType: mimeType || 'application/octet-stream',
+      // Cache-Control for CDN delivery
+      CacheControl: resourceType === 'image' ? 'public, max-age=31536000, immutable' : 'private',
       Metadata: {
         userId: String(userId),
         purpose: String(purpose),
-        originalName: String(originalName || '')
+        originalName: String(originalName || '').substring(0, 256)
       }
     });
 
@@ -159,7 +181,7 @@ const uploadFileBuffer = async (fileBuffer, originalName, userId, purpose, resou
 
   return {
     asset_id: assetId,
-    public_id: key, // We treat the R2 Key as public_id to minimize code drift
+    public_id: key, // R2 Key treated as public_id for consistency
     secure_url: secureUrl,
     resource_type: resourceType,
     format,
@@ -211,5 +233,6 @@ const deleteFile = async (key, resourceType = 'raw') => {
 module.exports = {
   uploadFileBuffer,
   deleteFile,
-  getAccessUrl
+  getAccessUrl,
+  isR2Configured
 };

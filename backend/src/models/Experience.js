@@ -1,106 +1,48 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const experienceSchema = new mongoose.Schema(
+const ExperienceSchema = new Schema(
   {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
+    userId: {
+      type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Experience must belong to a user'],
-      index: true,
+      required: true,
+      index: true
     },
-    organization: {
+    designation: {
       type: String,
-      required: [true, 'Organization is required'],
-      trim: true,
-      index: true,
+      required: [true, 'Designation is required'],
+      trim: true
     },
-    role: {
+    institution: {
       type: String,
-      required: [true, 'Role is required'],
-      trim: true,
+      required: [true, 'Institution/Company is required'],
+      trim: true
     },
-    department: {
+    duration: {
       type: String,
-      trim: true,
-      default: '',
-    },
-    employmentType: {
-      type: String,
-      enum: ['full-time', 'part-time', 'contract', 'fellowship', 'postdoc', 'visiting'],
-      default: 'full-time',
-    },
-    researchArea: {
-      type: String,
-      trim: true,
-      default: '',
-    },
-    startYear: {
-      type: Number,
-      required: [true, 'Start year is required'],
-    },
-    startMonth: {
-      type: Number,
-      min: 1,
-      max: 12,
-      default: 1,
-    },
-    endYear: {
-      type: Number,
-      default: null, // Null represents currently working here
-    },
-    endMonth: {
-      type: Number,
-      min: 1,
-      max: 12,
-      default: null,
-    },
-    isCurrent: {
-      type: Boolean,
-      default: false,
+      required: [true, 'Duration is required'], // e.g. "2022 - Present"
+      trim: true
     },
     description: {
       type: String,
       trim: true,
-      default: '',
+      default: ''
     },
-    sortOrder: {
-      type: Number,
-      default: 0,
+    researchFocus: {
+      type: String,
+      trim: true,
+      default: ''
     },
     isDeleted: {
       type: Boolean,
-      default: false,
-      index: true,
-    },
-    source: {
-      type: String,
-      enum: ['manual', 'googleScholar', 'orcid', 'scopus', 'linkedin'],
-      default: 'manual',
-    },
-    lastUpdated: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-    },
-    syncVersion: {
-      type: Number,
-      default: 1,
-    },
+      default: false
+    }
   },
   {
-    timestamps: true,
-    collection: 'experience',
+    timestamps: true
   }
 );
 
-// Soft delete query middleware
-experienceSchema.pre(/^find/, function (next) {
-  this.find({ isDeleted: { $ne: true } });
-  next();
-});
-
-const Experience = mongoose.model('Experience', experienceSchema);
-export default Experience;
+const Experience = mongoose.model('Experience', ExperienceSchema);
+module.exports = Experience;

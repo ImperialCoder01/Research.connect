@@ -1,38 +1,34 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const publicationViewSchema = new mongoose.Schema(
+const PublicationViewSchema = new Schema(
   {
-    publication: {
-      type: mongoose.Schema.Types.ObjectId,
+    publicationId: {
+      type: Schema.Types.ObjectId,
       ref: 'Publication',
       required: true,
-      index: true,
+      index: true
     },
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
+    userId: {
+      type: Schema.Types.ObjectId,
       ref: 'User',
-      default: null, // Null means guest view
-      index: true,
+      index: true
     },
-    ip: {
+    ipAddress: {
       type: String,
-      default: '',
+      default: ''
     },
-    country: {
+    userAgent: {
       type: String,
-      default: 'Unknown',
-      index: true,
-    },
-    institution: {
-      type: String,
-      default: 'Unknown',
-      index: true,
-    },
+      default: ''
+    }
   },
   {
     timestamps: true,
+    collection: 'publicationViews'
   }
 );
 
-const PublicationView = mongoose.model('PublicationView', publicationViewSchema);
-export default PublicationView;
+const PublicationView = mongoose.model('PublicationView', PublicationViewSchema);
+
+module.exports = PublicationView;

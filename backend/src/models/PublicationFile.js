@@ -1,39 +1,53 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const publicationFileSchema = new mongoose.Schema(
+const PublicationFileSchema = new Schema(
   {
-    publication: {
-      type: mongoose.Schema.Types.ObjectId,
+    publicationId: {
+      type: Schema.Types.ObjectId,
       ref: 'Publication',
-      required: [true, 'File must belong to a publication'],
-      index: true,
-    },
-    fileType: {
-      type: String,
       required: true,
-      enum: ['PDF', 'Cover Image', 'Dataset', 'Presentation', 'Code ZIP', 'Supplementary Files'],
+      index: true
     },
-    url: {
+    secure_url: {
       type: String,
-      required: [true, 'File URL is required'],
+      required: true
     },
-    publicId: {
+    public_id: {
       type: String,
-      default: '', // Cloudinary public ID
+      required: true
     },
-    fileName: {
+    resource_type: {
       type: String,
-      required: true,
+      default: 'raw'
     },
-    fileSize: {
-      type: Number, // in bytes
-      required: true,
+    bytes: {
+      type: Number,
+      default: 0
     },
+    format: {
+      type: String,
+      default: ''
+    },
+    pages: {
+      type: Number,
+      default: 0
+    },
+    asset_id: {
+      type: String,
+      default: ''
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false
+    }
   },
   {
     timestamps: true,
+    collection: 'publicationFiles'
   }
 );
 
-const PublicationFile = mongoose.model('PublicationFile', publicationFileSchema);
-export default PublicationFile;
+const PublicationFile = mongoose.model('PublicationFile', PublicationFileSchema);
+
+module.exports = PublicationFile;

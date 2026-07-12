@@ -7,8 +7,18 @@ const User = require('../../../models/User');
 const Publication = require('../../../models/Publication');
 const { ValidationError, NotFoundError } = require('../../../common/errors/AppError');
 const logger = require('../../../common/logger/winston');
+const { ProfileCache, FeedCache } = require('../../../cache/cache.service');
 
 const log = logger || console;
+
+// Lazy-load socket to avoid circular dependency
+const getSocket = () => {
+  try {
+    return require('../../../socket');
+  } catch {
+    return null;
+  }
+};
 
 const CROCKFORD_BASE32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
@@ -57,6 +67,35 @@ const generateIdForPurpose = (purpose) => {
       return `RCTHESIS_${ulid}`;
     default:
       return `RCMISC_${ulid}`;
+  }
+};
+
+/**
+ * Emit a Socket.IO event to all open sessions of a user.
+ * Fires-and-forgets — never throws.
+ */
+const emitProfileImageUpdate = (userId, eventName, payload) => {
+  try {
+    const socket = getSocket();
+    if (socket && socket.emitToUser) {
+      socket.emitToUser(String(userId), eventName, payload);
+      log.info(`[UPLOAD SERVICE] Emitted ${eventName} to user ${userId}`);
+    }
+  } catch (err) {
+    log.warn(`[UPLOAD SERVICE] Socket emit failed for ${eventName}: ${err.message}`);
+  }
+};
+
+/**
+ * Invalidate all profile-related cache keys for a user.
+ */
+const invalidateProfileCache = async (userId) => {
+  try {
+    await ProfileCache.del(String(userId));
+    await FeedCache.flush(); // Flush feed cache so new images appear
+    log.info(`[UPLOAD SERVICE] Cache invalidated for user ${userId}`);
+  } catch (err) {
+    log.warn(`[UPLOAD SERVICE] Cache invalidation failed for user ${userId}: ${err.message}`);
   }
 };
 
@@ -116,14 +155,11 @@ const uploadFileInternal = async ({ file, userId, purpose, resourceId, useTransa
     if (activeResourceId) {
       replacementQuery.resourceId = activeResourceId;
     }
-    // We only replace single-value assets
     const replaceTypes = ['profile-avatar', 'profile-banner', 'publication-pdf', 'publication-cover', 'project-image', 'dataset'];
     if (replaceTypes.includes(purpose)) {
-      if (useTransaction && session) {
-        oldAsset = await Upload.findOne(replacementQuery).session(session);
-      } else {
-        oldAsset = await Upload.findOne(replacementQuery);
-      }
+      oldAsset = useTransaction && session
+        ? await Upload.findOne(replacementQuery).session(session)
+        : await Upload.findOne(replacementQuery);
     }
 
     const storageStart = Date.now();
@@ -140,80 +176,68 @@ const uploadFileInternal = async ({ file, userId, purpose, resourceId, useTransa
 
     const mongoStart = Date.now();
     // 3. Save Upload metadata document
+    const uploadData = {
+      userId,
+      purpose,
+      resourceId: activeResourceId,
+      asset_id: uploadedAsset.asset_id,
+      public_id: uploadedAsset.public_id,
+      secure_url: uploadedAsset.secure_url,
+      resource_type: uploadedAsset.resource_type,
+      format: uploadedAsset.format,
+      bytes: uploadedAsset.bytes,
+      width: uploadedAsset.width,
+      height: uploadedAsset.height,
+      pages: uploadedAsset.pages,
+      folder: uploadedAsset.folder,
+      version: uploadedAsset.version,
+      original_filename: uploadedAsset.original_filename,
+      uploadedAt: uploadedAsset.uploadedAt
+    };
+
     let newUploadDoc;
     if (useTransaction && session) {
-      const uploadDocs = await Upload.create([
-        {
-          userId,
-          purpose,
-          resourceId: activeResourceId,
-          asset_id: uploadedAsset.asset_id,
-          public_id: uploadedAsset.public_id,
-          secure_url: uploadedAsset.secure_url,
-          resource_type: uploadedAsset.resource_type,
-          format: uploadedAsset.format,
-          bytes: uploadedAsset.bytes,
-          width: uploadedAsset.width,
-          height: uploadedAsset.height,
-          pages: uploadedAsset.pages,
-          folder: uploadedAsset.folder,
-          version: uploadedAsset.version,
-          original_filename: uploadedAsset.original_filename,
-          uploadedAt: uploadedAsset.uploadedAt
-        }
-      ], { session });
+      const uploadDocs = await Upload.create([uploadData], { session });
       newUploadDoc = uploadDocs[0];
     } else {
-      newUploadDoc = await Upload.create({
-        userId,
-        purpose,
-        resourceId: activeResourceId,
-        asset_id: uploadedAsset.asset_id,
-        public_id: uploadedAsset.public_id,
-        secure_url: uploadedAsset.secure_url,
-        resource_type: uploadedAsset.resource_type,
-        format: uploadedAsset.format,
-        bytes: uploadedAsset.bytes,
-        width: uploadedAsset.width,
-        height: uploadedAsset.height,
-        pages: uploadedAsset.pages,
-        folder: uploadedAsset.folder,
-        version: uploadedAsset.version,
-        original_filename: uploadedAsset.original_filename,
-        uploadedAt: uploadedAsset.uploadedAt
-      });
+      newUploadDoc = await Upload.create(uploadData);
     }
 
     // 4. Soft delete old upload reference in MongoDB if replacing
     if (oldAsset) {
+      const softDeleteData = { isDeleted: true, deletedAt: new Date() };
       if (useTransaction && session) {
-        await Upload.findByIdAndUpdate(
-          oldAsset._id,
-          { isDeleted: true, deletedAt: new Date() },
-          { session }
-        );
+        await Upload.findByIdAndUpdate(oldAsset._id, softDeleteData, { session });
       } else {
-        await Upload.findByIdAndUpdate(
-          oldAsset._id,
-          { isDeleted: true, deletedAt: new Date() }
-        );
+        await Upload.findByIdAndUpdate(oldAsset._id, softDeleteData);
       }
     }
 
-    // 5. Update the parent MongoDB resource directly (avatar, banner, etc.)
+    const imgData = {
+      url: uploadedAsset.secure_url,
+      objectKey: uploadedAsset.public_id,
+      mimeType: file.mimetype || `image/${uploadedAsset.format}`,
+      fileSize: uploadedAsset.bytes,
+      uploadedAt: uploadedAsset.uploadedAt || new Date(),
+      storageProvider: 'cloudflare-r2',
+      bucket: env.r2?.bucketName || 'research-connect',
+      fileName: file.originalname || ''
+    };
+
+    // 5. Update the parent MongoDB resource (Profile + User for avatar)
     if (purpose === 'profile-avatar') {
       if (useTransaction && session) {
-        await Profile.findOneAndUpdate({ userId }, { profileImage: uploadedAsset.secure_url }, { session });
-        await User.findByIdAndUpdate(userId, { profileImage: uploadedAsset.secure_url }, { session });
+        await Profile.findOneAndUpdate({ userId }, { profileImage: imgData }, { session, new: true });
+        await User.findByIdAndUpdate(userId, { profileImage: imgData }, { session });
       } else {
-        await Profile.findOneAndUpdate({ userId }, { profileImage: uploadedAsset.secure_url });
-        await User.findByIdAndUpdate(userId, { profileImage: uploadedAsset.secure_url });
+        await Profile.findOneAndUpdate({ userId }, { profileImage: imgData });
+        await User.findByIdAndUpdate(userId, { profileImage: imgData });
       }
     } else if (purpose === 'profile-banner') {
       if (useTransaction && session) {
-        await Profile.findOneAndUpdate({ userId }, { coverImage: uploadedAsset.secure_url }, { session });
+        await Profile.findOneAndUpdate({ userId }, { coverImage: imgData }, { session, new: true });
       } else {
-        await Profile.findOneAndUpdate({ userId }, { coverImage: uploadedAsset.secure_url });
+        await Profile.findOneAndUpdate({ userId }, { coverImage: imgData });
       }
     }
 
@@ -224,9 +248,33 @@ const uploadFileInternal = async ({ file, userId, purpose, resourceId, useTransa
     }
     const mongoTime = Date.now() - mongoStart;
 
-    // 7. Post-Commit: delete replaced R2 asset if successful
+    // 7. Post-Commit: delete replaced R2 asset to avoid orphaned files
     if (oldAsset && oldAsset.public_id) {
       await r2Service.deleteFile(oldAsset.public_id, oldAsset.resource_type);
+    }
+
+    // 8. Invalidate Redis / in-memory profile cache
+    if (['profile-avatar', 'profile-banner'].includes(purpose)) {
+      await invalidateProfileCache(userId);
+    }
+
+    // 9. Emit Socket.IO real-time update to all user sessions
+    if (purpose === 'profile-avatar') {
+      const payload = {
+        userId: String(userId),
+        profileImage: uploadedAsset.secure_url,
+        uploadedAt: uploadedAsset.uploadedAt
+      };
+      emitProfileImageUpdate(userId, 'profile:imageUpdated', payload);
+      emitProfileImageUpdate(userId, 'profileImageUpdated', payload);
+    } else if (purpose === 'profile-banner') {
+      const payload = {
+        userId: String(userId),
+        coverImage: uploadedAsset.secure_url,
+        uploadedAt: uploadedAsset.uploadedAt
+      };
+      emitProfileImageUpdate(userId, 'profile:bannerUpdated', payload);
+      emitProfileImageUpdate(userId, 'bannerUpdated', payload);
     }
 
     const totalDuration = Date.now() - uploadStart;
@@ -253,9 +301,7 @@ const uploadFileInternal = async ({ file, userId, purpose, resourceId, useTransa
     if (useTransaction && isTxError) {
       log.warn('MongoDB transactions not supported by the database server. Retrying without transaction.');
       if (session) {
-        try {
-          await session.abortTransaction();
-        } catch (e) {}
+        try { await session.abortTransaction(); } catch (e) {}
         session.endSession();
       }
       return uploadFileInternal({ file, userId, purpose, resourceId, useTransaction: false });
@@ -263,11 +309,8 @@ const uploadFileInternal = async ({ file, userId, purpose, resourceId, useTransa
 
     log.error(`[UPLOAD SERVICE FAILED] Aborting upload`, { error: error.message, userId, purpose });
 
-    // Rollback the MongoDB transaction
     if (useTransaction && session) {
-      try {
-        await session.abortTransaction();
-      } catch (abortErr) {
+      try { await session.abortTransaction(); } catch (abortErr) {
         log.error('[UPLOAD SERVICE ABORT FAILED]', abortErr);
       }
       session.endSession();
@@ -301,7 +344,7 @@ const deleteUploadInternal = async (assetId, userId, useTransaction = true) => {
     throw new NotFoundError('Upload not found.');
   }
 
-  // Ensure owner or admin deletes
+  // Ensure owner deletes
   if (upload.userId.toString() !== userId.toString()) {
     throw new ValidationError('Unauthorized. You do not own this file.');
   }
@@ -318,21 +361,16 @@ const deleteUploadInternal = async (assetId, userId, useTransaction = true) => {
   }
 
   try {
-    // 1. Soft delete upload metadata
+    const softDeleteData = { isDeleted: true, deletedAt: new Date() };
+
     if (useTransaction && session) {
-      await Upload.findByIdAndUpdate(
-        upload._id,
-        { isDeleted: true, deletedAt: new Date() },
-        { session }
-      );
+      await Upload.findByIdAndUpdate(upload._id, softDeleteData, { session });
     } else {
-      await Upload.findByIdAndUpdate(
-        upload._id,
-        { isDeleted: true, deletedAt: new Date() }
-      );
+      await Upload.findByIdAndUpdate(upload._id, softDeleteData);
     }
 
-    // 2. Remove references from parent resources
+    // Remove references from parent resources
+    const DEFAULT_BANNER = 'https://iili.io/C7pZ8Ss.jpg';
     if (upload.purpose === 'profile-avatar') {
       if (useTransaction && session) {
         await Profile.findOneAndUpdate({ userId }, { profileImage: '' }, { session });
@@ -343,22 +381,16 @@ const deleteUploadInternal = async (assetId, userId, useTransaction = true) => {
       }
     } else if (upload.purpose === 'profile-banner') {
       if (useTransaction && session) {
-        await Profile.findOneAndUpdate({ userId }, { coverImage: 'https://iili.io/C7pZ8Ss.jpg' }, { session });
+        await Profile.findOneAndUpdate({ userId }, { coverImage: DEFAULT_BANNER }, { session });
       } else {
-        await Profile.findOneAndUpdate({ userId }, { coverImage: 'https://iili.io/C7pZ8Ss.jpg' });
+        await Profile.findOneAndUpdate({ userId }, { coverImage: DEFAULT_BANNER });
       }
     } else if (upload.purpose === 'publication-pdf') {
+      const update = { pdfUrl: '', 'document.url': '' };
       if (useTransaction && session) {
-        await Publication.findOneAndUpdate(
-          { publicationId: upload.resourceId },
-          { cloudinaryFileUrl: '', 'fileDetails.secure_url': '' },
-          { session }
-        );
+        await Publication.findOneAndUpdate({ publicationId: upload.resourceId }, update, { session });
       } else {
-        await Publication.findOneAndUpdate(
-          { publicationId: upload.resourceId },
-          { cloudinaryFileUrl: '', 'fileDetails.secure_url': '' }
-        );
+        await Publication.findOneAndUpdate({ publicationId: upload.resourceId }, update);
       }
     }
 
@@ -367,8 +399,32 @@ const deleteUploadInternal = async (assetId, userId, useTransaction = true) => {
       session.endSession();
     }
 
-    // 3. Delete from R2
+    // Delete from R2
     await r2Service.deleteFile(upload.public_id, upload.resource_type);
+
+    // Invalidate cache
+    if (['profile-avatar', 'profile-banner'].includes(upload.purpose)) {
+      await invalidateProfileCache(userId);
+
+      // Emit real-time update
+      if (upload.purpose === 'profile-avatar') {
+        const payload = {
+          userId: String(userId),
+          profileImage: '',
+          uploadedAt: new Date()
+        };
+        emitProfileImageUpdate(userId, 'profile:imageUpdated', payload);
+        emitProfileImageUpdate(userId, 'profileImageUpdated', payload);
+      } else {
+        const payload = {
+          userId: String(userId),
+          coverImage: 'https://iili.io/C7pZ8Ss.jpg',
+          uploadedAt: new Date()
+        };
+        emitProfileImageUpdate(userId, 'profile:bannerUpdated', payload);
+        emitProfileImageUpdate(userId, 'bannerUpdated', payload);
+      }
+    }
 
     return { success: true };
   } catch (error) {
@@ -379,9 +435,7 @@ const deleteUploadInternal = async (assetId, userId, useTransaction = true) => {
     if (useTransaction && isTxError) {
       log.warn('MongoDB transactions not supported by the database server on delete. Retrying without transaction.');
       if (session) {
-        try {
-          await session.abortTransaction();
-        } catch (e) {}
+        try { await session.abortTransaction(); } catch (e) {}
         session.endSession();
       }
       return deleteUploadInternal(assetId, userId, false);
@@ -402,7 +456,41 @@ const deleteUpload = async (assetId, userId) => {
   return deleteUploadInternal(assetId, userId, true);
 };
 
+const deleteProfilePhoto = async (userId) => {
+  const upload = await Upload.findOne({ userId, purpose: 'profile-avatar', isDeleted: { $ne: true } });
+  if (!upload) {
+    // No upload record but still clear the MongoDB field
+    await Profile.findOneAndUpdate({ userId }, { profileImage: '' });
+    await User.findByIdAndUpdate(userId, { profileImage: '' });
+    await invalidateProfileCache(userId);
+    const payload = { userId: String(userId), profileImage: '' };
+    emitProfileImageUpdate(userId, 'profile:imageUpdated', payload);
+    emitProfileImageUpdate(userId, 'profileImageUpdated', payload);
+    return { success: true, message: 'Profile photo cleared.' };
+  }
+  return deleteUploadInternal(upload.asset_id, userId, true);
+};
+
+/**
+ * Delete the profile banner by finding the active banner upload for the user.
+ */
+const deleteProfileBanner = async (userId) => {
+  const DEFAULT_BANNER = 'https://iili.io/C7pZ8Ss.jpg';
+  const upload = await Upload.findOne({ userId, purpose: 'profile-banner', isDeleted: { $ne: true } });
+  if (!upload) {
+    await Profile.findOneAndUpdate({ userId }, { coverImage: DEFAULT_BANNER });
+    await invalidateProfileCache(userId);
+    const payload = { userId: String(userId), coverImage: DEFAULT_BANNER };
+    emitProfileImageUpdate(userId, 'profile:bannerUpdated', payload);
+    emitProfileImageUpdate(userId, 'bannerUpdated', payload);
+    return { success: true, message: 'Profile banner reset to default.' };
+  }
+  return deleteUploadInternal(upload.asset_id, userId, true);
+};
+
 module.exports = {
   uploadFile,
-  deleteUpload
+  deleteUpload,
+  deleteProfilePhoto,
+  deleteProfileBanner
 };

@@ -1,38 +1,52 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const publicationCommentSchema = new mongoose.Schema(
+const PublicationCommentSchema = new Schema(
   {
-    publication: {
-      type: mongoose.Schema.Types.ObjectId,
+    publicationId: {
+      type: Schema.Types.ObjectId,
       ref: 'Publication',
-      required: [true, 'Comment must belong to a publication'],
-      index: true,
+      required: true,
+      index: true
     },
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
+    userId: {
+      type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Comment must belong to a user'],
+      required: true,
+      index: true
     },
-    commentText: {
+    content: {
       type: String,
-      required: [true, 'Comment text cannot be empty'],
+      required: true,
       trim: true,
+      maxlength: 1500
     },
     parentId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: 'PublicationComment',
-      default: null, // Null means it's a top-level comment
-      index: true,
+      default: null,
+      index: true
     },
-    isDeleted: {
+    likes: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User'
+      }
+    ],
+    isEdited: {
       type: Boolean,
-      default: false,
+      default: false
     },
+    editedAt: {
+      type: Date
+    }
   },
   {
     timestamps: true,
+    collection: 'publicationComments'
   }
 );
 
-const PublicationComment = mongoose.model('PublicationComment', publicationCommentSchema);
-export default PublicationComment;
+const PublicationComment = mongoose.model('PublicationComment', PublicationCommentSchema);
+
+module.exports = PublicationComment;

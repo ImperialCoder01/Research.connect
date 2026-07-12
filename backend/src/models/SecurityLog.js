@@ -1,33 +1,56 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const securityLogSchema = new mongoose.Schema(
+const SecurityLogSchema = new Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
-      index: true,
+      index: true
     },
-    action: {
+    email: {
+      type: String,
+      trim: true,
+      index: true
+    },
+    event: {
       type: String,
       required: true,
+      trim: true,
+      index: true
     },
-    ipAddress: {
+    description: {
       type: String,
-      required: true,
-      default: '127.0.0.1',
+      trim: true
+    },
+    ip: {
+      type: String,
+      default: ''
     },
     userAgent: {
       type: String,
-      required: true,
-      default: 'Unknown',
+      default: ''
     },
+    device: {
+      type: String,
+      default: 'Unknown'
+    },
+    browser: {
+      type: String,
+      default: 'Unknown'
+    },
+    os: {
+      type: String,
+      default: 'Unknown'
+    }
   },
   {
-    timestamps: { createdAt: true, updatedAt: false },
-    collection: 'security_logs',
+    timestamps: true
   }
 );
 
-const SecurityLog = mongoose.model('SecurityLog', securityLogSchema);
-export default SecurityLog;
+SecurityLogSchema.index({ createdAt: -1 });
+
+const SecurityLog = mongoose.model('SecurityLog', SecurityLogSchema);
+
+module.exports = SecurityLog;

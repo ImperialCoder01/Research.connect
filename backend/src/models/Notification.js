@@ -1,55 +1,82 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const notificationSchema = new mongoose.Schema(
+const NotificationSchema = new Schema(
   {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
+    recipientId: {
+      type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Notification must belong to a user'],
-      index: true,
+      required: true,
+      index: true
     },
-    sender: {
-      type: mongoose.Schema.Types.ObjectId,
+    actorId: {
+      type: Schema.Types.ObjectId,
       ref: 'User',
-    },
-    title: {
-      type: String,
-      required: [true, 'Notification must have a title'],
-      trim: true,
-    },
-    message: {
-      type: String,
-      required: [true, 'Notification must have a message'],
-      trim: true,
+      required: true
     },
     type: {
       type: String,
-      enum: ['Recommendation', 'Publication', 'Collaboration', 'System', 'Profile', 'Follow'],
       required: true,
-      index: true,
+      enum: [
+        'follow',
+        'connection_request',
+        'connection_accepted',
+        'connection_rejected',
+        'connection_removed',
+        'publication_uploaded',
+        'publication_updated',
+        'publication_commented',
+        'publication_recommended',
+        'publication_bookmarked',
+        'publication_shared',
+        'publication_cited',
+        'dataset_shared',
+        'project_invitation',
+        'collaboration_invitation',
+        'mention',
+        'system',
+        'admin'
+      ],
+      index: true
     },
-    read: {
+    title: {
+      type: String,
+      required: true
+    },
+    message: {
+      type: String,
+      required: true
+    },
+    targetType: {
+      type: String,
+      enum: ['User', 'Publication', 'Dataset', 'Project', 'ConnectionRequest', 'Comment', 'System'],
+      required: true
+    },
+    targetId: {
+      type: Schema.Types.ObjectId,
+      required: true
+    },
+    targetUrl: {
+      type: String,
+      default: ''
+    },
+    metadata: {
+      type: Map,
+      of: Schema.Types.Mixed
+    },
+    isRead: {
       type: Boolean,
       default: false,
-      index: true,
-    },
-    relatedEntity: {
-      type: mongoose.Schema.Types.ObjectId,
-      refPath: 'onModel',
-    },
-    onModel: {
-      type: String,
-      enum: ['Publication', 'Profile', 'CollaborationRequest', 'Follow'],
-    },
+      index: true
+    }
   },
   {
-    timestamps: true,
-    collection: 'notifications',
+    timestamps: true
   }
 );
 
-// Compound Index: Optimizes loading a user's unread notifications in reverse chronological order
-notificationSchema.index({ user: 1, read: 1, createdAt: -1 });
+// Optimize sorting and unread retrieval
+NotificationSchema.index({ recipientId: 1, isRead: 1, createdAt: -1 });
+NotificationSchema.index({ recipientId: 1, createdAt: -1 });
 
-const Notification = mongoose.model('Notification', notificationSchema);
-export default Notification;
+module.exports = mongoose.model('Notification', NotificationSchema);

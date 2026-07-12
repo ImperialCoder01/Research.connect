@@ -1,26 +1,30 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const publicationResearchAreaSchema = new mongoose.Schema(
+const PublicationResearchAreaSchema = new Schema(
   {
-    publication: {
-      type: mongoose.Schema.Types.ObjectId,
+    publicationId: {
+      type: Schema.Types.ObjectId,
       ref: 'Publication',
-      required: [true, 'Publication is required'],
+      required: true,
+      index: true
     },
     researchArea: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'ResearchArea',
-      required: [true, 'Research Area is required'],
-      index: true,
-    },
+      type: String,
+      required: true,
+      trim: true,
+      index: true
+    }
   },
   {
     timestamps: true,
+    collection: 'publicationResearchAreas'
   }
 );
 
-// Compound Index: Uniqueness of research area per publication
-publicationResearchAreaSchema.index({ publication: 1, researchArea: 1 }, { unique: true });
+// Compound index to avoid duplicate research area mappings
+PublicationResearchAreaSchema.index({ publicationId: 1, researchArea: 1 }, { unique: true });
 
-const PublicationResearchArea = mongoose.model('PublicationResearchArea', publicationResearchAreaSchema);
-export default PublicationResearchArea;
+const PublicationResearchArea = mongoose.model('PublicationResearchArea', PublicationResearchAreaSchema);
+
+module.exports = PublicationResearchArea;

@@ -36,8 +36,8 @@ class PublicationController {
     );
   });
 
-  // Upload File to Cloudinary
-  // publicationId is generated HERE (before upload) so Cloudinary path is unique.
+  // Upload File to Cloudflare R2
+  // publicationId is generated HERE (before upload) so Cloudflare R2 path is unique.
   // This publicationId is returned to the client who passes it when creating the publication record.
   uploadFile = asyncHandler(async (req, res) => {
     if (!req.file) {
@@ -59,7 +59,7 @@ class PublicationController {
       purpose: 'publication-pdf'
     });
 
-    return res.success('File uploaded to Cloudinary successfully.', {
+    return res.success('File uploaded to Cloudflare R2 successfully.', {
       publicationId: result.resourceId,
       secure_url: result.secure_url,
       public_id: result.public_id,
@@ -155,16 +155,7 @@ class PublicationController {
     } = req.query;
 
     const User = require('../../../models/User');
-    
-    const query = { isDeleted: { $ne: true } };
-    if (require('mongoose').Types.ObjectId.isValid(profileSlug)) {
-      query.$or = [{ _id: profileSlug }, { profileSlug }, { username: profileSlug }];
-    } else {
-      query.$or = [{ profileSlug }, { username: profileSlug }];
-    }
-    
-    const user = await User.findOne(query);
-    
+    const user = await User.findOne({ profileSlug, isDeleted: { $ne: true } });
     if (!user) {
       throw new ValidationError('Profile not found.');
     }
@@ -458,6 +449,39 @@ class PublicationController {
     return res.success('Publication deleted successfully.');
   });
 
+  // Upload research paper PDF
+  uploadPaper = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!req.file) {
+      throw new ValidationError('No file was uploaded.');
+    }
+
+    const mimeType = req.file.mimetype || '';
+    const isPDF = mimeType === 'application/pdf' || req.file.originalname?.toLowerCase().endsWith('.pdf');
+
+    if (isPDF) {
+      await validatePDFBuffer(req.file.buffer, req.file.originalname);
+    }
+
+    const pub = await publicationService.uploadPaper(id, req.user._id, req.file);
+
+    return res.success(
+      'Research paper document uploaded successfully.',
+      publicationDTO.formatPublication(pub)
+    );
+  });
+
+  // Delete research paper PDF
+  deletePaper = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const pub = await publicationService.deletePaper(id, req.user._id);
+
+    return res.success(
+      'Research paper document removed successfully.',
+      publicationDTO.formatPublication(pub)
+    );
+  });
+
   // Restore soft deleted publication
   restorePublication = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -549,16 +573,11 @@ class PublicationController {
     } = req.query;
 
     const User = require('../../../models/User');
-    
-    const query = { isDeleted: { $ne: true } };
-    if (require('mongoose').Types.ObjectId.isValid(username)) {
-      query.$or = [{ _id: username }, { profileSlug: username }, { username: username }];
-    } else {
-      query.$or = [{ profileSlug: username }, { username: username }];
+    // Try resolving by username first, fallback to profileSlug
+    let user = await User.findOne({ username, isDeleted: { $ne: true } });
+    if (!user) {
+      user = await User.findOne({ profileSlug: username, isDeleted: { $ne: true } });
     }
-    
-    let user = await User.findOne(query);
-
     if (!user) {
       throw new ValidationError('User profile not found.');
     }

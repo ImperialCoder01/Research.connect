@@ -33,7 +33,13 @@ class ProfileController {
         userId: req.user._id,
         purpose: 'profile-banner'
       });
-      coverImage = uploadDoc.secure_url;
+      coverImage = {
+        url: uploadDoc.secure_url,
+        objectKey: uploadDoc.public_id,
+        mimeType: req.file.mimetype || `image/${uploadDoc.format}`,
+        fileSize: uploadDoc.bytes,
+        uploadedAt: uploadDoc.uploadedAt || new Date()
+      };
     }
     const profile = await profileService.updateProfile(req.user._id, { coverImage });
     return res.success('Profile cover banner updated successfully.', profile);
@@ -49,10 +55,32 @@ class ProfileController {
         userId: req.user._id,
         purpose: 'profile-avatar'
       });
-      profileImage = uploadDoc.secure_url;
+      profileImage = {
+        url: uploadDoc.secure_url,
+        objectKey: uploadDoc.public_id,
+        mimeType: req.file.mimetype || `image/${uploadDoc.format}`,
+        fileSize: uploadDoc.bytes,
+        uploadedAt: uploadDoc.uploadedAt || new Date()
+      };
     }
     const profile = await profileService.updateProfile(req.user._id, { profileImage });
     return res.success('Profile avatar photo updated successfully.', profile);
+  });
+
+  // Delete profile photo and reset to default
+  deletePhoto = asyncHandler(async (req, res) => {
+    const uploadService = require('../../upload/service/upload.service');
+    await uploadService.deleteProfilePhoto(req.user._id);
+    const profile = await profileService.getProfile(req.user._id);
+    return res.success('Profile photo removed successfully.', profile);
+  });
+
+  // Delete profile banner and reset to default
+  deleteBanner = asyncHandler(async (req, res) => {
+    const uploadService = require('../../upload/service/upload.service');
+    await uploadService.deleteProfileBanner(req.user._id);
+    const profile = await profileService.getProfile(req.user._id);
+    return res.success('Profile banner removed and reset to default.', profile);
   });
 
   // Update basic details (First Name, Last Name, Headline, etc.)
