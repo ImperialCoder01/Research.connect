@@ -1,4 +1,9 @@
+const mongoose = require('mongoose');
 const Connection = require('../../../models/Connection');
+const Follow = require('../../../models/Follow');
+const User = require('../../../models/User');
+const Profile = require('../../../models/Profile');
+const ConnectionRequest = require('../../connections/model/ConnectionRequest');
 const { ValidationError, UnauthorizedError } = require('../../../common/errors/AppError');
 const messageRepository = require('../repository/message.repository');
 const Conversation = require('../model/Conversation');
@@ -8,30 +13,45 @@ const ArchivedChat = require('../model/ArchivedChat');
 const MessageAttachment = require('../model/MessageAttachment');
 const MessageReaction = require('../model/MessageReaction');
 const Call = require('../../../models/Call');
-const { emitToUser, emitToRoom } = require('../../../config/socket');
+const { emitToUser, emitToRoom, isUserOnline } = require('../../../config/socket');
 
 class MessageService {
   /**
-   * Helper to verify if two users are currently connected
+   * Check if two users are allowed to chat:
+   * - Accepted connections, OR
+   * - One party follows the other (mutual or one-way)
    */
-  async checkConnected(userA, userB) {
-    const [a, b] = [userA.toString(), userB.toString()].sort();
-    const conn = await Connection.findOne({ researcherA: a, researcherB: b });
-    return !!conn;
+  async checkCanChat(userA, userB) {
+    const aStr = userA.toString();
+    const bStr = userB.toString();
+    const [sortedA, sortedB] = [aStr, bStr].sort();
+
+    // Check accepted connection
+    const isConnected = await Connection.findOne({ researcherA: sortedA, researcherB: sortedB }).lean();
+    if (isConnected) return true;
+
+    // Check follow relationship (either direction)
+    const followExists = await Follow.findOne({
+      $or: [
+        { followerId: aStr, followingId: bStr },
+        { followerId: bStr, followingId: aStr }
+      ]
+    }).lean();
+
+    return !!followExists;
   }
 
   /**
-   * Start or retrieve a conversation
+   * Start or retrieve a conversation (enforces chat permission)
    */
   async getOrCreateConversation(userId, targetUserId) {
     if (userId.toString() === targetUserId.toString()) {
       throw new ValidationError('Cannot chat with yourself.');
     }
 
-    // Enforce connection check
-    const isConnected = await this.checkConnected(userId, targetUserId);
-    if (!isConnected) {
-      throw new ValidationError('You can only message connected researchers.');
+    const canChat = await this.checkCanChat(userId, targetUserId);
+    if (!canChat) {
+      throw new ValidationError('You can only message researchers you are connected with or follow.');
     }
 
     return await messageRepository.findOrCreateConversation(userId, targetUserId);
@@ -56,12 +76,6 @@ class MessageService {
       conversationId = conv._id;
     } else {
       throw new ValidationError('Either conversationId or receiverId must be supplied.');
-    }
-
-    // Double check connection status
-    const isConnected = await this.checkConnected(userId, receiverId);
-    if (!isConnected) {
-      throw new ValidationError('You can only message connected researchers.');
     }
 
     // Create the message
@@ -453,6 +467,139 @@ class MessageService {
    */
   async getSharedFiles(userId) {
     return await messageRepository.getSharedFiles(userId);
+  }
+
+  /**
+   * Get messaging contacts — merged deduplicated list of:
+   * connections, followers, and following;
+   * each enriched with online status and existingConversationId.
+   */
+  async getMessagingContacts(userId) {
+    const userIdStr = userId.toString();
+    const castUserId = new mongoose.Types.ObjectId(userId);
+
+    // 1. Fetch all three relationship sets in parallel
+    const [connections, followers, following, conversations] = await Promise.all([
+      Connection.find({ $or: [{ researcherA: castUserId }, { researcherB: castUserId }] }).lean(),
+      Follow.find({ followingId: castUserId }).lean(),
+      Follow.find({ followerId: castUserId }).lean(),
+      Conversation.find({ participants: castUserId, isGroup: false }).select('participants').lean()
+    ]);
+
+    // Build conversationId lookup: otherUserId -> conversationId
+    const convMap = new Map();
+    conversations.forEach(c => {
+      const other = c.participants.find(p => p.toString() !== userIdStr);
+      if (other) convMap.set(other.toString(), c._id.toString());
+    });
+
+    // Extract unique other-user IDs per category
+    const connectionIds = connections.map(c =>
+      c.researcherA.toString() === userIdStr ? c.researcherB.toString() : c.researcherA.toString()
+    );
+    const followerIds = followers.map(f => f.followerId.toString());
+    const followingIds = following.map(f => f.followingId.toString());
+
+    // Collect all unique user IDs we need to enrich
+    const allIds = [...new Set([...connectionIds, ...followerIds, ...followingIds])];
+    if (allIds.length === 0) {
+      return { connections: [], followers: [], following: [] };
+    }
+
+    const objectIds = allIds.map(id => new mongoose.Types.ObjectId(id));
+
+    // 2. Bulk fetch users + profiles
+    const [users, profiles] = await Promise.all([
+      User.find({ _id: { $in: objectIds }, isDeleted: { $ne: true } })
+        .select('_id firstName lastName username profileImage profileSlug slug')
+        .lean(),
+      Profile.find({ userId: { $in: objectIds } })
+        .select('userId bio designation institution')
+        .lean()
+    ]);
+
+    const userMap = new Map();
+    users.forEach(u => userMap.set(u._id.toString(), u));
+    const profileMap = new Map();
+    profiles.forEach(p => profileMap.set(p.userId.toString(), p));
+
+    // Enrichment helper
+    const enrich = (idStr) => {
+      const u = userMap.get(idStr);
+      if (!u) return null;
+      const p = profileMap.get(idStr) || {};
+      return {
+        _id: u._id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        username: u.username,
+        profileImage: u.profileImage,
+        profileSlug: u.profileSlug || u.slug,
+        bio: p.bio || '',
+        designation: p.designation || '',
+        institution: p.institution || '',
+        isOnline: isUserOnline(idStr),
+        existingConversationId: convMap.get(idStr) || null
+      };
+    };
+
+    return {
+      connections: connectionIds.map(enrich).filter(Boolean),
+      followers: followerIds.map(enrich).filter(Boolean),
+      following: followingIds.map(enrich).filter(Boolean)
+    };
+  }
+
+  /**
+   * Get pending received connection requests (for the messaging Requests tab)
+   */
+  async getConnectionRequests(userId) {
+    const castUserId = new mongoose.Types.ObjectId(userId);
+    return await ConnectionRequest.aggregate([
+      { $match: { receiverId: castUserId, status: 'pending' } },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'senderId',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: '$user' },
+      {
+        $lookup: {
+          from: 'profiles',
+          localField: 'senderId',
+          foreignField: 'userId',
+          as: 'profile'
+        }
+      },
+      { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1,
+          note: 1,
+          status: 1,
+          createdAt: 1,
+          user: {
+            _id: 1,
+            firstName: 1,
+            lastName: 1,
+            username: 1,
+            profileImage: 1,
+            profileSlug: 1
+          },
+          profile: {
+            bio: 1,
+            designation: 1,
+            institution: 1,
+            skills: 1,
+            metrics: 1
+          }
+        }
+      },
+      { $sort: { createdAt: -1 } }
+    ]);
   }
 }
 

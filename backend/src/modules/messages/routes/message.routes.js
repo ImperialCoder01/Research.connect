@@ -18,6 +18,12 @@ router.get('/', messageController.getUserConversations);
 router.get('/search', messageController.searchMessages);
 router.get('/shared-files', messageController.getSharedFiles);
 
+// GET Messaging contacts (connections + followers + following with online status)
+router.get('/contacts', messageController.getMessagingContacts);
+
+// GET Pending connection requests for the messaging Requests tab
+router.get('/requests', messageController.getConnectionRequests);
+
 // GET Message history
 router.get('/:conversationId', validateConversationId, messageController.getConversationMessages);
 

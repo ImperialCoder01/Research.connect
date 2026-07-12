@@ -1,31 +1,85 @@
 const rateLimit = require('express-rate-limit');
 const redisClient = require('./redis');
 
-// Helper to create a unique RedisStore instance for each rate limiter to prevent sharing error
+class FallbackStore {
+  constructor(prefix) {
+    this.prefix = prefix;
+    this.useMemory = false;
+  }
+
+  async init(options) {
+    this.options = options;
+    const { MemoryStore } = require('express-rate-limit');
+    this.memoryStore = new MemoryStore();
+    if (typeof this.memoryStore.init === 'function') {
+      await this.memoryStore.init(options);
+    }
+
+    if (redisClient.isOpen && redisClient.isReady) {
+      try {
+        const { RedisStore } = require('rate-limit-redis');
+        this.redisStore = new RedisStore({
+          sendCommand: async (...args) => {
+            return await redisClient.sendCommand(args);
+          },
+          prefix: `rl:${this.prefix}:`
+        });
+        await this.redisStore.init(options);
+      } catch (err) {
+        console.warn(`Failed to initialize Redis store for rate limiting prefix "${this.prefix}", falling back to memory:`, err.message);
+        this.useMemory = true;
+      }
+    } else {
+      this.useMemory = true;
+    }
+  }
+
+  async increment(key) {
+    if (this.useMemory || !redisClient.isOpen || !redisClient.isReady) {
+      return await this.memoryStore.increment(key);
+    }
+    try {
+      return await this.redisStore.increment(key);
+    } catch (err) {
+      console.warn(`Redis rate limit store error for prefix "${this.prefix}", falling back to memory:`, err.message);
+      this.useMemory = true;
+      return await this.memoryStore.increment(key);
+    }
+  }
+
+  async decrement(key) {
+    if (this.useMemory || !redisClient.isOpen || !redisClient.isReady) {
+      if (typeof this.memoryStore.decrement === 'function') {
+        return await this.memoryStore.decrement(key);
+      }
+      return;
+    }
+    try {
+      return await this.redisStore.decrement(key);
+    } catch (err) {
+      this.useMemory = true;
+      if (typeof this.memoryStore.decrement === 'function') {
+        return await this.memoryStore.decrement(key);
+      }
+    }
+  }
+
+  async resetKey(key) {
+    if (this.useMemory || !redisClient.isOpen || !redisClient.isReady) {
+      return await this.memoryStore.resetKey(key);
+    }
+    try {
+      return await this.redisStore.resetKey(key);
+    } catch (err) {
+      this.useMemory = true;
+      return await this.memoryStore.resetKey(key);
+    }
+  }
+}
+
+// Helper to create a store instance for each rate limiter
 const createStore = (prefix) => {
-  if (!redisClient.isOpen || !redisClient.isReady) {
-    return undefined;
-  }
-  try {
-    const { RedisStore } = require('rate-limit-redis');
-    return new RedisStore({
-      sendCommand: async (...args) => {
-        if (!redisClient.isOpen || !redisClient.isReady) {
-          // Return dummy value during import/compile phase or when Redis is not ready yet
-          return 'dummy';
-        }
-        try {
-          return await redisClient.sendCommand(args);
-        } catch (err) {
-          return 'dummy';
-        }
-      },
-      prefix: `rl:${prefix}:`
-    });
-  } catch (err) {
-    console.warn(`Failed to initialize Redis store for rate limiting prefix "${prefix}", falling back to memory:`, err.message);
-    return undefined;
-  }
+  return new FallbackStore(prefix);
 };
 
 

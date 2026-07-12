@@ -289,8 +289,9 @@ class MessageController {
       );
 
       const attachment = new MessageAttachment({
-        url: uploaded.secure_url,
-        publicId: uploaded.public_id,
+        url: uploaded.secure_url || uploaded.url,
+        objectKey: uploaded.public_id || uploaded.objectKey || null,
+        storageProvider: 'r2',
         filename: req.file.originalname,
         fileType: req.file.mimetype,
         fileSize: req.file.size,
@@ -408,6 +409,43 @@ class MessageController {
       res.status(200).json({
         success: true,
         message: 'Shared files retrieved successfully',
+        data,
+        error: null
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /contacts
+   * Returns the authenticated user's connections, followers, and following
+   * each enriched with online status and existingConversationId.
+   */
+  async getMessagingContacts(req, res, next) {
+    try {
+      const data = await messageService.getMessagingContacts(req.user.id);
+      res.status(200).json({
+        success: true,
+        message: 'Messaging contacts retrieved successfully',
+        data,
+        error: null
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /requests
+   * Returns pending received connection requests for the messaging Requests tab.
+   */
+  async getConnectionRequests(req, res, next) {
+    try {
+      const data = await messageService.getConnectionRequests(req.user.id);
+      res.status(200).json({
+        success: true,
+        message: 'Connection requests retrieved successfully',
         data,
         error: null
       });

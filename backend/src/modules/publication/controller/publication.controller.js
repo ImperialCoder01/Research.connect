@@ -574,10 +574,16 @@ class PublicationController {
     } = req.query;
 
     const User = require('../../../models/User');
-    // Try resolving by username first, fallback to profileSlug
-    let user = await User.findOne({ username, isDeleted: { $ne: true } });
-    if (!user) {
-      user = await User.findOne({ profileSlug: username, isDeleted: { $ne: true } });
+    let user;
+    if (!username || username === 'undefined' || username === 'me') {
+      if (req.user) {
+        user = await User.findById(req.user._id);
+      }
+    } else {
+      user = await User.findOne({ username, isDeleted: { $ne: true } });
+      if (!user) {
+        user = await User.findOne({ profileSlug: username, isDeleted: { $ne: true } });
+      }
     }
     if (!user) {
       throw new ValidationError('User profile not found.');

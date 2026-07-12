@@ -171,9 +171,10 @@ class MessagesService {
 
   /**
    * Get pending connection requests
+   * Now served by the messaging module directly (same data, avoids cross-module coupling)
    */
   async getRequests() {
-    const res = await axiosInstance.get('/v1/network/requests');
+    const res = await axiosInstance.get('/v1/messages/requests');
     return res.data;
   }
 
@@ -190,6 +191,16 @@ class MessagesService {
    */
   async rejectRequest(requestId) {
     const res = await axiosInstance.post('/v1/network/reject', { requestId });
+    return res.data;
+  }
+
+  /**
+   * Get messaging contacts — returns connections, followers, and following
+   * each enriched with online status and existingConversationId.
+   * Used to populate the Followers / Following / Connections panels in MessagesPage.
+   */
+  async getContacts() {
+    const res = await axiosInstance.get('/v1/messages/contacts');
     return res.data;
   }
 }
