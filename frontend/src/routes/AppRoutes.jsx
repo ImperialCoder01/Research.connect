@@ -29,8 +29,7 @@ const PublicationEditPage = React.lazy(() => import('../modules/publication/page
 const PublicationReader = React.lazy(() => import('../modules/publication/pages/PublicationReader'));
 const PublicationAnalyticsPage = React.lazy(() => import('../modules/publication/pages/PublicationAnalyticsPage'));
 const SearchPage = React.lazy(() => import('../modules/search/pages/SearchPage'));
-const MessagesPage = React.lazy(() => import('../modules/messages/pages/MessagesPage'));
-const HelpCenterPage = React.lazy(() => import('../pages/HelpCenter/HelpCenterPage'));
+const MessagesPage = React.lazy(() => import('../modules/messaging/pages/MessagesPage'));
 
 // Social Collaboration Modules
 const NetworkPage = React.lazy(() => import('../modules/connections/pages/NetworkPage'));
@@ -58,6 +57,9 @@ import profileRoutes from '../modules/profile/routes/profile.routes';
 // Legal pages
 const TermsOfServicePage = React.lazy(() => import('../modules/legal/pages/TermsOfServicePage'));
 const PrivacyPolicyPage = React.lazy(() => import('../modules/legal/pages/PrivacyPolicyPage'));
+
+// Help Center Module
+const HelpCenterPage = React.lazy(() => import('../pages/HelpCenter/HelpCenterPage'));
 
 const AppRoutes = () => {
   return (
