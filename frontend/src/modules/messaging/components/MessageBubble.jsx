@@ -160,62 +160,6 @@ const MessageBubble = ({ message, onReply, onEditInit, otherParticipant }) => {
             </button>
             <button onClick={() => setSheetOpen(false)} className="w-full text-center px-3 py-3 mt-1 text-sm font-bold text-slate-400 hover:text-slate-600 cursor-pointer sm:hidden">Cancel</button>
           </div>
-<<<<<<< HEAD
-=======
-
-          <button 
-            onClick={handleCopy}
-            className="p-1 hover:bg-slate-50 text-slate-500 hover:text-slate-800 rounded-lg transition-colors cursor-pointer"
-            title="Copy Text"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-
-          <button 
-            onClick={onReply}
-            className="p-1 hover:bg-slate-50 text-slate-500 hover:text-slate-800 rounded-lg transition-colors cursor-pointer"
-            title="Reply"
-          >
-            <Reply className="w-3.5 h-3.5" />
-          </button>
-
-          {isMe && (
-            <>
-              <button 
-                onClick={onEditInit}
-                className="p-1 hover:bg-slate-50 text-slate-500 hover:text-slate-800 rounded-lg transition-colors cursor-pointer"
-                title="Edit"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-              <button 
-                onClick={() => {
-                  if (window.confirm('Delete message for everyone?')) {
-                    deleteMutation.mutate('everyone');
-                  }
-                }}
-                className="p-1 hover:bg-red-50 text-red-500 rounded-lg transition-colors cursor-pointer"
-                title="Delete for Everyone"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </>
-          )}
-
-          {!isMe && (
-            <button 
-              onClick={() => {
-                if (window.confirm('Delete message for yourself?')) {
-                  deleteMutation.mutate('me');
-                }
-              }}
-              className="p-1 hover:bg-red-50 text-red-500 rounded-lg transition-colors cursor-pointer"
-              title="Delete for Me"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
->>>>>>> origin/main
         </div>
       )}
     </div>
