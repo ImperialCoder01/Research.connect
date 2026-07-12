@@ -336,6 +336,8 @@ PublicationSchema.index({ userId: 1, googleScholarPublicationId: 1 }, { unique: 
 PublicationSchema.index({ publicationType: 1 });
 PublicationSchema.index({ createdAt: -1 });
 PublicationSchema.index({ isDeleted: 1 });
+PublicationSchema.index({ userId: 1, isDeleted: 1, status: 1, visibility: 1 });
+PublicationSchema.index({ userId: 1, isDeleted: 1 });
 
 // Compound text index for full-text search (Phase 5 Search Engine)
 PublicationSchema.index(

@@ -35,6 +35,7 @@ const globalLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   store: createStore('global'),
+  passOnStoreError: true,
   message: createMessage('Too many requests from this IP. Please try again after 15 minutes.')
 });
 
@@ -44,6 +45,7 @@ const authLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   store: createStore('auth'),
+  passOnStoreError: true,
   message: createMessage('Too many authentication attempts. Please try again after 15 minutes.', 'AUTH_BRUTE_FORCE')
 });
 
@@ -54,6 +56,7 @@ const otpLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   store: createStore('otp'),
+  passOnStoreError: true,
   message: createMessage('Too many OTP requests. Please wait 5 minutes before requesting again.', 'OTP_THROTTLED')
 });
 
@@ -64,6 +67,7 @@ const verifyOtpLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   store: createStore('verify_otp'),
+  passOnStoreError: true,
   message: createMessage('Too many verification attempts. Please wait a few minutes and try again.', 'OTP_THROTTLED')
 });
 
@@ -73,6 +77,7 @@ const searchLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   store: createStore('search'),
+  passOnStoreError: true,
   message: createMessage('Too many search requests. Please slow down.', 'SEARCH_THROTTLED')
 });
 
@@ -82,6 +87,7 @@ const scholarSyncLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   store: createStore('scholar_sync'),
+  passOnStoreError: true,
   message: createMessage('Google Scholar portfolio synchronization is throttled to 3 times per 10 minutes.', 'SYNC_THROTTLED')
 });
 
@@ -91,6 +97,7 @@ const uploadLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   store: createStore('upload'),
+  passOnStoreError: true,
   message: createMessage('Too many file uploads from this IP. Please try again after 15 minutes.', 'UPLOAD_THROTTLED')
 });
 

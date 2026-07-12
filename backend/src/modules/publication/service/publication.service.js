@@ -601,7 +601,16 @@ class PublicationService {
    */
   async getPublications(filter = {}, queryOptions = {}) {
     const { page = 1, limit = 10, sort = '-createdAt', search } = queryOptions;
-    const skip = (page - 1) * limit;
+    
+    // Safety boundaries for pagination limit and page
+    let pageNum = parseInt(page, 10) || 1;
+    if (pageNum < 1) pageNum = 1;
+    
+    let limitNum = parseInt(limit, 10) || 10;
+    if (limitNum <= 0) limitNum = 10;
+    if (limitNum > 100) limitNum = 100; // safety ceiling
+    
+    const skip = (pageNum - 1) * limitNum;
 
     const baseFilter = { ...filter };
     if (baseFilter.isDeleted === undefined) {
@@ -645,7 +654,7 @@ class PublicationService {
       .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug slug username')
       .sort(sortOption)
       .skip(skip)
-      .limit(Number(limit))
+      .limit(limitNum)
       .lean();
 
     const [docs, total] = await Promise.all([
@@ -656,9 +665,9 @@ class PublicationService {
     return {
       docs,
       total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages: Math.ceil(total / limit)
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum)
     };
   }
 

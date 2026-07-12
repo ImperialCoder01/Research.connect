@@ -301,9 +301,10 @@ class PublicationController {
       filter._id = { $in: bookmarkedIds };
     }
 
-    const stats = await publicationService.getPublicationStats(req.user._id);
-
-    const result = await publicationService.getPublications(filter, { page, limit, sort, search });
+    const [stats, result] = await Promise.all([
+      publicationService.getPublicationStats(req.user._id),
+      publicationService.getPublications(filter, { page, limit, sort, search })
+    ]);
 
     return res.success('My publications retrieved successfully.', {
       docs: publicationDTO.formatPublicationList(result.docs),

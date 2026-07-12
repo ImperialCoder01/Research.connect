@@ -93,8 +93,18 @@ class RedisQueue {
             }
           }
         } catch (err) {
-          logger.error(`[QUEUE WORKER LOOP ERROR] Queue ${queueName}: ${err.stack || err.message || err}`);
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          const isRedisError = err.message?.includes('closed') || 
+                               err.message?.includes('socket') || 
+                               err.message?.includes('connection') || 
+                               err.message?.includes('ECONNRESET') || 
+                               err.name === 'AbortError';
+          if (isRedisError) {
+            logger.warn(`[QUEUE WORKER REDIS DISCONNECT] Queue ${queueName} waiting for connection: ${err.message}`);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          } else {
+            logger.error(`[QUEUE WORKER LOOP ERROR] Queue ${queueName}: ${err.stack || err.message}`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
         }
       }
     })();
