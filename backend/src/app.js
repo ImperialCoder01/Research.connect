@@ -60,6 +60,9 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use("/uploads", express.static(uploadsDir));
 
+// Request ID tracing
+app.use(requestIdMiddleware);
+
 // Request logger
 app.use(loggerMiddleware);
 
