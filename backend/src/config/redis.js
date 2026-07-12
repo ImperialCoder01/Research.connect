@@ -4,7 +4,13 @@ const logger = require('../common/logger/winston');
 const REDIS_URI = process.env.REDIS_URI || 'redis://localhost:6379';
 
 const redisClient = createClient({
-  url: REDIS_URI
+  url: REDIS_URI,
+  socket: {
+    reconnectStrategy: (retries) => {
+      const delay = Math.min(retries * 100, 3000);
+      return delay;
+    }
+  }
 });
 
 redisClient.on('error', (err) => {
