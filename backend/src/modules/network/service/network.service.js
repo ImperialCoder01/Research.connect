@@ -174,7 +174,7 @@ class NetworkService {
         fullName: 1,
         username: 1,
         profileSlug: 1,
-        profileImage: 1,
+        profileImage: '$profileImage.url',
         profile: {
           headline: 1,
           institution: 1,

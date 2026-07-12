@@ -60,6 +60,7 @@ class MessageRepository extends BaseRepository {
           const presence = await Presence.findOne({ userId: otherParticipant._id }).lean();
           detailedParticipant = {
             ...otherParticipant,
+            profileImage: otherParticipant.profileImage?.url || otherParticipant.profileImage || '',
             isOnline: presence ? presence.status === 'online' : false,
             lastSeen: presence?.lastSeen || null,
             bio: profile?.bio || '',

@@ -499,6 +499,14 @@ class MessageService {
       emitToUser(pid, 'conversation:update', { conversationId: conv._id, lastMessage: msg });
     });
 
+    // Normalize profileImage for all participants (populate+lean bypasses toJSON)
+    if (populated && populated.participants) {
+      populated.participants = populated.participants.map(p => ({
+        ...p,
+        profileImage: p.profileImage?.url || p.profileImage || ''
+      }));
+    }
+
     return populated;
   }
 
@@ -544,10 +552,20 @@ class MessageService {
       });
     }
 
-    return await Conversation.findById(conversationId)
+    const result = await Conversation.findById(conversationId)
       .populate('participants', 'firstName lastName username profileSlug slug profileImage')
       .populate('lastMessage')
       .lean();
+
+    // Normalize profileImage for all participants (populate+lean bypasses toJSON)
+    if (result && result.participants) {
+      result.participants = result.participants.map(p => ({
+        ...p,
+        profileImage: p.profileImage?.url || p.profileImage || ''
+      }));
+    }
+
+    return result;
   }
 
   /**
@@ -587,11 +605,26 @@ class MessageService {
    */
   async getCallHistory(userId) {
     const castUserId = new mongoose.Types.ObjectId(userId);
-    return await Call.find({ participants: castUserId })
+    const calls = await Call.find({ participants: castUserId })
       .populate('initiatorId', 'firstName lastName username profileSlug slug profileImage')
       .populate('participants', 'firstName lastName username profileSlug slug profileImage')
       .sort({ createdAt: -1 })
       .lean();
+
+    // Normalize profileImage (populate+lean bypasses toJSON transformer)
+    return calls.map(call => ({
+      ...call,
+      initiatorId: call.initiatorId ? {
+        ...call.initiatorId,
+        profileImage: call.initiatorId.profileImage?.url || call.initiatorId.profileImage || ''
+      } : call.initiatorId,
+      participants: Array.isArray(call.participants)
+        ? call.participants.map(p => ({
+            ...p,
+            profileImage: p.profileImage?.url || p.profileImage || ''
+          }))
+        : call.participants
+    }));
   }
 
   /**
@@ -702,7 +735,7 @@ class MessageService {
         firstName: u.firstName,
         lastName: u.lastName,
         username: u.username,
-        profileImage: u.profileImage,
+        profileImage: u.profileImage?.url || u.profileImage || '',
         profileSlug: u.profileSlug || u.slug,
         bio: p.bio || '',
         designation: p.designation || '',
@@ -755,7 +788,7 @@ class MessageService {
             firstName: 1,
             lastName: 1,
             username: 1,
-            profileImage: 1,
+            profileImage: '$user.profileImage.url',
             profileSlug: 1
           },
           profile: {
@@ -839,6 +872,7 @@ class MessageService {
       const presence = await Presence.findOne({ userId: otherParticipant._id }).lean();
       detailedParticipant = {
         ...otherParticipant,
+        profileImage: otherParticipant.profileImage?.url || otherParticipant.profileImage || '',
         isOnline: presence ? presence.status === 'online' : false,
         lastSeen: presence?.lastSeen || null,
         bio: profile?.bio || '',
