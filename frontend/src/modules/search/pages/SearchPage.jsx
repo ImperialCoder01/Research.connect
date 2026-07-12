@@ -76,7 +76,9 @@ const SearchPage = () => {
     views: r.profile?.metrics?.viewsCount || r.profile?.views || 0,
     citations: r.profile?.metrics?.totalCitations || r.profile?.citations || 0,
     profileSlug: r.profileSlug,
-    avatar: r.profileImage || r.profile?.profileImage || null
+    avatar: (typeof r.profileImage === 'string' ? r.profileImage : r.profileImage?.url) || 
+            (typeof r.profile?.profileImage === 'string' ? r.profile?.profileImage : r.profile?.profileImage?.url) || 
+            null
   }));
 
   // Intersection Observer for infinite scrolling
