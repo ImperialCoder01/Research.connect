@@ -29,8 +29,9 @@ const PublicationEditPage = React.lazy(() => import('../modules/publication/page
 const PublicationReader = React.lazy(() => import('../modules/publication/pages/PublicationReader'));
 const PublicationAnalyticsPage = React.lazy(() => import('../modules/publication/pages/PublicationAnalyticsPage'));
 const SearchPage = React.lazy(() => import('../modules/search/pages/SearchPage'));
-const MessagesPage = React.lazy(() => import('../modules/messages/pages/MessagesPage'));
+const MessagesPage = React.lazy(() => import('../modules/messaging/pages/MessagesPage'));
 const CreateProject = React.lazy(() => import('../modules/project/pages/CreateProject'));
+
 
 // Social Collaboration Modules
 const NetworkPage = React.lazy(() => import('../modules/connections/pages/NetworkPage'));

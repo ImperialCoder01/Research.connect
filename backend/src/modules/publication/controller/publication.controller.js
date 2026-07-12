@@ -301,9 +301,10 @@ class PublicationController {
       filter._id = { $in: bookmarkedIds };
     }
 
-    const stats = await publicationService.getPublicationStats(req.user._id);
-
-    const result = await publicationService.getPublications(filter, { page, limit, sort, search });
+    const [stats, result] = await Promise.all([
+      publicationService.getPublicationStats(req.user._id),
+      publicationService.getPublications(filter, { page, limit, sort, search })
+    ]);
 
     return res.success('My publications retrieved successfully.', {
       docs: publicationDTO.formatPublicationList(result.docs),
@@ -573,10 +574,16 @@ class PublicationController {
     } = req.query;
 
     const User = require('../../../models/User');
-    // Try resolving by username first, fallback to profileSlug
-    let user = await User.findOne({ username, isDeleted: { $ne: true } });
-    if (!user) {
-      user = await User.findOne({ profileSlug: username, isDeleted: { $ne: true } });
+    let user;
+    if (!username || username === 'undefined' || username === 'me') {
+      if (req.user) {
+        user = await User.findById(req.user._id);
+      }
+    } else {
+      user = await User.findOne({ username, isDeleted: { $ne: true } });
+      if (!user) {
+        user = await User.findOne({ profileSlug: username, isDeleted: { $ne: true } });
+      }
     }
     if (!user) {
       throw new ValidationError('User profile not found.');

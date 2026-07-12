@@ -8,6 +8,7 @@ import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import ResearcherInfo from '../components/ResearcherInfo';
 import CallOverlay from '../components/CallOverlay';
+import NewChatModal from '../components/NewChatModal';
 import { 
   ArrowLeft, MessageSquare, Mail, Star, Archive, Users, 
   Lightbulb, UserPlus, PhoneCall, FolderOpen, FileText, Ban, 
@@ -23,10 +24,12 @@ const MessagesPage = () => {
   const { socket } = useSocket();
 
   const userQueryId = searchParams.get('user');
+  const conversationQueryId = searchParams.get('conversation');
 
   const [activeId, setActiveId] = useState(conversationId || null);
   const [mobileView, setMobileView] = useState('list'); // 'list' or 'chat'
   const [showInfoPanel, setShowInfoPanel] = useState(true);
+  const [isComposeOpen, setIsComposeOpen] = useState(false);
   
   // Navigation tabs state
   const [activeTab, setActiveTab] = useState('inbox'); // inbox, unread, starred, archived, groups, collaboration, requests, calls, files, settings
@@ -70,7 +73,7 @@ const MessagesPage = () => {
 
   // Handle "?user=userId" query parameter to auto-open or create conversation
   useEffect(() => {
-    if (!userQueryId || !conversations.length) return;
+    if (!userQueryId || isConvLoading) return;
 
     // Check if we already have a conversation with this participant
     const existingConv = conversations.find(
@@ -85,6 +88,7 @@ const MessagesPage = () => {
           const res = await messagesService.createConversation(userQueryId);
           if (res.success && res.data) {
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            queryClient.invalidateQueries({ queryKey: ['messagingContacts'] });
             handleSelectConversation(res.data._id);
           }
         } catch (err) {
@@ -93,20 +97,41 @@ const MessagesPage = () => {
       };
       startNewChat();
     }
-  }, [userQueryId, conversations]);
+  }, [userQueryId, isConvLoading, conversations]);
+
+  // Handle "?conversation=conversationId" query parameter to auto-select conversation
+  useEffect(() => {
+    if (conversationQueryId) {
+      handleSelectConversation(conversationQueryId);
+    }
+  }, [conversationQueryId]);
 
   const activeConversation = conversations.find(c => c._id === activeId);
 
-  // Fetch connection requests (incoming)
+  // Fetch connection requests (incoming) — now served by messaging module
   const { data: requestsData, refetch: refetchRequests } = useQuery({
     queryKey: ['networkRequests'],
     queryFn: async () => {
-      const res = await networkService.getRequests();
-      return res.data || { received: [], sent: [] };
+      const res = await messagesService.getRequests();
+      return res.data || [];
     }
   });
 
-  const incomingRequests = requestsData?.received || [];
+  const incomingRequests = requestsData || [];
+
+  // Fetch messaging contacts (connections + followers + following with online status)
+  const { data: contactsData } = useQuery({
+    queryKey: ['messagingContacts'],
+    queryFn: async () => {
+      const res = await messagesService.getContacts();
+      return res.data || { connections: [], followers: [], following: [] };
+    },
+    staleTime: 60_000
+  });
+
+  const contactConnections = contactsData?.connections || [];
+  const contactFollowers  = contactsData?.followers  || [];
+  const contactFollowing  = contactsData?.following  || [];
 
   // Fetch Call History logs
   const { data: callHistoryData, isLoading: isCallsLoading } = useQuery({
@@ -161,6 +186,7 @@ const MessagesPage = () => {
       toast.success('Connection accepted! DM initiated.');
       queryClient.invalidateQueries({ queryKey: ['networkRequests'] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['messagingContacts'] });
     },
     onError: (err) => {
       toast.error(err.response?.data?.message || 'Failed to accept request.');
@@ -169,7 +195,7 @@ const MessagesPage = () => {
 
   const rejectRequestMutation = useMutation({
     mutationFn: async (requestId) => {
-      return await networkService.rejectRequest(requestId);
+      return await messagesService.rejectRequest(requestId);
     },
     onSuccess: () => {
       toast.success('Request declined.');
@@ -233,12 +259,42 @@ const MessagesPage = () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     };
 
+    // Listen for message delivered receipts (delivery tick on sender side)
+    const handleMessageDelivered = ({ messageId, conversationId: convId }) => {
+      if (convId) {
+        queryClient.invalidateQueries({ queryKey: ['messages', convId] });
+      }
+    };
+
+    // Real-time message updates (edits, deletions, reactions)
+    const handleMessageUpdate = () => {
+      if (activeId) {
+        queryClient.invalidateQueries({ queryKey: ['messages', activeId] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    };
+
+    const handleConversationUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['unreadCount'] });
+    };
+
     socket.on('call:incoming', handleIncomingCall);
     socket.on('call:accepted', handleCallAccepted);
     socket.on('call:rejected', handleCallRejected);
     socket.on('call:hungup', handleCallHungup);
     socket.on('message:new', handleNewMessage);
+    socket.on('receiveMessage', handleNewMessage);
     socket.on('conversation:new', handleNewConversation);
+    socket.on('message:delivered', handleMessageDelivered);
+    socket.on('messageDelivered', handleMessageDelivered);
+    socket.on('message:update', handleMessageUpdate);
+    socket.on('messageEdited', handleMessageUpdate);
+    socket.on('messageDeleted', handleMessageUpdate);
+    socket.on('reactionAdded', handleMessageUpdate);
+    socket.on('reactionRemoved', handleMessageUpdate);
+    socket.on('conversation:update', handleConversationUpdate);
+    socket.on('conversationUpdated', handleConversationUpdate);
 
     return () => {
       socket.off('call:incoming', handleIncomingCall);
@@ -246,7 +302,17 @@ const MessagesPage = () => {
       socket.off('call:rejected', handleCallRejected);
       socket.off('call:hungup', handleCallHungup);
       socket.off('message:new', handleNewMessage);
+      socket.off('receiveMessage', handleNewMessage);
       socket.off('conversation:new', handleNewConversation);
+      socket.off('message:delivered', handleMessageDelivered);
+      socket.off('messageDelivered', handleMessageDelivered);
+      socket.off('message:update', handleMessageUpdate);
+      socket.off('messageEdited', handleMessageUpdate);
+      socket.off('messageDeleted', handleMessageUpdate);
+      socket.off('reactionAdded', handleMessageUpdate);
+      socket.off('reactionRemoved', handleMessageUpdate);
+      socket.off('conversation:update', handleConversationUpdate);
+      socket.off('conversationUpdated', handleConversationUpdate);
     };
   }, [socket, activeId]);
 
@@ -284,6 +350,20 @@ const MessagesPage = () => {
         attachmentId: payload.attachmentId,
         replyTo: payload.replyTo
       });
+    }
+  };
+
+  // Start a new DM from the ConversationList People section
+  const handleStartNewChatFromList = async (userId) => {
+    try {
+      const res = await messagesService.createConversation(userId);
+      if (res.success && res.data) {
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['messagingContacts'] });
+        handleSelectConversation(res.data._id);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not start conversation.');
     }
   };
 
@@ -370,6 +450,26 @@ const MessagesPage = () => {
   // Calculations for unread counts
   const totalUnreadCount = conversations.reduce((acc, curr) => acc + (curr.unreadCount || 0), 0);
 
+  // Open or create a DM conversation from a contact card
+  const handleOpenContactDM = async (contact) => {
+    if (contact.existingConversationId) {
+      handleSelectConversation(contact.existingConversationId);
+      setActiveTab('inbox');
+      return;
+    }
+    try {
+      const res = await messagesService.createConversation(contact._id);
+      if (res.success && res.data) {
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['messagingContacts'] });
+        handleSelectConversation(res.data._id);
+        setActiveTab('inbox');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not open conversation.');
+    }
+  };
+
   // Folder sidebar items list
   const sidebarFolders = [
     { id: 'inbox', label: 'Inbox', icon: MessageSquare, badge: totalUnreadCount > 0 ? totalUnreadCount : null },
@@ -378,6 +478,8 @@ const MessagesPage = () => {
     { id: 'archived', label: 'Archived', icon: Archive },
     { id: 'groups', label: 'Groups', icon: Users },
     { id: 'collaboration', label: 'Research Collaboration', icon: Lightbulb },
+    { id: 'followers', label: 'Followers', icon: Users, badge: contactFollowers.length > 0 ? contactFollowers.length : null },
+    { id: 'following', label: 'Following', icon: Users, badge: contactFollowing.length > 0 ? contactFollowing.length : null },
     { id: 'requests', label: 'Connection Requests', icon: UserPlus, badge: incomingRequests.length > 0 ? incomingRequests.length : null },
     { id: 'calls', label: 'Calls', icon: PhoneCall },
     { id: 'files', label: 'Shared Files', icon: FolderOpen },
@@ -435,7 +537,85 @@ const MessagesPage = () => {
 
       {/* 2. Middle Content Section (Changes based on selected Folder tab) */}
       <div className="flex-1 h-full flex overflow-hidden bg-white">
-        {activeTab === 'requests' ? (
+        {activeTab === 'followers' ? (
+          /* Followers Panel */
+          <div className="flex-1 h-full overflow-y-auto p-6 bg-slate-50/20 text-left">
+            <div className="mb-6">
+              <h3 className="text-base font-extrabold text-slate-800">Followers</h3>
+              <p className="text-xs text-slate-450 font-semibold mt-0.5">Researchers who follow your work. You can message them directly.</p>
+            </div>
+            {contactFollowers.length > 0 ? (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {contactFollowers.map((person) => (
+                  <div key={person._id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <img src={person.profileImage || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'} alt={`${person.firstName} ${person.lastName}`} className="w-12 h-12 rounded-full object-cover border border-slate-150" />
+                        <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${person.isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-black text-slate-800 truncate">{person.firstName} {person.lastName}</h4>
+                        <p className="text-xs text-slate-500 font-bold truncate">{person.designation || 'Researcher'}</p>
+                        <p className="text-xs text-slate-400 font-semibold truncate">{person.institution}</p>
+                      </div>
+                      <button
+                        onClick={() => handleOpenContactDM(person)}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm shadow-blue-500/10 shrink-0"
+                      >
+                        {person.existingConversationId ? 'Open Chat' : 'Message'}
+                      </button>
+                    </div>
+                    {person.bio && <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 italic bg-slate-50 p-2.5 rounded-xl">"{person.bio}"</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-24 text-center text-slate-400 space-y-3">
+                <Users className="w-12 h-12 mx-auto opacity-30 animate-pulse" />
+                <p className="text-sm font-black">No followers yet.</p>
+              </div>
+            )}
+          </div>
+        ) : activeTab === 'following' ? (
+          /* Following Panel */
+          <div className="flex-1 h-full overflow-y-auto p-6 bg-slate-50/20 text-left">
+            <div className="mb-6">
+              <h3 className="text-base font-extrabold text-slate-800">Following</h3>
+              <p className="text-xs text-slate-450 font-semibold mt-0.5">Researchers you follow. Start a conversation directly.</p>
+            </div>
+            {contactFollowing.length > 0 ? (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {contactFollowing.map((person) => (
+                  <div key={person._id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <img src={person.profileImage || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'} alt={`${person.firstName} ${person.lastName}`} className="w-12 h-12 rounded-full object-cover border border-slate-150" />
+                        <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${person.isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-black text-slate-800 truncate">{person.firstName} {person.lastName}</h4>
+                        <p className="text-xs text-slate-500 font-bold truncate">{person.designation || 'Researcher'}</p>
+                        <p className="text-xs text-slate-400 font-semibold truncate">{person.institution}</p>
+                      </div>
+                      <button
+                        onClick={() => handleOpenContactDM(person)}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm shadow-blue-500/10 shrink-0"
+                      >
+                        {person.existingConversationId ? 'Open Chat' : 'Message'}
+                      </button>
+                    </div>
+                    {person.bio && <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 italic bg-slate-50 p-2.5 rounded-xl">"{person.bio}"</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-24 text-center text-slate-400 space-y-3">
+                <Users className="w-12 h-12 mx-auto opacity-30 animate-pulse" />
+                <p className="text-sm font-black">You are not following anyone yet.</p>
+              </div>
+            )}
+          </div>
+        ) : activeTab === 'requests' ? (
           /* Connection Requests List Page View */
           <div className="flex-1 h-full overflow-y-auto p-6 bg-slate-50/20 text-left">
             <div className="mb-6">
@@ -739,6 +919,9 @@ const MessagesPage = () => {
                 onSelect={handleSelectConversation}
                 activeSubTab={activeSubTab}
                 setActiveSubTab={setActiveSubTab}
+                contacts={contactsData}
+                onStartNewChat={handleStartNewChatFromList}
+                onComposeClick={() => setIsComposeOpen(true)}
               />
             </div>
 
@@ -794,6 +977,14 @@ const MessagesPage = () => {
         onDecline={handleDeclineCall}
         onHangup={handleHangupCall}
         socket={socket}
+      />
+
+      {/* Compose / New Chat Modal */}
+      <NewChatModal
+        isOpen={isComposeOpen}
+        onClose={() => setIsComposeOpen(false)}
+        contacts={contactsData}
+        onSelectContact={handleStartNewChatFromList}
       />
     </div>
   );

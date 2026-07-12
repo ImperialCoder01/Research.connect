@@ -601,7 +601,16 @@ class PublicationService {
    */
   async getPublications(filter = {}, queryOptions = {}) {
     const { page = 1, limit = 10, sort = '-createdAt', search } = queryOptions;
-    const skip = (page - 1) * limit;
+    
+    // Safety boundaries for pagination limit and page
+    let pageNum = parseInt(page, 10) || 1;
+    if (pageNum < 1) pageNum = 1;
+    
+    let limitNum = parseInt(limit, 10) || 10;
+    if (limitNum <= 0) limitNum = 10;
+    if (limitNum > 100) limitNum = 100; // safety ceiling
+    
+    const skip = (pageNum - 1) * limitNum;
 
     const baseFilter = { ...filter };
     if (baseFilter.isDeleted === undefined) {
@@ -645,7 +654,7 @@ class PublicationService {
       .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug slug username')
       .sort(sortOption)
       .skip(skip)
-      .limit(Number(limit))
+      .limit(limitNum)
       .lean();
 
     const [docs, total] = await Promise.all([
@@ -656,9 +665,9 @@ class PublicationService {
     return {
       docs,
       total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages: Math.ceil(total / limit)
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum)
     };
   }
 
@@ -1051,32 +1060,33 @@ class PublicationService {
    * Aggregates 9 key metrics for a researcher's publications dashboard
    */
   async getPublicationStats(userId) {
-    const counts = await Publication.aggregate([
-      { $match: { userId: new mongoose.Types.ObjectId(userId), isDeleted: { $ne: true } } },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          published: {
-            $sum: { $cond: [{ $eq: ['$status', 'published'] }, 1, 0] }
-          },
-          drafts: {
-            $sum: { $cond: [{ $eq: ['$status', 'draft'] }, 1, 0] }
-          },
-          privateCount: {
-            $sum: { $cond: [{ $eq: ['$visibility', 'Private'] }, 1, 0] }
-          },
-          publicCount: {
-            $sum: { $cond: [{ $eq: ['$visibility', 'Public'] }, 1, 0] }
-          },
-          views: { $sum: { $ifNull: ['$views', 0] } },
-          downloads: { $sum: { $ifNull: ['$downloads', 0] } },
-          citations: { $sum: { $ifNull: ['$citations', 0] } }
+    const [counts, bookmarksCount] = await Promise.all([
+      Publication.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId), isDeleted: { $ne: true } } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            published: {
+              $sum: { $cond: [{ $eq: ['$status', 'published'] }, 1, 0] }
+            },
+            drafts: {
+              $sum: { $cond: [{ $eq: ['$status', 'draft'] }, 1, 0] }
+            },
+            privateCount: {
+              $sum: { $cond: [{ $eq: ['$visibility', 'Private'] }, 1, 0] }
+            },
+            publicCount: {
+              $sum: { $cond: [{ $eq: ['$visibility', 'Public'] }, 1, 0] }
+            },
+            views: { $sum: { $ifNull: ['$views', 0] } },
+            downloads: { $sum: { $ifNull: ['$downloads', 0] } },
+            citations: { $sum: { $ifNull: ['$citations', 0] } }
+          }
         }
-      }
+      ]),
+      PublicationBookmark.countDocuments({ userId })
     ]);
-
-    const bookmarksCount = await PublicationBookmark.countDocuments({ userId });
 
     const stats = counts[0] || {
       total: 0,

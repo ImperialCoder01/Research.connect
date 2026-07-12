@@ -284,7 +284,7 @@ class ScholarService {
           }
           const tracking = profile.dataSourceTracking.get(field);
           if (tracking && tracking.userModified === true) {
-            logger.info(`Preserving user-modified field '${field}' with value: ${tracking.value}`);
+            logger.info(`Preserving user-modified field '${field}' with value: ${typeof tracking.value === 'object' ? JSON.stringify(tracking.value) : tracking.value}`);
             return;
           }
           profile[field] = val;

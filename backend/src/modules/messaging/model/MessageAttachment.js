@@ -11,18 +11,40 @@ const messageAttachmentSchema = new mongoose.Schema(
       type: String,
       required: true
     },
-    publicId: {
+    fileUrl: {
+      type: String
+    },
+    // objectKey is the Cloudflare R2 storage key (previously called publicId for Cloudinary).
+    // Optional to maintain backwards compatibility and support multiple storage providers.
+    objectKey: {
       type: String,
-      required: true
+      default: null
+    },
+    storageProvider: {
+      type: String,
+      enum: ['r2', 'cloudinary', 'local'],
+      default: 'r2'
     },
     filename: {
+      type: String
+    },
+    fileName: {
       type: String
     },
     fileType: {
       type: String
     },
+    mimeType: {
+      type: String
+    },
     fileSize: {
       type: Number
+    },
+    size: {
+      type: Number
+    },
+    thumbnail: {
+      type: String
     },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
