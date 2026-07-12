@@ -8,6 +8,7 @@ const Publication = require('../../../models/Publication');
 const { ValidationError, NotFoundError } = require('../../../common/errors/AppError');
 const logger = require('../../../common/logger/winston');
 const { ProfileCache, FeedCache } = require('../../../cache/cache.service');
+const env = require('../../../config/environment');
 
 const log = logger || console;
 
