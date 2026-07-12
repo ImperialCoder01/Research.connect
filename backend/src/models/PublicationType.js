@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const specificFieldSchema = new mongoose.Schema(
   {
@@ -69,4 +69,4 @@ const publicationTypeSchema = new mongoose.Schema(
 );
 
 const PublicationType = mongoose.model('PublicationType', publicationTypeSchema);
-export default PublicationType;
+module.exports = PublicationType;

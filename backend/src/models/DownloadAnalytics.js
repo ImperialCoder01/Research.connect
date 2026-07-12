@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const downloadAnalyticsSchema = new mongoose.Schema(
   {
@@ -37,4 +37,4 @@ const downloadAnalyticsSchema = new mongoose.Schema(
 );
 
 const DownloadAnalytics = mongoose.model('DownloadAnalytics', downloadAnalyticsSchema);
-export default DownloadAnalytics;
+module.exports = DownloadAnalytics;

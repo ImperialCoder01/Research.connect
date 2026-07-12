@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const projectFileSchema = new mongoose.Schema(
   {
@@ -68,4 +68,4 @@ const projectFileSchema = new mongoose.Schema(
 projectFileSchema.index({ project: 1, folder: 1 });
 
 const ProjectFile = mongoose.model('ProjectFile', projectFileSchema);
-export default ProjectFile;
+module.exports = ProjectFile;

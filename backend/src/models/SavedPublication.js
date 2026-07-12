@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const savedPublicationSchema = new mongoose.Schema(
   {
@@ -23,4 +23,4 @@ const savedPublicationSchema = new mongoose.Schema(
 savedPublicationSchema.index({ user: 1, publication: 1 }, { unique: true });
 
 const SavedPublication = mongoose.model('SavedPublication', savedPublicationSchema);
-export default SavedPublication;
+module.exports = SavedPublication;

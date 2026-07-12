@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 /**
  * Research — minimal placeholder model.
@@ -25,4 +25,4 @@ researchSchema.pre(/^find/, function (next) {
 });
 
 const Research = mongoose.model('Research', researchSchema);
-export default Research;
+module.exports = Research;

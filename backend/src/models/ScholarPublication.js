@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const scholarPublicationSchema = new mongoose.Schema(
   {
@@ -105,4 +105,4 @@ scholarPublicationSchema.pre(/^find/, function (next) {
 });
 
 const ScholarPublication = mongoose.model('ScholarPublication', scholarPublicationSchema);
-export default ScholarPublication;
+module.exports = ScholarPublication;

@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const loginActivitySchema = new mongoose.Schema(
   {
@@ -35,4 +35,4 @@ const loginActivitySchema = new mongoose.Schema(
 );
 
 const LoginActivity = mongoose.model('LoginActivity', loginActivitySchema);
-export default LoginActivity;
+module.exports = LoginActivity;

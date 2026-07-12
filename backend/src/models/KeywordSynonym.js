@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const keywordSynonymSchema = new mongoose.Schema(
   {
@@ -21,4 +21,4 @@ const keywordSynonymSchema = new mongoose.Schema(
 );
 
 const KeywordSynonym = mongoose.model('KeywordSynonym', keywordSynonymSchema);
-export default KeywordSynonym;
+module.exports = KeywordSynonym;

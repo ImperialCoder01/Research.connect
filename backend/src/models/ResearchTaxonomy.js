@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const researchTaxonomySchema = new mongoose.Schema(
   {
@@ -52,4 +52,4 @@ researchTaxonomySchema.pre('save', async function (next) {
 });
 
 const ResearchTaxonomy = mongoose.model('ResearchTaxonomy', researchTaxonomySchema);
-export default ResearchTaxonomy;
+module.exports = ResearchTaxonomy;

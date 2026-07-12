@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const externalAccountSchema = new mongoose.Schema(
   {
@@ -53,4 +53,4 @@ const externalAccountSchema = new mongoose.Schema(
 externalAccountSchema.index({ user: 1, provider: 1 }, { unique: true });
 
 const ExternalAccount = mongoose.model('ExternalAccount', externalAccountSchema);
-export default ExternalAccount;
+module.exports = ExternalAccount;

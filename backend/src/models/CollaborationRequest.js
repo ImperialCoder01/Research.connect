@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const collaborationRequestSchema = new mongoose.Schema(
   {
@@ -77,4 +77,4 @@ collaborationRequestSchema.index({ sender: 1, receiver: 1 });
 collaborationRequestSchema.index({ receiver: 1, status: 1 });
 
 const CollaborationRequest = mongoose.model('CollaborationRequest', collaborationRequestSchema);
-export default CollaborationRequest;
+module.exports = CollaborationRequest;

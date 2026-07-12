@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const collaborationPreferenceSchema = new mongoose.Schema(
   {
@@ -91,4 +91,4 @@ const collaborationPreferenceSchema = new mongoose.Schema(
 );
 
 const CollaborationPreference = mongoose.model('CollaborationPreference', collaborationPreferenceSchema);
-export default CollaborationPreference;
+module.exports = CollaborationPreference;

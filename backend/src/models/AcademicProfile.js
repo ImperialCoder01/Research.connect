@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import fieldMetadataSchema from './fieldMetadataSchema.js';
+const mongoose = require('mongoose');
+const fieldMetadataSchema = require('./fieldMetadataSchema.js');
 
 const academicProfileSchema = new mongoose.Schema(
   {
@@ -57,4 +57,4 @@ const academicProfileSchema = new mongoose.Schema(
 );
 
 const AcademicProfile = mongoose.model('AcademicProfile', academicProfileSchema);
-export default AcademicProfile;
+module.exports = AcademicProfile;

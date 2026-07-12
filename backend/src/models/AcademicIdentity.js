@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const academicIdentitySchema = new mongoose.Schema(
   {
@@ -53,4 +53,4 @@ const academicIdentitySchema = new mongoose.Schema(
 academicIdentitySchema.index({ user: 1, provider: 1 }, { unique: true });
 
 const AcademicIdentity = mongoose.model('AcademicIdentity', academicIdentitySchema);
-export default AcademicIdentity;
+module.exports = AcademicIdentity;

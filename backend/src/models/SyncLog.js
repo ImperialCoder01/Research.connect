@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const syncLogSchema = new mongoose.Schema(
   {
@@ -41,4 +41,4 @@ const syncLogSchema = new mongoose.Schema(
 );
 
 const SyncLog = mongoose.model('SyncLog', syncLogSchema);
-export default SyncLog;
+module.exports = SyncLog;

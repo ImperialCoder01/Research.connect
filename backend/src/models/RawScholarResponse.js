@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const rawScholarResponseSchema = new mongoose.Schema(
   {
@@ -28,4 +28,4 @@ const rawScholarResponseSchema = new mongoose.Schema(
 );
 
 const RawScholarResponse = mongoose.model('RawScholarResponse', rawScholarResponseSchema);
-export default RawScholarResponse;
+module.exports = RawScholarResponse;

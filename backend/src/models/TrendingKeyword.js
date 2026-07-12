@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const trendingKeywordSchema = new mongoose.Schema(
   {
@@ -35,4 +35,4 @@ const trendingKeywordSchema = new mongoose.Schema(
 );
 
 const TrendingKeyword = mongoose.model('TrendingKeyword', trendingKeywordSchema);
-export default TrendingKeyword;
+module.exports = TrendingKeyword;

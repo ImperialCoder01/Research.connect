@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const semanticVectorSchema = new mongoose.Schema(
   {
@@ -27,4 +27,4 @@ const semanticVectorSchema = new mongoose.Schema(
 semanticVectorSchema.index({ targetType: 1, referenceId: 1 }, { unique: true });
 
 const SemanticVector = mongoose.model('SemanticVector', semanticVectorSchema);
-export default SemanticVector;
+module.exports = SemanticVector;

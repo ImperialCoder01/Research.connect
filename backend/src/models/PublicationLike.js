@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const publicationLikeSchema = new mongoose.Schema(
   {
@@ -24,4 +24,4 @@ const publicationLikeSchema = new mongoose.Schema(
 publicationLikeSchema.index({ user: 1, publication: 1 }, { unique: true });
 
 const PublicationLike = mongoose.model('PublicationLike', publicationLikeSchema);
-export default PublicationLike;
+module.exports = PublicationLike;

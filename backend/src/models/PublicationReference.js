@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const publicationReferenceSchema = new mongoose.Schema(
   {
@@ -32,4 +32,4 @@ const publicationReferenceSchema = new mongoose.Schema(
 );
 
 const PublicationReference = mongoose.model('PublicationReference', publicationReferenceSchema);
-export default PublicationReference;
+module.exports = PublicationReference;

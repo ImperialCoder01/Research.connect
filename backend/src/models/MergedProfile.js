@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const mergedProfileSchema = new mongoose.Schema(
   {
@@ -107,4 +107,4 @@ const mergedProfileSchema = new mongoose.Schema(
 );
 
 const MergedProfile = mongoose.model('MergedProfile', mergedProfileSchema);
-export default MergedProfile;
+module.exports = MergedProfile;

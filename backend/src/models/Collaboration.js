@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const collaborationSchema = new mongoose.Schema(
   {
@@ -74,4 +74,4 @@ const collaborationSchema = new mongoose.Schema(
 collaborationSchema.index({ members: 1 });
 
 const Collaboration = mongoose.model('Collaboration', collaborationSchema);
-export default Collaboration;
+module.exports = Collaboration;

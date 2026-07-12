@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const researcherConnectionSchema = new mongoose.Schema(
   {
@@ -30,4 +30,4 @@ const researcherConnectionSchema = new mongoose.Schema(
 researcherConnectionSchema.index({ requester: 1, receiver: 1 }, { unique: true });
 
 const ResearcherConnection = mongoose.model('ResearcherConnection', researcherConnectionSchema);
-export default ResearcherConnection;
+module.exports = ResearcherConnection;

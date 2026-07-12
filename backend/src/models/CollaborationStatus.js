@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const collaborationStatusSchema = new mongoose.Schema(
   {
@@ -67,4 +67,4 @@ collaborationStatusSchema.pre('save', function (next) {
 });
 
 const CollaborationStatus = mongoose.model('CollaborationStatus', collaborationStatusSchema);
-export default CollaborationStatus;
+module.exports = CollaborationStatus;

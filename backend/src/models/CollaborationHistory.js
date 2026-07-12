@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const collaborationHistorySchema = new mongoose.Schema(
   {
@@ -41,4 +41,4 @@ const collaborationHistorySchema = new mongoose.Schema(
 );
 
 const CollaborationHistory = mongoose.model('CollaborationHistory', collaborationHistorySchema);
-export default CollaborationHistory;
+module.exports = CollaborationHistory;

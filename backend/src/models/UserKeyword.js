@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const userKeywordSchema = new mongoose.Schema(
   {
@@ -40,4 +40,4 @@ const userKeywordSchema = new mongoose.Schema(
 userKeywordSchema.index({ user: 1, keyword: 1 }, { unique: true });
 
 const UserKeyword = mongoose.model('UserKeyword', userKeywordSchema);
-export default UserKeyword;
+module.exports = UserKeyword;

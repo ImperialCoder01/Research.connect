@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const researchDomainSchema = new mongoose.Schema(
   {
@@ -62,4 +62,4 @@ researchDomainSchema.pre('save', function (next) {
 });
 
 const ResearchDomain = mongoose.model('ResearchDomain', researchDomainSchema);
-export default ResearchDomain;
+module.exports = ResearchDomain;

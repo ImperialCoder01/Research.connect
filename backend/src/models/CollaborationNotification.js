@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const collaborationNotificationSchema = new mongoose.Schema(
   {
@@ -61,4 +61,4 @@ const collaborationNotificationSchema = new mongoose.Schema(
 collaborationNotificationSchema.index({ user: 1, read: 1, createdAt: -1 });
 
 const CollaborationNotification = mongoose.model('CollaborationNotification', collaborationNotificationSchema);
-export default CollaborationNotification;
+module.exports = CollaborationNotification;

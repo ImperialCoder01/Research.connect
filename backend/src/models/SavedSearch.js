@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const savedSearchSchema = new mongoose.Schema(
   {
@@ -34,4 +34,4 @@ const savedSearchSchema = new mongoose.Schema(
 );
 
 const SavedSearch = mongoose.model('SavedSearch', savedSearchSchema);
-export default SavedSearch;
+module.exports = SavedSearch;

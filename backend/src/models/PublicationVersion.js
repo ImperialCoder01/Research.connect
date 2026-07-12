@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const publicationVersionSchema = new mongoose.Schema(
   {
@@ -31,4 +31,4 @@ const publicationVersionSchema = new mongoose.Schema(
 publicationVersionSchema.index({ publication: 1, versionNumber: 1 }, { unique: true });
 
 const PublicationVersion = mongoose.model('PublicationVersion', publicationVersionSchema);
-export default PublicationVersion;
+module.exports = PublicationVersion;

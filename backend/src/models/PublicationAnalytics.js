@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const publicationAnalyticsSchema = new mongoose.Schema(
   {
@@ -36,4 +36,4 @@ const publicationAnalyticsSchema = new mongoose.Schema(
 );
 
 const PublicationAnalytics = mongoose.model('PublicationAnalytics', publicationAnalyticsSchema);
-export default PublicationAnalytics;
+module.exports = PublicationAnalytics;

@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const userResearchAreaSchema = new mongoose.Schema(
   {
@@ -40,4 +40,4 @@ const userResearchAreaSchema = new mongoose.Schema(
 userResearchAreaSchema.index({ user: 1, researchArea: 1 }, { unique: true });
 
 const UserResearchArea = mongoose.model('UserResearchArea', userResearchAreaSchema);
-export default UserResearchArea;
+module.exports = UserResearchArea;

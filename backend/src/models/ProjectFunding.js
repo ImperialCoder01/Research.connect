@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const projectFundingSchema = new mongoose.Schema(
   {
@@ -61,4 +61,4 @@ projectFundingSchema.pre('save', function (next) {
 });
 
 const ProjectFunding = mongoose.model('ProjectFunding', projectFundingSchema);
-export default ProjectFunding;
+module.exports = ProjectFunding;

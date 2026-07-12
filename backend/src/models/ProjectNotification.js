@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const projectNotificationSchema = new mongoose.Schema(
   {
@@ -47,4 +47,4 @@ const projectNotificationSchema = new mongoose.Schema(
 projectNotificationSchema.index({ user: 1, isRead: 1, createdAt: -1 });
 
 const ProjectNotification = mongoose.model('ProjectNotification', projectNotificationSchema);
-export default ProjectNotification;
+module.exports = ProjectNotification;

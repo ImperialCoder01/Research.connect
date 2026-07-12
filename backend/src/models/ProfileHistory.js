@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const profileHistorySchema = new mongoose.Schema(
   {
@@ -35,4 +35,4 @@ const profileHistorySchema = new mongoose.Schema(
 profileHistorySchema.index({ user: 1, version: -1 });
 
 const ProfileHistory = mongoose.model('ProfileHistory', profileHistorySchema);
-export default ProfileHistory;
+module.exports = ProfileHistory;

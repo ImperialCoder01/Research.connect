@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const fieldMetadataSchema = new mongoose.Schema(
   {
@@ -24,4 +24,4 @@ const fieldMetadataSchema = new mongoose.Schema(
   { _id: false }
 );
 
-export default fieldMetadataSchema;
+module.exports = fieldMetadataSchema;

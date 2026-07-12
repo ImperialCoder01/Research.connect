@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const profileViewSchema = new mongoose.Schema(
   {
@@ -42,4 +42,4 @@ const profileViewSchema = new mongoose.Schema(
 profileViewSchema.index({ user: 1, timestamp: -1 });
 
 const ProfileView = mongoose.model('ProfileView', profileViewSchema);
-export default ProfileView;
+module.exports = ProfileView;

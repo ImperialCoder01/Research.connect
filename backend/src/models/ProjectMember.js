@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const projectMemberSchema = new mongoose.Schema(
   {
@@ -56,4 +56,4 @@ const projectMemberSchema = new mongoose.Schema(
 projectMemberSchema.index({ project: 1, user: 1 }, { unique: true });
 
 const ProjectMember = mongoose.model('ProjectMember', projectMemberSchema);
-export default ProjectMember;
+module.exports = ProjectMember;

@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const googleScholarCoAuthorSchema = new mongoose.Schema(
   {
@@ -53,4 +53,4 @@ const googleScholarCoAuthorSchema = new mongoose.Schema(
 googleScholarCoAuthorSchema.index({ user: 1, scholarId: 1 }, { unique: true });
 
 const GoogleScholarCoAuthor = mongoose.model('GoogleScholarCoAuthor', googleScholarCoAuthorSchema);
-export default GoogleScholarCoAuthor;
+module.exports = GoogleScholarCoAuthor;

@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const keywordHistorySchema = new mongoose.Schema(
   {
@@ -33,4 +33,4 @@ const keywordHistorySchema = new mongoose.Schema(
 );
 
 const KeywordHistory = mongoose.model('KeywordHistory', keywordHistorySchema);
-export default KeywordHistory;
+module.exports = KeywordHistory;

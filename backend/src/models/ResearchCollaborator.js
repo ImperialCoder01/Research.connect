@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const researchCollaboratorSchema = new mongoose.Schema(
   {
@@ -50,4 +50,4 @@ const researchCollaboratorSchema = new mongoose.Schema(
 researchCollaboratorSchema.index({ user: 1, scholarId: 1 }, { unique: true, sparse: true });
 
 const ResearchCollaborator = mongoose.model('ResearchCollaborator', researchCollaboratorSchema);
-export default ResearchCollaborator;
+module.exports = ResearchCollaborator;

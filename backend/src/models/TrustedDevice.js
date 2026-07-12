@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 /**
  * TrustedDevice — minimal placeholder model.
@@ -21,4 +21,4 @@ const trustedDeviceSchema = new mongoose.Schema(
 trustedDeviceSchema.index({ user: 1, deviceId: 1 }, { unique: true });
 
 const TrustedDevice = mongoose.model('TrustedDevice', trustedDeviceSchema);
-export default TrustedDevice;
+module.exports = TrustedDevice;

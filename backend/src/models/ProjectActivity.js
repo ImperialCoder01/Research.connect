@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const projectActivitySchema = new mongoose.Schema(
   {
@@ -34,4 +34,4 @@ const projectActivitySchema = new mongoose.Schema(
 );
 
 const ProjectActivity = mongoose.model('ProjectActivity', projectActivitySchema);
-export default ProjectActivity;
+module.exports = ProjectActivity;

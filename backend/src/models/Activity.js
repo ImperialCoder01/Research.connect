@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const activitySchema = new mongoose.Schema(
   {
@@ -51,4 +51,4 @@ activitySchema.index({ createdAt: -1 });
 activitySchema.index({ user: 1, privacy: 1, createdAt: -1 });
 
 const Activity = mongoose.model('Activity', activitySchema);
-export default Activity;
+module.exports = Activity;

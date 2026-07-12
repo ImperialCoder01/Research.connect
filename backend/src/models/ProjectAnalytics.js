@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const projectAnalyticsSchema = new mongoose.Schema(
   {
@@ -60,4 +60,4 @@ const projectAnalyticsSchema = new mongoose.Schema(
 );
 
 const ProjectAnalytics = mongoose.model('ProjectAnalytics', projectAnalyticsSchema);
-export default ProjectAnalytics;
+module.exports = ProjectAnalytics;

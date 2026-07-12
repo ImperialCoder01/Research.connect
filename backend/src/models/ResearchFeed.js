@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const researchFeedSchema = new mongoose.Schema(
   {
@@ -77,4 +77,4 @@ const researchFeedSchema = new mongoose.Schema(
 researchFeedSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const ResearchFeed = mongoose.model('ResearchFeed', researchFeedSchema);
-export default ResearchFeed;
+module.exports = ResearchFeed;

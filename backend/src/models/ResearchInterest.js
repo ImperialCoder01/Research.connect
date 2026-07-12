@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const researchInterestSchema = new mongoose.Schema(
   {
@@ -33,4 +33,4 @@ const researchInterestSchema = new mongoose.Schema(
 );
 
 const ResearchInterest = mongoose.model('ResearchInterest', researchInterestSchema);
-export default ResearchInterest;
+module.exports = ResearchInterest;

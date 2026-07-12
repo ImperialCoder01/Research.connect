@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 /**
  * SavedResearch — minimal placeholder model.
@@ -18,4 +18,4 @@ const savedResearchSchema = new mongoose.Schema(
 savedResearchSchema.index({ user: 1, research: 1 }, { unique: true });
 
 const SavedResearch = mongoose.model('SavedResearch', savedResearchSchema);
-export default SavedResearch;
+module.exports = SavedResearch;

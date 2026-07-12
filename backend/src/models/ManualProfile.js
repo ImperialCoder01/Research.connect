@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const manualProfileSchema = new mongoose.Schema(
   {
@@ -82,4 +82,4 @@ const manualProfileSchema = new mongoose.Schema(
 );
 
 const ManualProfile = mongoose.model('ManualProfile', manualProfileSchema);
-export default ManualProfile;
+module.exports = ManualProfile;

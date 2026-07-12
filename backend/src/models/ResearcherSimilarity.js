@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const researcherSimilaritySchema = new mongoose.Schema(
   {
@@ -64,4 +64,4 @@ researcherSimilaritySchema.pre('save', function (next) {
 });
 
 const ResearcherSimilarity = mongoose.model('ResearcherSimilarity', researcherSimilaritySchema);
-export default ResearcherSimilarity;
+module.exports = ResearcherSimilarity;

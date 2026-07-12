@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const citationSchema = new mongoose.Schema(
   {
@@ -33,4 +33,4 @@ const citationSchema = new mongoose.Schema(
 citationSchema.index({ citingPublication: 1, citedPublication: 1 }, { unique: true });
 
 const Citation = mongoose.model('Citation', citationSchema);
-export default Citation;
+module.exports = Citation;

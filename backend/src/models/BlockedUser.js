@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const blockedUserSchema = new mongoose.Schema(
   {
@@ -24,4 +24,4 @@ const blockedUserSchema = new mongoose.Schema(
 blockedUserSchema.index({ blocker: 1, blocked: 1 }, { unique: true });
 
 const BlockedUser = mongoose.model('BlockedUser', blockedUserSchema);
-export default BlockedUser;
+module.exports = BlockedUser;
