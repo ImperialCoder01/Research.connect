@@ -17,11 +17,40 @@ class SearchService {
     return data;
   }
 
+  async searchProjects(params = {}) {
+    const { data } = await axiosInstance.get('/v1/search/projects', { params });
+    return data;
+  }
+
   /**
    * Search authors only
    */
   async searchAuthors(params = {}) {
     const { data } = await axiosInstance.get('/v1/search/authors', { params });
+    return data;
+  }
+
+  /**
+   * Search researchers only
+   */
+  async searchResearchers(params = {}) {
+    const { data } = await axiosInstance.get('/v1/search/researchers', { params });
+    return data;
+  }
+
+  /**
+   * Search keywords only
+   */
+  async searchKeywords(params = {}) {
+    const { data } = await axiosInstance.get('/v1/search/keywords', { params });
+    return data;
+  }
+
+  /**
+   * Search institutions only
+   */
+  async searchInstitutions(params = {}) {
+    const { data } = await axiosInstance.get('/v1/search/institutions', { params });
     return data;
   }
 

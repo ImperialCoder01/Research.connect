@@ -1,7 +1,9 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const logger = require('./common/logger/winston');
 const { connectDB, closeDB } = require('./config/database/connection');
 const { syncDatabaseIndexes } = require('./config/database/indexes');
+const redisClient = require('./config/redis');
 
 const PORT = process.env.PORT || 5000;
 
@@ -9,6 +11,13 @@ const startServer = async () => {
   try {
     // 1. Establish Database Connection
     await connectDB();
+
+    // 1.5 Establish Redis Connection
+    try {
+      await redisClient.connect();
+    } catch (redisErr) {
+      logger.error('Failed to connect to Redis on startup. Proceeding in fallback mode:', redisErr.message);
+    }
 
     // 2. Express + Register Routes (loaded dynamically after DB connection)
     const app = require('./app');
@@ -20,11 +29,22 @@ const startServer = async () => {
       
       // 4. Asynchronously spawn background tasks (Non-blocking)
       setImmediate(async () => {
+        if (process.env.SYNC_INDEXES === 'true') {
+          try {
+            await syncDatabaseIndexes();
+          } catch (err) {
+            logger.error('Failed database index audit in background:', err);
+          }
+        } else {
+          logger.info('Database index syncing skipped (SYNC_INDEXES is not set to true).');
+        }
+
+        // Run self-healing schema migrations in background
         try {
-          // Sync database indexes (skips automatically outside development)
-          await syncDatabaseIndexes();
+          const migrateLegacyToR2 = require('./config/database/migrate_legacy_to_r2');
+          await migrateLegacyToR2();
         } catch (err) {
-          logger.error('Failed database index audit in background:', err);
+          logger.error('Failed database legacy migration in background:', err);
         }
 
         try {
@@ -34,26 +54,30 @@ const startServer = async () => {
         } catch (err) {
           logger.error('Failed to run Scholar queue worker in background:', err);
         }
+
+        try {
+          // Identity Sync Queue Worker
+          const identitySyncQueueService = require('./modules/identity/service/identitySyncQueue.service');
+          identitySyncQueueService.runQueueWorker();
+        } catch (err) {
+          logger.error('Failed to run Identity Sync queue worker in background:', err);
+        }
+
+        try {
+          // Initialize Redis background workers
+          const { initWorkers } = require('./jobs/workers');
+          initWorkers();
+        } catch (err) {
+          logger.error('Failed to initialize Redis background workers:', err);
+        }
         
         logger.info('Background workers initialized.');
       });
     });
 
     // 4. Initialize Socket.IO
-    const io = new Server(server, {
-      cors: {
-        origin: "*", // allow frontend to connect
-        methods: ["GET", "POST"]
-      }
-    });
-
-    io.on("connection", (socket) => {
-      logger.info(`New WebSocket connection established: ${socket.id}`);
-      
-      socket.on("disconnect", () => {
-        logger.info(`WebSocket disconnected: ${socket.id}`);
-      });
-    });
+    const { initSocket } = require('./config/socket');
+    const io = initSocket(server);
 
     // Handle Graceful Shutdowns
     const shutdownGracefully = async (signal) => {
@@ -90,9 +114,9 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error(`Unhandled Rejection at promise: ${promise}, reason: ${reason instanceof Error ? reason.stack : reason}`);
 });
 
 startServer();
 
-// Nodemon reload trigger to connect cleanly after port release
+// Nodemon reload trigger to connect cleanly after port release - updated

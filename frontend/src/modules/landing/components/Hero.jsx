@@ -1,170 +1,149 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
-import Button from '../../../components/common/buttons/Button';
+import { Link } from 'react-router-dom';
+import { ArrowRight, CheckCircle2, Globe2 } from 'lucide-react';
+import { TypeAnimation } from 'react-type-animation';
+
+import img1 from '../../../assets/researcher-lab.jpg';
+import imgMicroscope from '../../../assets/researcher-microscope.jpg';
+import imgChalkboard from '../../../assets/researcher-chalkboard.jpg';
 
 const Hero = () => {
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (searchQuery) {
-      alert(`Simulation search triggered for: "${searchQuery}". Semantics index logic will launch in Phase 3.`);
-    }
-  };
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.15, delayChildren: 0.1 }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 30 },
-    visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } }
-  };
-
   return (
-    <section className="relative overflow-hidden bg-gradient-hero pt-20 pb-24 md:pt-28 md:pb-32 px-4 border-b border-border">
-      {/* Decorative backdrop blobs */}
-      <div className="absolute top-1/4 left-10 w-72 h-72 bg-light-blue rounded-full filter blur-[80px] opacity-60 -z-10 animate-pulse"></div>
-      <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-light-purple rounded-full filter blur-[100px] opacity-40 -z-10"></div>
-
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-        {/* Hero Left Content */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="lg:col-span-7 text-left space-y-6"
-        >
-          {/* Badge */}
+    <section className="relative min-h-[90vh] bg-white overflow-hidden pt-20 border-b border-slate-200">
+      {/* Background decorations */}
+      <div className="absolute top-0 right-0 -mr-40 -mt-40 w-[600px] h-[600px] bg-blue-50 rounded-full blur-3xl opacity-60 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 -ml-40 -mb-40 w-[500px] h-[500px] bg-indigo-50 rounded-full blur-3xl opacity-60 pointer-events-none" />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 pt-16 lg:pt-24 pb-20">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
+          
+          {/* Left: Text Content */}
           <motion.div
-            variants={itemVariants}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-light-blue text-primary border border-blue-200 text-xs font-semibold"
+            initial={{ opacity: 0, x: -40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-center lg:text-left max-w-2xl mx-auto lg:mx-0"
           >
-            <Sparkles className="w-4 h-4 text-accent-indigo" />
-            <span>Phase 0 Foundation Live</span>
-          </motion.div>
-
-          {/* Heading */}
-          <motion.h1
-            variants={itemVariants}
-            className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-text-primary tracking-tight leading-tight"
-          >
-            Empowering Scientific <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent-indigo">
-              Discovery & Synergy
-            </span>
-          </motion.h1>
-
-          {/* Subheading */}
-          <motion.p
-            variants={itemVariants}
-            className="text-lg text-text-secondary max-w-2xl leading-relaxed"
-          >
-            An enterprise-grade, AI-powered collaboration network built for researchers. Discover academic publications, cooperate on projects, and sync Google Scholar metrics in real-time.
-          </motion.p>
-
-          {/* Search bar UI */}
-          <motion.form
-            variants={itemVariants}
-            onSubmit={handleSearchSubmit}
-            className="w-full max-w-xl flex items-center p-1.5 bg-bg-card rounded-xl shadow-md border border-border focus-within:ring-2 focus-within:ring-primary focus-within:border-transparent transition-all"
-          >
-            <div className="flex items-center flex-grow pl-3 text-text-secondary">
-              <Search className="w-5 h-5 mr-2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search research papers, keywords, DOI..."
-                className="w-full bg-transparent border-none text-text-primary focus:ring-0 focus:outline-none placeholder-text-secondary text-sm"
+            <h1 className="text-5xl lg:text-7xl font-extrabold text-slate-900 leading-[1.1] tracking-tight mb-6">
+              Connect. Collaborate.{' '}
+              <br className="hidden sm:block" />
+              <TypeAnimation
+                sequence={[
+                  'Discover.', 2500,
+                  'Innovate.', 2500,
+                  'Research.', 2500,
+                  'Publish.', 2500,
+                  'Grow.', 2500,
+                ]}
+                wrapper="span"
+                cursor={true}
+                repeat={Infinity}
+                className="inline-block text-blue-600"
               />
+            </h1>
+            
+            <p className="text-lg lg:text-xl text-slate-600 mb-10 leading-relaxed">
+              The world's leading network for academics and researchers. Find collaborators, secure funding, and advance human knowledge together.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+              <Link to="/register">
+                <motion.button
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                  className="px-8 py-4 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-200 hover:shadow-xl hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  Join the Network
+                  <ArrowRight className="w-5 h-5" />
+                </motion.button>
+              </Link>
+              <Link to="/explore">
+                <motion.button
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                  className="px-8 py-4 bg-white text-slate-700 font-bold border-2 border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                >
+                  Explore Research
+                </motion.button>
+              </Link>
             </div>
-            <Button type="submit" variant="primary" size="md">
-              Search
-            </Button>
-          </motion.form>
-
-          {/* Trust bullets */}
-          <motion.div
-            variants={itemVariants}
-            className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-4 text-sm text-text-secondary font-medium"
-          >
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-accent-green" />
-              <span>Semantic Search Ready</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-accent-green" />
-              <span>Secure Session Locks</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-accent-green" />
-              <span>Modular Repository Layer</span>
+            
+            <div className="mt-10 flex items-center justify-center lg:justify-start gap-6 text-sm text-slate-500 font-medium">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                Free for academics
+              </div>
+              <div className="flex items-center gap-2">
+                <Globe2 className="w-5 h-5 text-blue-500" />
+                Global community
+              </div>
             </div>
           </motion.div>
-        </motion.div>
 
-        {/* Hero Right Visuals */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="lg:col-span-5 flex justify-center relative"
-        >
-          {/* Glassmorphic illustration panel simulating publication dashboard */}
-          <div className="w-full max-w-md bg-white/70 backdrop-blur-md border border-slate-200 p-6 rounded-2xl shadow-xl space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-primary rounded-bl-full opacity-10"></div>
+          {/* Right: Award-Winning Multi-Image Hero */}
+          <div className="hidden lg:flex relative h-[600px] w-full items-center justify-center">
             
-            {/* Header profile row */}
-            <div className="flex items-center gap-3 border-b border-border pb-4">
-              <div className="w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center text-white font-bold text-lg">
-                AS
-              </div>
-              <div>
-                <h4 className="font-bold text-text-primary text-sm">Dr. Alice Smith</h4>
-                <p className="text-xs text-text-secondary">Associate Professor, Stanford</p>
-              </div>
-            </div>
+            {/* Animated Background Glow */}
+            <motion.div 
+              animate={{ 
+                scale: [1, 1.2, 1],
+                opacity: [0.3, 0.6, 0.3],
+                rotate: [0, 90, 0]
+              }}
+              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[140%] h-[140%] bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full blur-3xl -z-10 pointer-events-none" 
+            />
 
-            {/* Micro stats grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-[#DBEAFE] p-3 rounded-xl border border-blue-200">
-                <p className="text-xs text-[#2563EB] font-bold">Citations</p>
-                <p className="text-xl font-extrabold text-[#0F172A]">4,200+</p>
-              </div>
-              <div className="bg-[#DCFCE7] p-3 rounded-xl border border-green-200">
-                <p className="text-xs text-[#22C55E] font-bold">h-Index</p>
-                <p className="text-xl font-extrabold text-[#0F172A]">18</p>
-              </div>
-            </div>
+            {/* Main large image */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.8, y: 40 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ 
+                opacity: { duration: 1, delay: 0.2 },
+                scale: { duration: 1, delay: 0.2, type: "spring", bounce: 0.4 },
+                y: { duration: 1, delay: 0.2, type: "spring", bounce: 0.4 }
+              }}
+              className="relative w-full max-w-[420px] h-[520px] rounded-[2rem] overflow-hidden shadow-[0_20px_60px_-15px_rgba(37,99,235,0.3)] border-8 border-white z-20 ml-12 group"
+            >
+              <img src={img1} alt="Researcher in lab" className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent pointer-events-none" />
+            </motion.div>
 
-            {/* Micro paper list preview */}
-            <div className="space-y-3">
-              <p className="text-xs font-bold text-text-primary uppercase tracking-wider">Publications Preview</p>
-              <div className="p-3 bg-bg-card rounded-lg border border-border text-left hover:border-slate-300 transition-colors">
-                <h5 className="font-semibold text-xs text-text-primary mb-1">Attention Is All You Need</h5>
-                <p className="text-[10px] text-text-secondary">Preprint • Cited by 120,531</p>
-              </div>
-              <div className="p-3 bg-bg-card rounded-lg border border-border text-left hover:border-slate-300 transition-colors">
-                <h5 className="font-semibold text-xs text-text-primary mb-1">Deep Residual Learning for Image Recognition</h5>
-                <p className="text-[10px] text-text-secondary">Conference Paper • Cited by 98,241</p>
-              </div>
-            </div>
+            {/* Top left floating image */}
+            <motion.div 
+              initial={{ x: -60, opacity: 0, rotate: -20 }}
+              animate={{ x: 0, opacity: 1, rotate: -6 }}
+              transition={{ 
+                opacity: { duration: 0.8, delay: 0.6 },
+                x: { duration: 0.8, delay: 0.6, type: "spring", bounce: 0.5 },
+                rotate: { duration: 0.8, delay: 0.6, type: "spring", bounce: 0.5 }
+              }}
+              className="absolute top-8 left-0 w-56 h-48 rounded-3xl overflow-hidden shadow-2xl border-4 border-white z-30 group"
+            >
+              <img src={imgMicroscope} alt="Researcher at microscope" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-blue-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            </motion.div>
 
-            {/* Bottom synergy indicator */}
-            <div className="bg-light-purple p-3 rounded-xl border border-purple-200 flex items-center justify-between text-xs">
-              <span className="text-accent-indigo font-bold">AI Vector Embeddings Sync</span>
-              <span className="px-2 py-0.5 rounded bg-white text-accent-indigo font-semibold border border-purple-200">
-                Active
-              </span>
-            </div>
+            {/* Bottom right floating image */}
+            <motion.div 
+              initial={{ x: 60, opacity: 0, rotate: 20 }}
+              animate={{ x: 0, opacity: 1, rotate: 3 }}
+              transition={{ 
+                opacity: { duration: 0.8, delay: 0.8 },
+                x: { duration: 0.8, delay: 0.8, type: "spring", bounce: 0.5 },
+                rotate: { duration: 0.8, delay: 0.8, type: "spring", bounce: 0.5 }
+              }}
+              className="absolute bottom-4 -right-4 w-64 h-56 rounded-3xl overflow-hidden shadow-2xl border-4 border-white z-30 group"
+            >
+              <img src={imgChalkboard} alt="Researcher at chalkboard" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-indigo-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            </motion.div>
+            
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

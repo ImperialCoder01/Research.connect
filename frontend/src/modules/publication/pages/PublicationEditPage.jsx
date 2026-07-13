@@ -74,8 +74,10 @@ const PublicationEditPage = () => {
   // Check user permission & hydrate form fields
   useEffect(() => {
     if (pubRes) {
-      // Authorization Check
-      if (currentUser && pubRes.userId !== currentUser._id && currentUser.role !== 'admin') {
+      const pubUserId = pubRes.userId?._id || pubRes.userId?.id || pubRes.userId;
+      const currentUserId = currentUser?._id || currentUser?.id;
+
+      if (currentUser && pubUserId && pubUserId.toString() !== currentUserId?.toString() && currentUser.role !== 'admin') {
         toast.error('You are not authorized to edit this publication.');
         navigate(`/publication/${slug}`);
         return;
@@ -104,7 +106,7 @@ const PublicationEditPage = () => {
         researchAreas: pubRes.researchAreasList || pubRes.researchAreas || [],
         keywords: pubRes.keywordsList || pubRes.keywords || [],
         visibility: pubRes.visibility || 'Public',
-        fileDetails: pubRes.cloudinaryFileUrl ? { secure_url: pubRes.cloudinaryFileUrl, originalName: pubRes.title + '.pdf' } : null,
+        fileDetails: pubRes.pdfUrl ? { secure_url: pubRes.pdfUrl, originalName: pubRes.title + '.pdf' } : null,
         extractionConfidences: null
       });
     }
@@ -127,9 +129,9 @@ const PublicationEditPage = () => {
     setStep(3);
   };
 
-  const handleUploadSuccess = ({ cloudinaryData, extractedMetadata, originalName }) => {
+  const handleUploadSuccess = ({ r2Data, extractedMetadata, originalName }) => {
     handleFieldChange('fileDetails', {
-      ...cloudinaryData,
+      ...r2Data,
       originalName
     });
     setStep(4);
@@ -180,8 +182,8 @@ const PublicationEditPage = () => {
       keywords: formData.keywords,
       visibility: formData.visibility,
       status: status,
-      // If full file details exist, pass Cloudinary URL
-      cloudinaryFileUrl: formData.fileDetails?.secure_url || null
+      // If full file details exist, pass pdfUrl
+      pdfUrl: formData.fileDetails?.secure_url || null
     };
   };
 
@@ -202,7 +204,7 @@ const PublicationEditPage = () => {
         queryClient.invalidateQueries({ queryKey: ['publication', slug] });
         queryClient.invalidateQueries({ queryKey: ['publication-edit', slug] });
 
-        navigate(`/profile/${currentUser.profileSlug}/publications`);
+        navigate(`/profile/${currentUser.slug || currentUser.profileSlug || currentUser.username}/publications`);
       } else {
         toast.error(response.message || 'Failed to update draft.', { id: loadingToast });
       }

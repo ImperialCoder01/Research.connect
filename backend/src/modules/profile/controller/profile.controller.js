@@ -2,12 +2,42 @@ const profileService = require('../service/profile.service');
 const asyncHandler = require('../../../common/middlewares/asyncHandler.middleware');
 const scholarService = require('../../scholar/service/scholar.service');
 const { ValidationError } = require('../../../common/errors/AppError');
+const User = require('../../../models/User');
+
+const emitProfileUpdate = async (req) => {
+  try {
+    const socketGateway = require('../../../socket/gateway/socket.gateway');
+    const userId = req.user._id.toString();
+    const user = await User.findById(req.user._id).select('profileImage').lean();
+    const profileImage = user?.profileImage?.url || user?.profileImage || '';
+    const fullName = `${req.user.firstName} ${req.user.lastName}`;
+    const payload = { userId, profileImage, fullName };
+
+    // Emit to self
+    socketGateway.emitToUser(userId, 'profile:update', payload);
+    socketGateway.emitToUser(userId, 'avatar:update', payload);
+
+    // Find all conversations of this user and notify their contacts
+    const Conversation = require('../../messaging/model/Conversation');
+    const conversations = await Conversation.find({ participants: req.user._id }).select('participants').lean();
+    conversations.forEach(c => {
+      const otherId = c.participants.find(p => p.toString() !== userId);
+      if (otherId) {
+        socketGateway.emitToUser(otherId.toString(), 'profile:update', payload);
+        socketGateway.emitToUser(otherId.toString(), 'avatar:update', payload);
+      }
+    });
+  } catch (err) {
+    const logger = require('../../../common/logger/winston');
+    logger.error(`Failed to emit profile socket updates: ${err.message}`);
+  }
+};
 
 class ProfileController {
   // Retrieve public profile of a researcher by slug
   getPublicProfile = asyncHandler(async (req, res) => {
     const { profileSlug } = req.params;
-    const profile = await profileService.getProfileBySlug(profileSlug);
+    const profile = await profileService.getProfileBySlug(profileSlug, req.user?._id);
     return res.success('Researcher public profile retrieved successfully.', profile);
   });
 
@@ -33,7 +63,13 @@ class ProfileController {
         userId: req.user._id,
         purpose: 'profile-banner'
       });
-      coverImage = uploadDoc.secure_url;
+      coverImage = {
+        url: uploadDoc.secure_url,
+        objectKey: uploadDoc.public_id,
+        mimeType: req.file.mimetype || `image/${uploadDoc.format}`,
+        fileSize: uploadDoc.bytes,
+        uploadedAt: uploadDoc.uploadedAt || new Date()
+      };
     }
     const profile = await profileService.updateProfile(req.user._id, { coverImage });
     return res.success('Profile cover banner updated successfully.', profile);
@@ -49,10 +85,34 @@ class ProfileController {
         userId: req.user._id,
         purpose: 'profile-avatar'
       });
-      profileImage = uploadDoc.secure_url;
+      profileImage = {
+        url: uploadDoc.secure_url,
+        objectKey: uploadDoc.public_id,
+        mimeType: req.file.mimetype || `image/${uploadDoc.format}`,
+        fileSize: uploadDoc.bytes,
+        uploadedAt: uploadDoc.uploadedAt || new Date()
+      };
     }
     const profile = await profileService.updateProfile(req.user._id, { profileImage });
+    await emitProfileUpdate(req);
     return res.success('Profile avatar photo updated successfully.', profile);
+  });
+
+  // Delete profile photo and reset to default
+  deletePhoto = asyncHandler(async (req, res) => {
+    const uploadService = require('../../upload/service/upload.service');
+    await uploadService.deleteProfilePhoto(req.user._id);
+    const profile = await profileService.getProfile(req.user._id);
+    await emitProfileUpdate(req);
+    return res.success('Profile photo removed successfully.', profile);
+  });
+
+  // Delete profile banner and reset to default
+  deleteBanner = asyncHandler(async (req, res) => {
+    const uploadService = require('../../upload/service/upload.service');
+    await uploadService.deleteProfileBanner(req.user._id);
+    const profile = await profileService.getProfile(req.user._id);
+    return res.success('Profile banner removed and reset to default.', profile);
   });
 
   // Update basic details (First Name, Last Name, Headline, etc.)
@@ -165,7 +225,7 @@ class ProfileController {
     const { profileSlug } = req.params;
     const { page = 1, limit = 10, sort = '-createdAt', status, visibility, search } = req.query;
 
-    const profile = await profileService.getProfileBySlug(profileSlug);
+    const profile = await profileService.getProfileBySlug(profileSlug, req.user?._id);
     if (!profile) {
       throw new ValidationError('Profile not found.');
     }

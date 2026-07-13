@@ -1,57 +1,95 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import { motion, useInView } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '../../../api/axiosInstance';
-import { Users2, School, BookOpenCheck, Globe } from 'lucide-react';
-import Card from '../../../components/ui/Card';
+import { Users, BookOpenCheck, Globe, Handshake, Award, TrendingUp } from 'lucide-react';
 
-const statIcons = {
-  researchers: Users2,
-  universities: School,
-  publications: BookOpenCheck,
-  countries: Globe
+const stats = [
+  { key: 'researchers', label: 'Registered Researchers', icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', fallback: 1422, suffix: '+', description: 'Active globally' },
+  { key: 'publications', label: 'Indexed Publications', icon: BookOpenCheck, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', fallback: 18450, suffix: '+', description: 'Peer-reviewed works' },
+  { key: 'countries', label: 'Represented Countries', icon: Globe, color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200', fallback: 54, suffix: '', description: 'Worldwide reach' },
+  { key: 'universities', label: 'Partner Institutions', icon: Award, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', fallback: 116, suffix: '+', description: 'Top universities' },
+];
+
+const AnimatedCounter = ({ value, suffix = '', duration = 2 }) => {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-100px' });
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    if (inView && !hasAnimated.current && ref.current) {
+      hasAnimated.current = true;
+      let startTimestamp = null;
+      const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / (duration * 1000), 1);
+        const easeProgress = 1 - Math.pow(1 - progress, 4);
+        const currentVal = progress === 1 ? value : Math.floor(easeProgress * value);
+        if (ref.current) {
+          ref.current.textContent = currentVal.toLocaleString() + suffix;
+        }
+        if (progress < 1) {
+          window.requestAnimationFrame(step);
+        }
+      };
+      window.requestAnimationFrame(step);
+    }
+  }, [inView, value, suffix, duration]);
+
+  return <span ref={ref}>0{suffix}</span>;
 };
 
 const Stats = () => {
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['stats'],
+  const { data } = useQuery({
+    queryKey: ['platform-stats'],
     queryFn: async () => {
-      const response = await axiosInstance.get('/stats');
-      return response.data;
+      const res = await axiosInstance.get('/stats');
+      return res.data?.data || res.data;
     },
-    initialData: {
-      researchersCount: 1422,
-      universitiesCount: 116,
-      publicationsCount: 18450,
-      countriesCount: 54
-    }
+    retry: false,
   });
 
-  const statItems = [
-    { label: 'Registered Researchers', key: 'researchersCount', icon: Users2, color: 'text-[#2563EB]', bg: 'bg-[#DBEAFE]' },
-    { label: 'Universities & Partners', key: 'universitiesCount', icon: School, color: 'text-[#4F46E5]', bg: 'bg-[#EDE9FE]' },
-    { label: 'Indexed Publications', key: 'publicationsCount', icon: BookOpenCheck, color: 'text-[#22C55E]', bg: 'bg-[#DCFCE7]' },
-    { label: 'Represented Countries', key: 'countriesCount', icon: Globe, color: 'text-[#F59E0B]', bg: 'bg-[#FEF3C7]' }
-  ];
-
   return (
-    <section className="py-16 px-4 bg-bg-card border-b border-border">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {statItems.map((item) => {
-            const Icon = item.icon;
-            const value = stats[item.key];
+    <section className="py-24 bg-white relative overflow-hidden border-b border-slate-200">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-4 tracking-tight">
+            The numbers speak for themselves
+          </h2>
+          <p className="text-slate-600 text-lg max-w-2xl mx-auto">
+            Join a thriving global research community driving scientific discovery forward.
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+          {stats.map((stat, index) => {
+            const Icon = stat.icon;
+            const rawValue = data?.[`${stat.key}Count`] ?? data?.[stat.key] ?? stat.fallback;
             return (
-              <Card key={item.key} hoverEffect={true} className="flex flex-col items-center text-center p-6 bg-bg-page/50">
-                <div className={`p-4 rounded-full ${item.bg} ${item.color} mb-4 flex items-center justify-center`}>
-                  <Icon className="w-8 h-8" />
+              <motion.div
+                key={stat.key}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-50px' }}
+                transition={{ delay: index * 0.1, duration: 0.6 }}
+                whileHover={{ scale: 1.03, y: -4 }}
+                className={`bg-white rounded-2xl p-6 lg:p-8 border ${stat.border} shadow-sm group cursor-default relative overflow-hidden`}
+              >
+                <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-20 ${stat.bg} -mr-16 -mt-16`} />
+                <div className={`w-12 h-12 rounded-xl ${stat.bg} border ${stat.border} flex items-center justify-center mb-5 relative z-10`}>
+                  <Icon className={`w-6 h-6 ${stat.color}`} />
                 </div>
-                <h3 className="text-3xl font-extrabold text-text-primary tracking-tight mb-1">
-                  {value.toLocaleString()}
-                </h3>
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                  {item.label}
-                </p>
-              </Card>
+                <div className={`text-4xl lg:text-5xl font-extrabold ${stat.color} mb-2 tracking-tight relative z-10`}>
+                  <AnimatedCounter value={rawValue} suffix={stat.suffix} />
+                </div>
+                <p className="text-slate-900 font-bold text-sm mb-1 relative z-10">{stat.label}</p>
+                <p className="text-slate-500 text-xs relative z-10">{stat.description}</p>
+              </motion.div>
             );
           })}
         </div>

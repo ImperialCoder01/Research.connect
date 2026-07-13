@@ -50,7 +50,7 @@ const PublicationsLibraryPage = () => {
   const [filterStatus, setFilterStatus] = useState('all'); // all | published | draft | trash | bookmarks
   const [sortBy, setSortBy] = useState('-createdAt');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(1000);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Bulk Selection States
@@ -106,11 +106,17 @@ const PublicationsLibraryPage = () => {
   });
 
   const profile = profileRes?.success ? profileRes.data : null;
-  const isOwner = currentUser && profile && (currentUser._id === profile.userId || currentUser.profileSlug === profileSlug || currentUser.username === profileSlug);
+  const currentUserId = currentUser?._id || currentUser?.id;
+  const profileUserId = profile?.userId?._id || profile?.userId?.id || profile?.userId;
+  const isOwner = currentUser && profile && (
+    (currentUserId && profileUserId && currentUserId.toString() === profileUserId.toString()) || 
+    currentUser.profileSlug === profileSlug || 
+    currentUser.username === profileSlug
+  );
 
   // 2. Fetch Publications Portfolio
   const { data: pubsRes, isLoading: isPubsLoading, refetch } = useQuery({
-    queryKey: ['publications-portfolio', profileSlug, page, limit, filterType, filterYear, filterVisibility, filterStatus, sortBy, searchQuery, isOwner, isDashboard],
+    queryKey: ['publications-portfolio', profileSlug, page, limit, filterYear, filterVisibility, filterStatus, sortBy, searchQuery, isOwner, isDashboard],
     queryFn: async () => {
       const params = {
         page,
@@ -119,7 +125,13 @@ const PublicationsLibraryPage = () => {
         search: searchQuery
       };
 
-      if (filterType !== 'all') params.publicationType = filterType;
+      // NOTE: publicationType is intentionally NOT sent to the backend.
+      // The backend does a strict match on this field, and stored values
+      // are inconsistently cased/formatted ("Conference Paper" vs
+      // "conference-paper"), so a strict server-side match returns 0
+      // results and there's nothing left for the client filter to work
+      // with. We fetch the full list instead and filter by format
+      // entirely client-side (see `publications` below).
       if (filterVisibility !== 'all') params.visibility = filterVisibility;
       if (filterYear !== 'all') params.year = filterYear;
 
@@ -140,10 +152,32 @@ const PublicationsLibraryPage = () => {
     enabled: !!profileSlug
   });
 
-  const publications = pubsRes?.success ? pubsRes.data.docs : [];
+  const rawPublications = pubsRes?.success ? pubsRes.data.docs : [];
   const totalPubs = pubsRes?.success ? pubsRes.data.total : 0;
   const totalPages = pubsRes?.success ? pubsRes.data.totalPages : 1;
   const stats = pubsRes?.success ? pubsRes.data.stats : null;
+
+  // Client-side safety-net filter for Publication Type / Format.
+  // The dropdown sends slug-style values ('conference-paper') but stored
+  // publicationType values are spaced/mixed-case ('Conference Paper'), so a
+  // strict string match (whether done here or on the backend) never hits.
+  // Normalizing both sides (lowercase, strip spaces/hyphens/underscores)
+  // makes the comparison format-agnostic without needing a backend change.
+  const normalizeType = (val) => (val || '').toString().toLowerCase().replace(/[\s_-]/g, '');
+  const publications = filterType === 'all'
+    ? rawPublications
+    : rawPublications.filter((p) => normalizeType(p.publicationType) === normalizeType(filterType));
+
+  // Trash count fetched independently of the active tab/filters, so the
+  // "Trash" tab badge reflects the real total instead of only counting
+  // trashed items when you happen to already be viewing the Trash tab
+  // (every other tab's query excludes trashed docs, so it always read 0).
+  const { data: trashCountRes, refetch: refetchTrashCount } = useQuery({
+    queryKey: ['publications-trash-count', profileSlug],
+    queryFn: () => publicationService.getMyPublications({ page: 1, limit: 1, trash: 'true' }),
+    enabled: !!profileSlug && isOwner
+  });
+  const trashCount = trashCountRes?.success ? (trashCountRes.data.total ?? 0) : 0;
 
   // Sync Google Scholar Profile Handler
   const handleScholarSync = async () => {
@@ -207,13 +241,13 @@ const PublicationsLibraryPage = () => {
 
   // Download PDF attachment
   const handleDownload = async (pub) => {
-    if (!pub.cloudinaryFileUrl) {
+    if (!pub.pdfUrl) {
       toast.error('No attached PDF available for download.');
       return;
     }
     try {
       await publicationService.trackDownload(pub.id || pub._id);
-      window.open(pub.cloudinaryFileUrl, '_blank');
+      window.open(pub.pdfUrl, '_blank');
       refetch();
     } catch (err) {
       console.error(err);
@@ -276,6 +310,7 @@ const PublicationsLibraryPage = () => {
           { id: deleteToast }
         );
         refetch();
+        refetchTrashCount();
       } else {
         toast.error('Delete operation failed.', { id: deleteToast });
       }
@@ -294,6 +329,7 @@ const PublicationsLibraryPage = () => {
       if (res.success) {
         toast.success('Publication restored successfully!', { id: restoreToast });
         refetch();
+        refetchTrashCount();
       } else {
         toast.error('Failed to restore.', { id: restoreToast });
       }
@@ -447,7 +483,7 @@ const PublicationsLibraryPage = () => {
         {/* 1. Header Area */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 pb-6">
           <div className="space-y-1">
-            {profileSlug && (
+            {profileSlug && profileSlug !== 'undefined' && (
               <button
                 onClick={() => navigate(`/profile/${profileSlug}`)}
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors mb-1.5"
@@ -502,8 +538,8 @@ const PublicationsLibraryPage = () => {
 
         {/* 2. Top Statistics Cards */}
         {isOwner && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
-            {displayStats.map((m, idx) => {
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-9 gap-3">
+            {displayStats.filter(m => Number(m.value || 0) > 0).map((m, idx) => {
               const Icon = m.icon;
               return (
                 <motion.div 
@@ -532,7 +568,7 @@ const PublicationsLibraryPage = () => {
               { id: 'published', label: 'Published', count: stats?.published },
               { id: 'draft', label: 'Drafts', count: stats?.drafts },
               { id: 'bookmarks', label: 'Bookmarks', count: stats?.bookmarks },
-              { id: 'trash', label: 'Trash', count: publications.filter(p => p.isDeleted).length }
+              { id: 'trash', label: 'Trash', count: trashCount }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -583,6 +619,7 @@ const PublicationsLibraryPage = () => {
             >
               <option value="all">All Formats</option>
               <option value="article">Articles</option>
+              <option value="journal-paper">Journal Papers</option>
               <option value="book">Books</option>
               <option value="conference-paper">Conference Papers</option>
               <option value="patent">Patents</option>
@@ -678,7 +715,7 @@ const PublicationsLibraryPage = () => {
                   const id = pub.id || pub._id;
                   const isSelected = selectedIds.includes(id);
                   const isScholarImport = !!pub.googleScholarPublicationId;
-                  const hasPDF = !!pub.cloudinaryFileUrl;
+                  const hasPDF = !!pub.pdfUrl;
                   
                   return (
                     <motion.div
@@ -716,7 +753,7 @@ const PublicationsLibraryPage = () => {
                               <span className="text-[8px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-[8px]" title="Imported from Google Scholar">Scholar</span>
                             )}
                             {hasPDF && (
-                              <span className="text-[8px] font-black bg-[#2563EB] text-white px-2 py-0.5 rounded-[8px]" title="Cloudinary Attached PDF">PDF</span>
+                              <span className="text-[8px] font-black bg-[#2563EB] text-white px-2 py-0.5 rounded-[8px]" title="Cloudflare R2 Attached PDF">PDF</span>
                             )}
                             {pub.status === 'draft' && (
                               <span className="text-[8px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-[8px]">Draft</span>
@@ -864,7 +901,7 @@ const PublicationsLibraryPage = () => {
                   const id = pub.id || pub._id;
                   const isSelected = selectedIds.includes(id);
                   const isScholarImport = !!pub.googleScholarPublicationId;
-                  const hasPDF = !!pub.cloudinaryFileUrl;
+                  const hasPDF = !!pub.pdfUrl;
                   
                   return (
                     <motion.div
@@ -1334,10 +1371,10 @@ const PublicationsLibraryPage = () => {
               {/* Main Content Areas */}
               <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 <div className="lg:col-span-2 h-full min-h-[450px]">
-                  {activeReadPub.cloudinaryFileUrl ? (
+                  {activeReadPub.pdfUrl ? (
                     <PDFReader
                       title={activeReadPub.title}
-                      pdfUrl={activeReadPub.cloudinaryFileUrl}
+                      pdfUrl={activeReadPub.pdfUrl}
                       authors={activeReadPub.authors}
                       journal={activeReadPub.publication || activeReadPub.journal}
                       year={activeReadPub.year}

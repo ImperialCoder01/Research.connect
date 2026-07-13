@@ -18,7 +18,11 @@ const ProfileLayout = () => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Determine if viewing own profile
-  const isOwnProfile = currentUser && (currentUser.profileSlug === username || currentUser.username === username);
+  const isOwnProfile = currentUser && (
+    currentUser.slug === username ||
+    currentUser.profileSlug === username ||
+    currentUser.username === username
+  );
 
   // Query to fetch profile details (hydrated from all collections)
   const { data: profileData, isLoading, error, refetch } = useQuery({
@@ -75,7 +79,7 @@ const ProfileLayout = () => {
         {/* Menu Toggle Button for Mobile */}
         <button
           onClick={() => setIsMobileOpen(!isMobileOpen)}
-          className="md:hidden fixed top-[76px] left-3 z-40 w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg active:scale-95 transition-all"
+          className="md:hidden fixed top-[69px] left-2 z-30 w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg active:scale-95 transition-all"
           title="Profile Menu"
         >
           <Menu className="w-5 h-5" />

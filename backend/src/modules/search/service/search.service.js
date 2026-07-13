@@ -5,6 +5,9 @@ const PublicationKeyword = require('../../../models/PublicationKeyword');
 const PublicationResearchArea = require('../../../models/PublicationResearchArea');
 const SearchHistory = require('../../../models/SearchHistory');
 const SearchAnalytic = require('../../../models/SearchAnalytic');
+const User = require('../../../models/User');
+const Profile = require('../../../models/Profile');
+const Project = require('../../project/models/Project');
 const { ValidationError } = require('../../../common/errors/AppError');
 
 // Sanitize a query string to prevent regex injection
@@ -17,6 +20,17 @@ const sanitizeQuery = (q = '') => {
 const buildRegex = (q, options = 'i') => new RegExp(sanitizeQuery(q), options);
 
 class SearchService {
+
+  async searchProjects(params) {
+    const { q = '', status, domain, tags, owner, page = 1, limit = 20, sort = 'relevance' } = params;
+    const pageNum = Math.max(1, parseInt(page, 10)); const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+    const filter = { isArchived: false, visibility: 'Public' };
+    if (q.trim()) filter.$text = { $search: q.trim() };
+    if (status) filter.status = status; if (domain) filter.researchDomain = buildRegex(domain); if (tags) filter.tags = { $in: String(tags).split(',').map(buildRegex) }; if (owner) filter.owner = owner;
+    const sortMap = { newest: { createdAt: -1 }, oldest: { createdAt: 1 }, alphabetical: { title: 1 }, updated: { updatedAt: -1 }, relevance: filter.$text ? { score: { $meta: 'textScore' }, updatedAt: -1 } : { updatedAt: -1 } };
+    const [results, total] = await Promise.all([Project.find(filter, filter.$text ? { score: { $meta: 'textScore' } } : {}).populate('owner', 'firstName lastName fullName profileSlug avatar').sort(sortMap[sort] || sortMap.relevance).skip((pageNum - 1) * limitNum).limit(limitNum).lean(), Project.countDocuments(filter)]);
+    return { results, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+  }
 
   // ─── Core Publication Search ─────────────────────────────────────────────────
   async searchPublications(params) {
@@ -115,7 +129,7 @@ class SearchService {
     if (institution) baseFilter.institution = buildRegex(institution);
     if (language) baseFilter.language = buildRegex(language);
     if (openAccess === 'true' || openAccess === true) baseFilter.openAccess = true;
-    if (hasPDF === 'true' || hasPDF === true) baseFilter.cloudinaryFileUrl = { $ne: '' };
+    if (hasPDF === 'true' || hasPDF === true) baseFilter.pdfUrl = { $ne: '' };
     if (isScholarImported === 'true' || isScholarImported === true) baseFilter.googleScholarVerified = true;
 
     // ── Author sub-query (for author-type search) ────────────────────
@@ -173,7 +187,7 @@ class SearchService {
       conference: 1, publisher: 1, year: 1, publicationDate: 1,
       publicationType: 1, abstract: 1, keywords: 1, researchAreas: 1,
       slug: 1, doi: 1, views: 1, downloads: 1, citations: 1,
-      recommendations: 1, cloudinaryFileUrl: 1, thumbnail: 1,
+      recommendations: 1, pdfUrl: 1, thumbnail: 1,
       openAccess: 1, googleScholarVerified: 1, institution: 1,
       language: 1, readingTime: 1, researchScore: 1, createdAt: 1,
       publicationCode: 1,
@@ -207,7 +221,7 @@ class SearchService {
       ...pub,
       id: pub._id,
       authorsList: authorsMap[pub._id.toString()] || [],
-      hasPDF: !!(pub.cloudinaryFileUrl),
+      hasPDF: !!(pub.pdfUrl),
     }));
 
     return {
@@ -252,6 +266,112 @@ class SearchService {
     const [result] = await PublicationAuthor.aggregate(pipeline);
     const results = result?.data || [];
     const total = result?.count?.[0]?.total || 0;
+
+    // Enrich authors with User slug/profileSlug/username
+    if (results.length > 0) {
+      const authorIds = results.map(r => r.authorId).filter(id => id && mongoose.Types.ObjectId.isValid(id));
+      const authorNames = results.map(r => r._id);
+      
+      const users = await User.find({
+        $or: [
+          { _id: { $in: authorIds } },
+          { fullName: { $in: authorNames } }
+        ]
+      }).select('firstName lastName fullName username profileSlug slug').lean();
+
+      for (const r of results) {
+        let matchedUser = users.find(u => r.authorId && u._id.toString() === r.authorId.toString());
+        if (!matchedUser) {
+          matchedUser = users.find(u => u.fullName && u.fullName.toLowerCase() === r._id.toLowerCase());
+        }
+        if (matchedUser) {
+          r.profileSlug = matchedUser.slug || matchedUser.profileSlug || matchedUser.username;
+          r.userId = matchedUser._id;
+        }
+      }
+    }
+
+    return { results, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+  }
+
+  // ─── Researcher Search ────────────────────────────────────────────────────────
+  async searchResearchers(params) {
+    const { q = '', page = 1, limit = 20, country, institution, researchArea, currentUserId } = params;
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Search query on user's fullName / email or profile's bio / institution / researchAreas
+    const userQuery = {};
+    const profileQuery = { isDeleted: { $ne: true } };
+
+    if (country) profileQuery['institutionLocation.country'] = country;
+    if (institution) profileQuery.institution = { $regex: institution, $options: 'i' };
+    if (researchArea) profileQuery.researchAreas = { $in: [new RegExp(researchArea, 'i')] };
+
+    if (q.trim()) {
+      const regex = buildRegex(q);
+      profileQuery.$or = [
+        { institution: regex },
+        { department: regex },
+        { biography: regex },
+        { researchAreas: { $in: [regex] } }
+      ];
+      userQuery.$or = [
+        { firstName: regex },
+        { lastName: regex },
+        { email: regex }
+      ];
+    }
+
+    // First find matching profiles
+    const matchedProfiles = await Profile.find(profileQuery).lean();
+    const matchedUserIdsFromProfiles = matchedProfiles.map(p => p.userId);
+
+    // Find users matching either userQuery OR having profile match
+    const finalUserFilter = {
+      isDeleted: { $ne: true },
+      isActive: true
+    };
+
+    if (q.trim()) {
+      finalUserFilter.$or = [
+        ...userQuery.$or,
+        { _id: { $in: matchedUserIdsFromProfiles } }
+      ];
+    } else if (matchedUserIdsFromProfiles.length > 0) {
+      finalUserFilter._id = { $in: matchedUserIdsFromProfiles };
+    } else if (country || institution || researchArea) {
+      // If filters applied but no profiles matched, we should return empty
+      return { results: [], total: 0, page: pageNum, limit: limitNum, totalPages: 0 };
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(finalUserFilter)
+        .skip(skip)
+        .limit(limitNum)
+        .select('firstName lastName fullName email profileImage profileSlug slug username researcherType institution')
+        .lean(),
+      User.countDocuments(finalUserFilter)
+    ]);
+
+    // Attach profile details & compatibility score if currentUserId is present
+    const userIds = users.map(u => u._id);
+    const profiles = await Profile.find({ userId: { $in: userIds }, isDeleted: { $ne: true } }).lean();
+
+    const results = users.map((user) => {
+      const prof = profiles.find(p => p.userId.toString() === user._id.toString());
+      
+      return {
+        ...user,
+        profile: prof || null,
+        institution: prof?.institution || user.institution || '',
+        researchAreas: prof?.researchAreas || [],
+        profileSlug: user.slug || user.profileSlug || user.username,
+        matchPercentage: 0,
+        reasons: []
+      };
+    });
 
     return { results, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
   }
@@ -355,12 +475,12 @@ class SearchService {
 
   // ─── Autocomplete ────────────────────────────────────────────────────────────
   async getAutocomplete(query) {
-    if (!query || query.trim().length < 2) return { publications: [], authors: [], journals: [], conferences: [], keywords: [] };
+    if (!query || query.trim().length < 2) return { publications: [], authors: [], journals: [], conferences: [], keywords: [], projects: [], researchers: [] };
 
     const regex = buildRegex(query);
     const baseFilter = { isDeleted: { $ne: true }, status: 'published', visibility: 'Public' };
 
-    const [publications, authors, journalDocs, conferenceDocs, keywordDocs] = await Promise.all([
+    const [publications, authors, journalDocs, conferenceDocs, keywordDocs, projects, researchers] = await Promise.all([
       Publication.find(
         { ...baseFilter, title: regex },
         { title: 1, slug: 1, publicationType: 1, authors: 1, year: 1 }
@@ -380,7 +500,18 @@ class SearchService {
         { $group: { _id: '$keyword', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
         { $limit: 5 }
-      ])
+      ]),
+      Project.find({ isArchived: false, visibility: 'Public', $text: { $search: query } }, { title: 1, slug: 1, researchDomain: 1, status: 1 }).limit(5).lean(),
+      User.find(
+        {
+          $or: [
+            { firstName: regex },
+            { lastName: regex },
+            { fullName: regex }
+          ]
+        },
+        { firstName: 1, lastName: 1, fullName: 1, profileSlug: 1, avatar: 1 }
+      ).limit(5).lean()
     ]);
 
     return {
@@ -389,6 +520,13 @@ class SearchService {
       journals: journalDocs.filter(Boolean),
       conferences: conferenceDocs.filter(Boolean),
       keywords: keywordDocs.map(k => k._id),
+      projects: projects.map(p => ({ id: p._id, title: p.title, slug: p.slug, domain: p.researchDomain, status: p.status })),
+      researchers: researchers.map(r => ({
+        id: r._id,
+        fullName: r.fullName || `${r.firstName} ${r.lastName}`,
+        profileSlug: r.profileSlug,
+        avatar: r.avatar
+      }))
     };
   }
 
@@ -471,6 +609,193 @@ class SearchService {
     entry.isFavorite = !entry.isFavorite;
     await entry.save();
     return entry;
+  }
+
+  /**
+   * Search conversations by participant name or group name
+   */
+  async searchConversations(userId, q) {
+    const mongoose = require('mongoose');
+    const Conversation = mongoose.model('Conversation');
+    const User = mongoose.model('User');
+    const Profile = mongoose.model('Profile');
+
+    const searchRegex = new RegExp(q, 'i');
+
+    // 1. Find users who match first name / last name
+    const matchedUsers = await User.find({
+      $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { username: searchRegex }
+      ],
+      isDeleted: { $ne: true }
+    }).select('_id').lean();
+    const matchedUserIds = matchedUsers.map(u => u._id);
+
+    // 2. Find conversations containing the user and either group name matches or participants contain matched users
+    const conversations = await Conversation.find({
+      participants: userId,
+      $or: [
+        { name: searchRegex },
+        { participants: { $in: matchedUserIds } }
+      ]
+    })
+      .populate('participants', 'firstName lastName profileImage username profileSlug slug email')
+      .populate({
+        path: 'lastMessageId',
+        populate: { path: 'attachmentId' }
+      })
+      .sort({ lastMessageTime: -1 })
+      .lean();
+
+    // 3. Process
+    const processed = await Promise.all(
+      conversations.map(async (conv) => {
+        const otherParticipant = conv.participants.find(
+          p => p._id.toString() !== userId.toString()
+        );
+
+        let detailedParticipant = null;
+        if (otherParticipant) {
+          const profile = await Profile.findOne({ userId: otherParticipant._id }).lean();
+          detailedParticipant = {
+            ...otherParticipant,
+            isOnline: false,
+            bio: profile?.bio || '',
+            institution: profile?.institution || '',
+            designation: profile?.designation || ''
+          };
+        }
+
+        const isPinned = Array.isArray(conv.isPinned) && conv.isPinned.map(id => id.toString()).includes(userId.toString());
+        const isArchived = Array.isArray(conv.isArchived) && conv.isArchived.map(id => id.toString()).includes(userId.toString());
+        const isMuted = Array.isArray(conv.isMuted) && conv.isMuted.map(id => id.toString()).includes(userId.toString());
+
+        return {
+          ...conv,
+          lastMessage: conv.lastMessageId ? {
+            ...conv.lastMessageId,
+            attachment: conv.lastMessageId.attachmentId
+          } : null,
+          otherParticipant: detailedParticipant,
+          isPinned,
+          isArchived,
+          isMuted
+        };
+      })
+    );
+
+    return processed;
+  }
+
+  /**
+   * Search message content
+   */
+  async searchMessages(userId, q) {
+    const messageService = require('../../messaging/service/message.service');
+    return await messageService.searchMessages(userId, q);
+  }
+
+  async searchKeywords(params) {
+    const { q = '', page = 1, limit = 20 } = params;
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    if (!q.trim()) return { results: [], total: 0, page: pageNum, limit: limitNum, totalPages: 0 };
+    const regex = buildRegex(q);
+
+    const keywordGroups = await PublicationKeyword.aggregate([
+      { $match: { keyword: regex } },
+      { $group: { _id: '$keyword', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      {
+        $facet: {
+          data: [{ $skip: skip }, { $limit: limitNum }],
+          count: [{ $count: 'total' }]
+        }
+      }
+    ]);
+
+    const items = keywordGroups[0]?.data || [];
+    const total = keywordGroups[0]?.count?.[0]?.total || 0;
+
+    const results = await Promise.all(items.map(async (item) => {
+      const researchersCount = await Profile.countDocuments({ 
+        researchAreas: { $regex: new RegExp('^' + sanitizeQuery(item._id) + '$', 'i') } 
+      });
+      return {
+        keyword: item._id,
+        relatedPublicationsCount: item.count,
+        relatedResearchersCount: researchersCount
+      };
+    }));
+
+    return { results, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+  }
+
+  async searchInstitutions(params) {
+    const { q = '', page = 1, limit = 20 } = params;
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const queryFilter = { isActive: true };
+    if (q.trim()) {
+      queryFilter.name = buildRegex(q);
+    }
+
+    const [items, total] = await Promise.all([
+      mongoose.model('Institution').find(queryFilter)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      mongoose.model('Institution').countDocuments(queryFilter)
+    ]);
+
+    const results = await Promise.all(items.map(async (inst) => {
+      const [researchersCount, publicationsCount] = await Promise.all([
+        Profile.countDocuments({ institution: { $regex: new RegExp('^' + sanitizeQuery(inst.name) + '$', 'i') } }),
+        Publication.countDocuments({ institution: { $regex: new RegExp('^' + sanitizeQuery(inst.name) + '$', 'i') } })
+      ]);
+      return {
+        ...inst,
+        researchersCount,
+        publicationsCount
+      };
+    }));
+
+    return { results, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+  }
+
+  async combinedSearch(params) {
+    const { q = '', currentUserId } = params;
+    if (!q || !q.trim()) {
+      return {
+        researchers: [],
+        publications: [],
+        authors: [],
+        keywords: [],
+        institutions: []
+      };
+    }
+
+    const [researchers, publications, authors, keywords, institutions] = await Promise.all([
+      this.searchResearchers({ q, currentUserId, page: 1, limit: 5 }),
+      this.searchPublications({ q, page: 1, limit: 5 }),
+      this.searchAuthors({ q, page: 1, limit: 5 }),
+      this.searchKeywords({ q, page: 1, limit: 5 }),
+      this.searchInstitutions({ q, page: 1, limit: 5 })
+    ]);
+
+    return {
+      researchers: researchers.results,
+      publications: publications.results,
+      authors: authors.results,
+      keywords: keywords.results,
+      institutions: institutions.results
+    };
   }
 }
 

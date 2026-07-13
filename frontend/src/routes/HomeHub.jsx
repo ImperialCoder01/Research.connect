@@ -1,30 +1,20 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
-import LandingPage from '../modules/landing';
-import Navbar from '../layouts/Navbar';
-import Footer from '../layouts/Footer/Footer';
-import HomeFeed from '../modules/home/pages/HomeFeed';
-import MessagesView from '../modules/message/components/MessagesView';
+import { Navigate } from 'react-router-dom';
+import LandingPage from '../modules/landing/pages/LandingPage';
 
 const HomeHub = () => {
   const { isAuthenticated } = useSelector((state) => state.auth);
 
   if (isAuthenticated) {
-    return (
-      <>
-        <HomeFeed />
-        <MessagesView />
-      </>
-    );
+    return <Navigate to="/home" replace />;
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-bg-page text-text-primary transition-colors duration-300">
-      <Navbar />
+    <div className="flex flex-col min-h-screen bg-white text-slate-900 transition-colors duration-300">
       <main className="flex-grow">
         <LandingPage />
       </main>
-      <Footer />
     </div>
   );
 };

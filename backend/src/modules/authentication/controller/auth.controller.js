@@ -2,38 +2,8 @@ const authService = require('../service/auth.service');
 const authDTO = require('../dto/auth.dto');
 const asyncHandler = require('../../../common/middlewares/asyncHandler.middleware');
 const env = require('../../../config/environment');
+const { getClientInfo } = require('../../../common/utils/userAgent.helper');
 
-// Helper to extract device and client metadata from request
-const getClientInfo = (req) => {
-  const ua = req.headers['user-agent'] || '';
-  let browser = 'Unknown';
-  let device = 'Desktop';
-  let os = 'Unknown';
-
-  if (/firefox/i.test(ua)) browser = 'Firefox';
-  else if (/chrome|crios/i.test(ua)) browser = 'Chrome';
-  else if (/safari/i.test(ua)) browser = 'Safari';
-  else if (/msie|trident/i.test(ua)) browser = 'Internet Explorer';
-  else if (/edge/i.test(ua)) browser = 'Edge';
-  
-  if (/ipad|playbook|silk/i.test(ua)) device = 'Tablet';
-  else if (/mobile|android|iphone|ipod/i.test(ua)) device = 'Mobile';
-  
-  if (/windows/i.test(ua)) os = 'Windows';
-  else if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
-  else if (/linux/i.test(ua)) os = 'Linux';
-  else if (/android/i.test(ua)) os = 'Android';
-  else if (/iphone|ipad/i.test(ua)) os = 'iOS';
-
-  return {
-    ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '',
-    userAgent: ua,
-    browser,
-    device,
-    os,
-    location: req.headers['x-app-location'] || 'Unknown' // Custom header or fallback
-  };
-};
 
 // Helper to set cookie for refresh token
 const setRefreshTokenCookie = (res, token) => {
@@ -129,6 +99,22 @@ class AuthController {
     return res.success('Password reset successfully. You can now log in.');
   });
 
+  // Change Password
+  changePassword = asyncHandler(async (req, res) => {
+    const clientInfo = getClientInfo(req);
+    const { currentPassword, newPassword } = req.body;
+    await authService.changePassword(req.user._id, currentPassword, newPassword, clientInfo);
+    return res.success('Password changed successfully.');
+  });
+
+  // Deactivate Account
+  deactivate = asyncHandler(async (req, res) => {
+    const clientInfo = getClientInfo(req);
+    await authService.deactivate(req.user._id, clientInfo);
+    clearRefreshTokenCookie(res);
+    return res.success('Account deactivated successfully.');
+  });
+
   // Refresh Token Rotation
   refreshAccessToken = asyncHandler(async (req, res) => {
     const clientInfo = getClientInfo(req);
@@ -168,6 +154,40 @@ class AuthController {
       user: authDTO.formatUser(user),
       profile: authDTO.formatProfile(profile)
     });
+  });
+
+  // Unified Send OTP
+  sendOtp = asyncHandler(async (req, res) => {
+    const clientInfo = getClientInfo(req);
+    const { email, purpose = 'login' } = req.body;
+    if (purpose === 'registration') {
+      await authService.sendRegistrationOtp(email, clientInfo);
+    } else if (purpose === 'forgot_password') {
+      await authService.forgotPassword(email, clientInfo);
+    } else {
+      await authService.sendLoginOtp(email, clientInfo);
+    }
+    return res.success(`OTP code sent successfully for ${purpose}.`, { email, purpose });
+  });
+
+  // Unified Verify OTP
+  verifyOtp = asyncHandler(async (req, res) => {
+    const clientInfo = getClientInfo(req);
+    const { email, otp, purpose = 'login', rememberMe = false } = req.body;
+    let result;
+    if (purpose === 'registration') {
+      const { user, profile, accessToken, refreshToken } = await authService.verifyRegistrationOtp(email, otp, clientInfo);
+      setRefreshTokenCookie(res, refreshToken);
+      result = authDTO.formatAuthResponse(user, profile, accessToken);
+    } else if (purpose === 'forgot_password') {
+      await authService.resetPassword(email, otp, req.body.password, clientInfo);
+      return res.success('Password reset successfully. You can now log in.');
+    } else {
+      const { user, profile, accessToken, refreshToken } = await authService.verifyLoginOtp(email, otp, rememberMe, clientInfo);
+      setRefreshTokenCookie(res, refreshToken);
+      result = authDTO.formatAuthResponse(user, profile, accessToken);
+    }
+    return res.success('OTP verified successfully.', result);
   });
 }
 

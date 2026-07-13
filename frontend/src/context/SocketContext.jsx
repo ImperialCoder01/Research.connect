@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 
 const SocketContext = createContext(null);
 
@@ -8,6 +10,7 @@ export const SocketProvider = ({ children }) => {
   const { user } = useAuth();
   const [socket, setSocket] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!user) {
@@ -18,7 +21,7 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem('token');
     const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 
     const newSocket = io(socketUrl, {
@@ -27,47 +30,152 @@ export const SocketProvider = ({ children }) => {
     });
 
     newSocket.on('connect', () => {
-      console.log('🔌 Connected to Socket.io server');
+      // Socket connected successfully
     });
 
     newSocket.on('connect_error', (err) => {
       console.warn('🔌 Socket connection error:', err.message);
     });
 
-    // Naye collaboration requests aane pe suno
-    newSocket.on('NEW_COLLABORATION_REQUEST', (data) => {
-      console.log('📣 Real-time notification received: NEW_COLLABORATION_REQUEST', data);
-      setNotifications((prev) => [data.notification, ...prev]);
+    // Listen for new real-time notifications
+    newSocket.on('notification:new', (notification) => {
+      setNotifications((prev) => [notification, ...prev]);
+      
+      // Real-time UI Toast Alert
+      toast((t) => (
+        <div className="flex items-start gap-3 text-left">
+          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-650 flex items-center justify-center font-bold text-xs shrink-0 uppercase">
+            {notification.actorId?.firstName?.charAt(0) || 'N'}
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-xs font-black text-slate-900">{notification.title}</p>
+            <p className="text-[10px] text-slate-500 font-semibold leading-normal">{notification.message}</p>
+          </div>
+        </div>
+      ), { duration: 4000 });
+
+      // Invalidate count and list queries
+      queryClient.invalidateQueries({ queryKey: ['unreadCount'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
 
-    // Jab koi collaboration accept kare toh alert lo
-    newSocket.on('COLLABORATION_REQUEST_ACCEPTED', (data) => {
-      console.log('📣 Real-time notification received: COLLABORATION_REQUEST_ACCEPTED', data);
-      setNotifications((prev) => [data.notification, ...prev]);
+    // Listen for real-time unread count updates
+    newSocket.on('notification:count', ({ count }) => {
+      queryClient.setQueryData(['unreadCount'], { count });
     });
 
-    // Nayi connection requests aane pe suno
-    newSocket.on('NEW_CONNECTION_REQUEST', (data) => {
-      console.log('📣 Real-time notification received: NEW_CONNECTION_REQUEST', data);
-      setNotifications((prev) => [data.notification, ...prev]);
+    // Listen for notification updates (e.g. marked read)
+    newSocket.on('notification:update', (updatedNotification) => {
+      setNotifications((prev) => 
+        prev.map(n => n._id === updatedNotification._id ? { ...n, ...updatedNotification } : n)
+      );
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['unreadCount'] });
     });
 
-    // Jab koi connection accept kare toh alert lo
-    newSocket.on('CONNECTION_REQUEST_ACCEPTED', (data) => {
-      console.log('📣 Real-time notification received: CONNECTION_REQUEST_ACCEPTED', data);
-      setNotifications((prev) => [data.notification, ...prev]);
+    // Listen for notification deletes
+    newSocket.on('notification:delete', (deletedId) => {
+      setNotifications((prev) => prev.filter(n => n._id !== deletedId));
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['unreadCount'] });
     });
 
-    // Koi naya follower aaye toh notify karo
-    newSocket.on('NEW_FOLLOWER', (data) => {
-      console.log('📣 Real-time notification received: NEW_FOLLOWER', data);
-      setNotifications((prev) => [data.notification, ...prev]);
+    // Listen for new messages
+    newSocket.on('message:new', (message) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', message.conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
     });
 
-    // Jinko follow kiya hai, unki nayi publications aane pe suno
-    newSocket.on('NEW_PUBLICATION_BY_FOLLOWED', (data) => {
-      console.log('📣 Real-time notification received: NEW_PUBLICATION_BY_FOLLOWED', data);
-      setNotifications((prev) => [data.notification, ...prev]);
+    newSocket.on('message:received', (message) => {
+      console.log('💬 Socket: message:received:', message);
+      queryClient.invalidateQueries({ queryKey: ['messages', message.conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+
+    // Listen for message updates (edits, reactions, deletes)
+    newSocket.on('message:update', (updatedMessage) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', updatedMessage.conversationId] });
+    });
+
+    // Listen for read receipts
+    newSocket.on('message:read', ({ conversationId, readBy }) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+
+    newSocket.on('message:delivered', ({ conversationId }) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+
+    newSocket.on('message:seen', ({ conversationId }) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+
+    // Listen for typing signals
+    newSocket.on('typing:start', ({ conversationId, userId }) => {
+      window.dispatchEvent(new CustomEvent('typing:start', { detail: { conversationId, userId } }));
+    });
+
+    newSocket.on('typing:stop', ({ conversationId, userId }) => {
+      window.dispatchEvent(new CustomEvent('typing:stop', { detail: { conversationId, userId } }));
+    });
+
+    // Listen for user presence changes
+    newSocket.on('presence:update', ({ userId, status, lastSeen }) => {
+      queryClient.setQueryData(['conversations'], (old) => {
+        if (!old) return old;
+        return old.map(c => {
+          if (c.otherParticipant && (c.otherParticipant._id === userId || c.otherParticipant._id?.toString() === userId?.toString())) {
+            return {
+              ...c,
+              otherParticipant: {
+                ...c.otherParticipant,
+                isOnline: status === 'online',
+                lastSeen: lastSeen || c.otherParticipant.lastSeen
+              }
+            };
+          }
+          return c;
+        });
+      });
+      window.dispatchEvent(new CustomEvent('presence:update', { detail: { userId, status, lastSeen } }));
+    });
+
+    // Listen for avatar / profile updates
+    newSocket.on('avatar:update', ({ userId, profileImage }) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['profile', userId] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      queryClient.invalidateQueries({ queryKey: ['followers'] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
+    });
+
+    newSocket.on('profile:update', ({ userId, profileImage, fullName }) => {
+      queryClient.setQueryData(['conversations'], (old) => {
+        if (!old) return old;
+        return old.map(c => {
+          if (c.otherParticipant && (c.otherParticipant._id === userId || c.otherParticipant._id?.toString() === userId?.toString())) {
+            return {
+              ...c,
+              otherParticipant: {
+                ...c.otherParticipant,
+                profileImage: profileImage || c.otherParticipant.profileImage,
+                fullName: fullName || c.otherParticipant.fullName
+              }
+            };
+          }
+          return c;
+        });
+      });
+      queryClient.invalidateQueries({ queryKey: ['profile', userId] });
+    });
+
+    // Listen for conversation sidebar lists updates
+    newSocket.on('conversation:update', ({ conversationId, lastMessage }) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
     });
 
     setSocket(newSocket);
@@ -77,14 +185,12 @@ export const SocketProvider = ({ children }) => {
     };
   }, [user]);
 
-  // Database se purane notifications load karo
+  // Reset notifications on logout
   useEffect(() => {
     if (!user) {
       setNotifications([]);
       return;
     }
-
-    // Backend se notifications laao (chahe toh local bhi save kar sakte hain)
   }, [user]);
 
   return (

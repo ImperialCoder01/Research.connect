@@ -24,12 +24,11 @@ require('../../models/Import');
 require('../../models/ImportLog');
 require('../../models/DerivedAnalytics');
 require('../../models/SyncHistory');
+require('../../models/Institution');
+require('../../models/Department');
+require('../../models/Country');
 
 const syncDatabaseIndexes = async () => {
-  if (process.env.NODE_ENV !== 'development') {
-    logger.info('Skipping database index synchronization (outside development).');
-    return;
-  }
   logger.info('Auditing and syncing database indexes...');
   try {
     const models = mongoose.modelNames();

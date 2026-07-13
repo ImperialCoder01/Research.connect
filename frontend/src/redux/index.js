@@ -1,6 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit';
 import appReducer from './slices/appSlice';
-import themeReducer from './slices/themeSlice';
 import loadingReducer from './slices/loadingSlice';
 import authReducer from './slices/authSlice';
 import scholarReducer from './slices/scholarSlice';
@@ -12,7 +11,6 @@ import feedReducer from './slices/feedSlice';
 import searchReducer from './slices/searchSlice';
 import messageReducer from './slices/messageSlice';
 import bookmarkReducer from './slices/bookmarkSlice';
-import communityReducer from './slices/communitySlice';
 import commentReducer from './slices/commentSlice';
 import likeReducer from './slices/likeSlice';
 import shareReducer from './slices/shareSlice';
@@ -23,7 +21,6 @@ import settingsReducer from './slices/settingsSlice';
 export const store = configureStore({
   reducer: {
     app: appReducer,
-    theme: themeReducer,
     loading: loadingReducer,
     auth: authReducer,
     scholar: scholarReducer,
@@ -35,7 +32,6 @@ export const store = configureStore({
     search: searchReducer,
     message: messageReducer,
     bookmark: bookmarkReducer,
-    community: communityReducer,
     comment: commentReducer,
     like: likeReducer,
     share: shareReducer,

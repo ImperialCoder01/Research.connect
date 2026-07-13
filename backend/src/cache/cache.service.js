@@ -1,11 +1,13 @@
+const redisClient = require('../config/redis');
+
 class CacheService {
   constructor() {
     this.cache = new Map();
-    this.redisClient = null; // Ready for Redis connection scaling
+    this.redisClient = redisClient;
   }
 
   async get(key) {
-    if (this.redisClient) {
+    if (this.redisClient && this.redisClient.isOpen && this.redisClient.isReady) {
       try {
         const val = await this.redisClient.get(key);
         return val ? JSON.parse(val) : null;
@@ -23,7 +25,7 @@ class CacheService {
   }
 
   async set(key, value, ttlSeconds = 300) {
-    if (this.redisClient) {
+    if (this.redisClient && this.redisClient.isOpen && this.redisClient.isReady) {
       try {
         await this.redisClient.set(key, JSON.stringify(value), { EX: ttlSeconds });
         return true;
@@ -37,7 +39,7 @@ class CacheService {
   }
 
   async del(key) {
-    if (this.redisClient) {
+    if (this.redisClient && this.redisClient.isOpen && this.redisClient.isReady) {
       try {
         await this.redisClient.del(key);
         return true;
@@ -49,7 +51,7 @@ class CacheService {
   }
 
   async flush() {
-    if (this.redisClient) {
+    if (this.redisClient && this.redisClient.isOpen && this.redisClient.isReady) {
       try {
         await this.redisClient.flushAll();
         return true;
@@ -58,6 +60,33 @@ class CacheService {
       }
     }
     this.cache.clear();
+    return true;
+  }
+
+  async delPattern(pattern) {
+    if (this.redisClient && this.redisClient.isOpen && this.redisClient.isReady) {
+      try {
+        let cursor = '0';
+        do {
+          const reply = await this.redisClient.scan(cursor, { MATCH: pattern, COUNT: 100 });
+          cursor = reply.cursor;
+          const keys = reply.keys || [];
+          if (keys.length > 0) {
+            await this.redisClient.del(keys);
+          }
+        } while (cursor !== '0' && cursor !== 0);
+        return true;
+      } catch (err) {
+        console.error(`Redis cache delPattern error for ${pattern}:`, err);
+      }
+    }
+    // Memory fallback
+    for (const key of this.cache.keys()) {
+      const matchRegex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+      if (matchRegex.test(key)) {
+        this.cache.delete(key);
+      }
+    }
     return true;
   }
 }
@@ -81,7 +110,7 @@ const FeedCache = {
   get: async (key) => cacheInstance.get(`feed:${key}`),
   set: async (key, data, ttl = 300) => cacheInstance.set(`feed:${key}`, data, ttl),
   del: async (key) => cacheInstance.del(`feed:${key}`),
-  flush: async () => cacheInstance.flush()
+  flush: async () => cacheInstance.delPattern('feed:*')
 };
 
 const PublicationCache = {
@@ -96,11 +125,32 @@ const AIPromptCache = {
   del: async (key) => cacheInstance.del(`ai:prompt:${key}`)
 };
 
+// Cache for lookup collections (Country, Institution, Department)
+const LookupCache = {
+  getCountries: async () => cacheInstance.get('lookup:countries'),
+  setCountries: async (data) => cacheInstance.set('lookup:countries', data, 86400), // 24h
+  getInstitutions: async (country) => cacheInstance.get(`lookup:institutions:${country || 'all'}`),
+  setInstitutions: async (data, country) => cacheInstance.set(`lookup:institutions:${country || 'all'}`, data, 86400),
+  invalidate: async () => {
+    await cacheInstance.del('lookup:countries');
+    await cacheInstance.del('lookup:institutions:all');
+  }
+};
+
+// Cache for platform-wide statistics (landing page)
+const PlatformStatsCache = {
+  get: async () => cacheInstance.get('platform:stats'),
+  set: async (data) => cacheInstance.set('platform:stats', data, 3600), // 1h
+  del: async () => cacheInstance.del('platform:stats')
+};
+
 module.exports = {
   cacheService: cacheInstance,
   ScholarCache,
   ProfileCache,
   FeedCache,
   PublicationCache,
-  AIPromptCache
+  AIPromptCache,
+  LookupCache,
+  PlatformStatsCache
 };

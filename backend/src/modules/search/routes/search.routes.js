@@ -13,9 +13,28 @@ router.get('/', searchLimiter, optionalAuth, responseCache(15), searchController
 
 // GET /api/v1/search/publications
 router.get('/publications', searchLimiter, optionalAuth, responseCache(15), searchController.searchPublications);
+router.get('/projects', searchLimiter, optionalAuth, responseCache(15), searchController.searchProjects);
 
 // GET /api/v1/search/authors
 router.get('/authors', searchLimiter, optionalAuth, responseCache(30), searchController.searchAuthors);
+
+// GET /api/v1/search/researchers
+router.get('/researchers', searchLimiter, optionalAuth, responseCache(30), searchController.searchResearchers);
+
+// GET /api/v1/search/keywords
+router.get('/keywords', searchLimiter, optionalAuth, responseCache(30), searchController.searchKeywords);
+
+// GET /api/v1/search/institutions
+router.get('/institutions', searchLimiter, optionalAuth, responseCache(30), searchController.searchInstitutions);
+
+// GET /api/v1/search/recent
+router.get('/recent', authMiddleware, searchController.getHistory);
+
+// GET /api/v1/search/conversations
+router.get('/conversations', searchLimiter, authMiddleware, searchController.searchConversations);
+
+// GET /api/v1/search/messages
+router.get('/messages', searchLimiter, authMiddleware, searchController.searchMessages);
 
 // GET /api/v1/search/journals
 router.get('/journals', searchLimiter, optionalAuth, responseCache(30), searchController.searchJournals);
@@ -25,6 +44,9 @@ router.get('/conferences', searchLimiter, optionalAuth, responseCache(30), searc
 
 // GET /api/v1/search/autocomplete
 router.get('/autocomplete', searchLimiter, responseCache(10), searchController.autocomplete);
+
+// GET /api/v1/search/suggestions
+router.get('/suggestions', searchLimiter, responseCache(10), searchController.autocomplete);
 
 // GET /api/v1/search/trending
 router.get('/trending', responseCache(60), searchController.getTrending);

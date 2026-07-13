@@ -5,7 +5,6 @@ const User = require('../../../models/User');
 const Profile = require('../../../models/Profile');
 const Session = require('../../../models/Session');
 const RefreshToken = require('../../../models/RefreshToken');
-const EmailOtp = require('../../../models/EmailOtp');
 const SecurityLog = require('../../../models/SecurityLog');
 const Settings = require('../../../models/Settings');
 const ResearchMetric = require('../../../models/ResearchMetric');
@@ -45,9 +44,11 @@ class AuthService {
 
   // Cooldown check: Prevents sending OTPs too frequently (resend after 60s)
   async _checkOtpCooldown(email, purpose) {
-    const lastOtp = await EmailOtp.findOne({ email: email.toLowerCase(), purpose }).sort({ createdAt: -1 });
-    if (lastOtp) {
-      const timeDiff = (Date.now() - new Date(lastOtp.createdAt).getTime()) / 1000;
+    const { cacheService } = require('../../../cache/cache.service');
+    const cooldownKey = `otp_cooldown:${email.toLowerCase()}:${purpose}`;
+    const exists = await cacheService.get(cooldownKey);
+    if (exists) {
+      const timeDiff = (Date.now() - exists.createdAt) / 1000;
       if (timeDiff < 60) {
         throw new AppError(`Please wait ${Math.ceil(60 - timeDiff)} seconds before requesting a new code.`, 429, 'COOLDOWN_ERROR');
       }
@@ -137,12 +138,21 @@ class AuthService {
     const otpCode = this._generateOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
-    await EmailOtp.create({
+    const otpSalt = await bcrypt.genSalt(10);
+    const hashedOtp = await bcrypt.hash(otpCode, otpSalt);
+
+    const { cacheService } = require('../../../cache/cache.service');
+    const otpKey = `otp:${email.toLowerCase()}:registration`;
+    await cacheService.set(otpKey, {
       email: email.toLowerCase(),
-      otp: otpCode,
+      otp: hashedOtp,
       purpose: 'registration',
-      expiresAt
-    });
+      attempts: 0,
+      verified: false
+    }, 600); // 10 minutes
+
+    const cooldownKey = `otp_cooldown:${email.toLowerCase()}:registration`;
+    await cacheService.set(cooldownKey, { createdAt: Date.now() }, 60);
 
     // Send verification email
     await emailHelper.sendRegistrationOtp(email.toLowerCase(), otpCode);
@@ -168,12 +178,21 @@ class AuthService {
     const otpCode = this._generateOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await EmailOtp.create({
+    const salt = await bcrypt.genSalt(10);
+    const hashedOtp = await bcrypt.hash(otpCode, salt);
+
+    const { cacheService } = require('../../../cache/cache.service');
+    const otpKey = `otp:${email.toLowerCase()}:registration`;
+    await cacheService.set(otpKey, {
       email: email.toLowerCase(),
-      otp: otpCode,
+      otp: hashedOtp,
       purpose: 'registration',
-      expiresAt
-    });
+      attempts: 0,
+      verified: false
+    }, 600);
+
+    const cooldownKey = `otp_cooldown:${email.toLowerCase()}:registration`;
+    await cacheService.set(cooldownKey, { createdAt: Date.now() }, 60);
 
     await emailHelper.sendRegistrationOtp(email.toLowerCase(), otpCode);
     await this._logSecurityEvent(user._id, email, 'REGISTER_OTP_RESENT', 'Registration OTP resent.', clientInfo);
@@ -188,19 +207,12 @@ class AuthService {
       throw new AppError('No pending registration found for this email.', 404, 'NOT_FOUND');
     }
 
-    const otpRecord = await EmailOtp.findOne({ 
-      email: email.toLowerCase(), 
-      purpose: 'registration', 
-      verified: false 
-    }).sort({ createdAt: -1 });
+    const { cacheService } = require('../../../cache/cache.service');
+    const otpKey = `otp:${email.toLowerCase()}:registration`;
+    const otpRecord = await cacheService.get(otpKey);
 
-    if (!otpRecord) {
+    if (!otpRecord || otpRecord.verified) {
       throw new AppError('No active OTP found. Please request a new one.', 400, 'INVALID_OTP');
-    }
-
-    // Expiry Check
-    if (new Date() > otpRecord.expiresAt) {
-      throw new AppError('Verification code has expired. Please request a new one.', 400, 'OTP_EXPIRED');
     }
 
     // Limit Attempts (5 Max)
@@ -209,24 +221,56 @@ class AuthService {
     }
 
     // Code Verification
-    if (otpRecord.otp !== otpCode) {
+    const isOtpMatch = await bcrypt.compare(otpCode, otpRecord.otp);
+    if (!isOtpMatch) {
       otpRecord.attempts += 1;
-      await otpRecord.save();
+      await cacheService.set(otpKey, otpRecord, 600);
       throw new AppError('Invalid verification code. Please try again.', 400, 'INVALID_OTP');
     }
 
-    // Mark OTP as verified
-    otpRecord.verified = true;
-    await otpRecord.save();
+    // Delete OTP from Redis
+    await cacheService.del(otpKey);
 
     // Activate User
     user.status = 'active';
     user.emailVerified = true;
+    user.otpVerified = true;
+    user.verifiedAt = new Date();
     user.isActive = true;
     await user.save();
 
     // Initialize Settings, Research Metrics, and Completion
     await Settings.create({ userId: user._id });
+
+    // ── Lookup table upserts (non-blocking, best-effort) ─────────────────────
+    try {
+      const Country = require('../../../models/Country');
+      const Institution = require('../../../models/Institution');
+      const { LookupCache } = require('../../../cache/cache.service');
+
+      const profile = await Profile.findOne({ userId: user._id }).lean();
+
+      if (profile?.country) {
+        await Country.findOneAndUpdate(
+          { name: profile.country },
+          { name: profile.country },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+      }
+
+      if (profile?.institution) {
+        await Institution.findOneAndUpdate(
+          { name: profile.institution },
+          { name: profile.institution, country: profile.country || '' },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+      }
+
+      // Invalidate lookup cache so next request fetches fresh data
+      await LookupCache.invalidate();
+    } catch (err) {
+      logger.error('Lookup upsert failed during registration: ' + err.message);
+    }
     
     // Dynamically load profileService to avoid circular dependency
     try {
@@ -237,12 +281,16 @@ class AuthService {
       logger.error('Failed to calculate profile completion/metrics on verify registration: ' + err.message);
     }
 
-    // Initialize Welcome Notification
+    // Initialize Welcome Notification conforming to Schema
     await Notification.create({
-      userId: user._id,
+      recipientId: user._id,
+      actorId: user._id,
+      type: 'system',
       title: 'Welcome to Research Connect!',
       message: 'Your account is active. Complete your profile to build your research identity.',
-      type: 'info',
+      targetType: 'System',
+      targetId: user._id,
+      targetUrl: '/profile',
       isRead: false
     });
 
@@ -260,9 +308,15 @@ class AuthService {
       active: true
     });
 
+    await cacheService.set(`session:${session._id}`, session, 2592000); // Cache for 30 days
+
     const accessToken = signAccessToken({ userId: user._id, role: user.role, sessionId: session._id });
     const refreshTokenValue = signRefreshToken({ userId: user._id, sessionId: session._id });
     const refreshExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+    user.refreshToken = refreshTokenValue;
+    user.sessionId = session._id;
+    await user.save();
 
     await RefreshToken.create({
       userId: user._id,
@@ -320,14 +374,24 @@ class AuthService {
     const otpCode = this._generateOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await EmailOtp.create({
+    const salt = await bcrypt.genSalt(10);
+    const hashedOtp = await bcrypt.hash(otpCode, salt);
+
+    const { cacheService } = require('../../../cache/cache.service');
+    const otpKey = `otp:${email.toLowerCase()}:login`;
+    await cacheService.set(otpKey, {
       email: email.toLowerCase(),
-      otp: otpCode,
+      otp: hashedOtp,
       purpose: 'login',
-      expiresAt
-    });
+      attempts: 0,
+      verified: false
+    }, 600);
+
+    const cooldownKey = `otp_cooldown:${email.toLowerCase()}:login`;
+    await cacheService.set(cooldownKey, { createdAt: Date.now() }, 60);
 
     // Send Email OTP
+    logger.info(`[DEV ONLY] Login OTP for ${user.email} is: ${otpCode}`);
     await emailHelper.sendLoginOtp(user.email, otpCode, clientInfo);
 
     await this._logSecurityEvent(user._id, email, 'LOGIN_OTP_TRIGGERED', 'Credentials valid. Login 2FA OTP sent.', clientInfo);
@@ -350,12 +414,21 @@ class AuthService {
     const otpCode = this._generateOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await EmailOtp.create({
+    const salt = await bcrypt.genSalt(10);
+    const hashedOtp = await bcrypt.hash(otpCode, salt);
+
+    const { cacheService } = require('../../../cache/cache.service');
+    const otpKey = `otp:${email.toLowerCase()}:login`;
+    await cacheService.set(otpKey, {
       email: email.toLowerCase(),
-      otp: otpCode,
+      otp: hashedOtp,
       purpose: 'login',
-      expiresAt
-    });
+      attempts: 0,
+      verified: false
+    }, 600);
+
+    const cooldownKey = `otp_cooldown:${email.toLowerCase()}:login`;
+    await cacheService.set(cooldownKey, { createdAt: Date.now() }, 60);
 
     await emailHelper.sendLoginOtp(user.email, otpCode, clientInfo);
     await this._logSecurityEvent(user._id, email, 'LOGIN_OTP_RESENT', 'Login OTP resent.', clientInfo);
@@ -370,38 +443,35 @@ class AuthService {
       throw new AppError('User not found.', 404, 'NOT_FOUND');
     }
 
-    const otpRecord = await EmailOtp.findOne({ 
-      email: email.toLowerCase(), 
-      purpose: 'login', 
-      verified: false 
-    }).sort({ createdAt: -1 });
+    const { cacheService } = require('../../../cache/cache.service');
+    const otpKey = `otp:${email.toLowerCase()}:login`;
+    const otpRecord = await cacheService.get(otpKey);
 
-    if (!otpRecord) {
+    if (!otpRecord || otpRecord.verified) {
       throw new AppError('No active OTP found. Please request a new one.', 400, 'INVALID_OTP');
-    }
-
-    if (new Date() > otpRecord.expiresAt) {
-      throw new AppError('Verification code has expired. Please request a new one.', 400, 'OTP_EXPIRED');
     }
 
     if (otpRecord.attempts >= 5) {
       throw new AppError('Too many failed verification attempts. Please request a new code.', 400, 'TOO_MANY_ATTEMPTS');
     }
 
-    if (otpRecord.otp !== otpCode) {
+    const isOtpMatch = await bcrypt.compare(otpCode, otpRecord.otp);
+    if (!isOtpMatch) {
       otpRecord.attempts += 1;
-      await otpRecord.save();
+      await cacheService.set(otpKey, otpRecord, 600);
       throw new AppError('Invalid verification code. Please try again.', 400, 'INVALID_OTP');
     }
 
-    otpRecord.verified = true;
-    await otpRecord.save();
+    await cacheService.del(otpKey);
 
     // Reset login attempts & Set last login info
     user.loginAttempts = 0;
     user.lastLogin = new Date();
     user.lastLoginIP = clientInfo.ip || '';
     user.lastLoginDevice = clientInfo.device || 'Unknown';
+    user.status = 'active';
+    user.otpVerified = true;
+    user.verifiedAt = new Date();
     await user.save();
 
     const profile = await Profile.findOne({ userId: user._id });
@@ -419,11 +489,17 @@ class AuthService {
       active: true
     });
 
+    await cacheService.set(`session:${session._id}`, session, 2592000);
+
     const accessToken = signAccessToken({ userId: user._id, role: user.role, sessionId: session._id });
     const refreshTokenValue = signRefreshToken({ userId: user._id, sessionId: session._id });
     
     // Set token expiration (exactly 30 days)
     const refreshExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    user.refreshToken = refreshTokenValue;
+    user.sessionId = session._id;
+    await user.save();
 
     await RefreshToken.create({
       userId: user._id,
@@ -452,12 +528,21 @@ class AuthService {
     const otpCode = this._generateOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await EmailOtp.create({
+    const salt = await bcrypt.genSalt(10);
+    const hashedOtp = await bcrypt.hash(otpCode, salt);
+
+    const { cacheService } = require('../../../cache/cache.service');
+    const otpKey = `otp:${email.toLowerCase()}:forgot_password`;
+    await cacheService.set(otpKey, {
       email: email.toLowerCase(),
-      otp: otpCode,
+      otp: hashedOtp,
       purpose: 'forgot_password',
-      expiresAt
-    });
+      attempts: 0,
+      verified: false
+    }, 600);
+
+    const cooldownKey = `otp_cooldown:${email.toLowerCase()}:forgot_password`;
+    await cacheService.set(cooldownKey, { createdAt: Date.now() }, 60);
 
     await emailHelper.sendForgotPasswordOtp(user.email, otpCode);
     await this._logSecurityEvent(user._id, email, 'FORGOT_PASSWORD_REQUEST', 'Forgot password request initialized. Reset OTP sent.', clientInfo);
@@ -472,32 +557,26 @@ class AuthService {
       throw new AppError('User not found.', 404, 'NOT_FOUND');
     }
 
-    const otpRecord = await EmailOtp.findOne({ 
-      email: email.toLowerCase(), 
-      purpose: 'forgot_password', 
-      verified: false 
-    }).sort({ createdAt: -1 });
+    const { cacheService } = require('../../../cache/cache.service');
+    const otpKey = `otp:${email.toLowerCase()}:forgot_password`;
+    const otpRecord = await cacheService.get(otpKey);
 
-    if (!otpRecord) {
+    if (!otpRecord || otpRecord.verified) {
       throw new AppError('No active OTP found. Please request a new one.', 400, 'INVALID_OTP');
-    }
-
-    if (new Date() > otpRecord.expiresAt) {
-      throw new AppError('Verification code has expired. Please request a new one.', 400, 'OTP_EXPIRED');
     }
 
     if (otpRecord.attempts >= 5) {
       throw new AppError('Too many failed verification attempts. Please request a new code.', 400, 'TOO_MANY_ATTEMPTS');
     }
 
-    if (otpRecord.otp !== otpCode) {
+    const isOtpMatch = await bcrypt.compare(otpCode, otpRecord.otp);
+    if (!isOtpMatch) {
       otpRecord.attempts += 1;
-      await otpRecord.save();
+      await cacheService.set(otpKey, otpRecord, 600);
       throw new AppError('Invalid verification code. Please try again.', 400, 'INVALID_OTP');
     }
 
-    otpRecord.verified = true;
-    await otpRecord.save();
+    await cacheService.del(otpKey);
 
     // Hash and update password
     const salt = await bcrypt.genSalt(12);
@@ -511,7 +590,13 @@ class AuthService {
 
     // Revoke all existing sessions and refresh tokens for security
     await RefreshToken.deleteMany({ userId: user._id });
+    const activeSessions = await Session.find({ userId: user._id, active: true });
     await Session.updateMany({ userId: user._id, active: true }, { active: false, logoutTime: new Date() });
+
+    // Clear sessions from cache
+    for (const s of activeSessions) {
+      await cacheService.del(`session:${s._id}`);
+    }
 
     await emailHelper.sendPasswordChangedEmail(user.email);
     await this._logSecurityEvent(user._id, email, 'PASSWORD_RESET_SUCCESS', 'Password successfully reset.', clientInfo);
@@ -535,7 +620,12 @@ class AuthService {
       if (!storedToken) {
         // Someone has already rotated this token! Revoke everything for security
         await RefreshToken.deleteMany({ userId: decoded.userId });
+        const activeSessions = await Session.find({ userId: decoded.userId, active: true });
         await Session.updateMany({ userId: decoded.userId, active: true }, { active: false, logoutTime: new Date() });
+        const { cacheService } = require('../../../cache/cache.service');
+        for (const s of activeSessions) {
+          await cacheService.del(`session:${s._id}`);
+        }
         
         await this._logSecurityEvent(
           decoded.userId, 
@@ -570,7 +660,16 @@ class AuthService {
       }
 
       // Check Session is active
-      const session = await Session.findById(decoded.sessionId);
+      const { cacheService } = require('../../../cache/cache.service');
+      const cacheKey = `session:${decoded.sessionId}`;
+      let session = await cacheService.get(cacheKey);
+
+      if (!session) {
+        session = await Session.findById(decoded.sessionId);
+        if (session) {
+          await cacheService.set(cacheKey, session, 2592000);
+        }
+      }
       if (!session || !session.active) {
         throw new UnauthorizedError('Session is inactive.');
       }
@@ -613,6 +712,8 @@ class AuthService {
     // Inactivate Session
     if (sessionId) {
       await Session.findByIdAndUpdate(sessionId, { active: false, logoutTime: new Date() });
+      const { cacheService } = require('../../../cache/cache.service');
+      await cacheService.del(`session:${sessionId}`);
     }
 
     await this._logSecurityEvent(userId, null, 'LOGOUT_SUCCESS', 'Logged out from current device.', clientInfo);
@@ -625,7 +726,12 @@ class AuthService {
     await RefreshToken.deleteMany({ userId });
 
     // Inactivate all sessions
+    const activeSessions = await Session.find({ userId, active: true });
     await Session.updateMany({ userId, active: true }, { active: false, logoutTime: new Date() });
+    const { cacheService } = require('../../../cache/cache.service');
+    for (const s of activeSessions) {
+      await cacheService.del(`session:${s._id}`);
+    }
 
     await this._logSecurityEvent(userId, null, 'LOGOUT_ALL_SUCCESS', 'Logged out from all devices.', clientInfo);
     return { success: true };
@@ -639,6 +745,44 @@ class AuthService {
     }
     const profile = await Profile.findOne({ userId });
     return { user, profile };
+  }
+
+  // Change Password
+  async changePassword(userId, currentPassword, newPassword, clientInfo = {}) {
+    const user = await User.findById(userId).select('+password');
+    if (!user) {
+      throw new AppError('User not found.', 404, 'NOT_FOUND');
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      throw new ValidationError('Current password is incorrect.', { currentPassword: 'Current password is incorrect.' });
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    await this._logSecurityEvent(userId, user.email, 'PASSWORD_CHANGE_SUCCESS', 'Password updated successfully.', clientInfo);
+    return { success: true };
+  }
+
+  // Deactivate Account
+  async deactivate(userId, clientInfo = {}) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new AppError('User not found.', 404, 'NOT_FOUND');
+    }
+
+    user.status = 'suspended';
+    user.isActive = false;
+    await user.save();
+
+    await RefreshToken.deleteMany({ userId });
+    await Session.updateMany({ userId, active: true }, { active: false, logoutTime: new Date() });
+
+    await this._logSecurityEvent(userId, user.email, 'ACCOUNT_DEACTIVATED', 'User temporarily deactivated their account.', clientInfo);
+    return { success: true };
   }
 }
 

@@ -106,7 +106,7 @@ const PublicationSchema = new Schema(
       enum: ['draft', 'published'],
       default: 'published'
     },
-    cloudinaryFileUrl: {
+    pdfUrl: {
       type: String,
       default: ''
     },
@@ -119,6 +119,38 @@ const PublicationSchema = new Schema(
       pages: { type: Number, default: 0 },
       asset_id: { type: String, default: '' }
     },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    lastUpdatedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    document: {
+      url: { type: String, default: '' },
+      objectKey: { type: String, default: '' },
+      fileName: { type: String, default: '' },
+      mimeType: { type: String, default: '' },
+      fileSize: { type: Number, default: 0 },
+      uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+      uploadedAt: { type: Date },
+      lastModified: { type: Date },
+      storageProvider: { type: String, default: 'cloudflare-r2' },
+      version: { type: Number, default: 1 }
+    },
+    attachments: [
+      {
+        url: { type: String, default: '' },
+        objectKey: { type: String, default: '' },
+        fileName: { type: String, default: '' },
+        mimeType: { type: String, default: '' },
+        fileSize: { type: Number, default: 0 },
+        uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+        uploadedAt: { type: Date },
+        attachmentType: { type: String, default: 'supplementary' }
+      }
+    ],
     license: {
       type: String,
       default: ''
@@ -289,14 +321,23 @@ PublicationSchema.pre('save', async function (next) {
     this.publicationCode = generatePublicationCode();
   }
 
+  if (!this.ownerId && this.userId) {
+    this.ownerId = this.userId;
+  }
+  if (!this.createdBy && this.userId) {
+    this.createdBy = this.userId;
+  }
+
   next();
 });
 
-PublicationSchema.index({ doi: 1 }, { unique: true, sparse: true });
-PublicationSchema.index({ googleScholarPublicationId: 1 }, { unique: true, sparse: true });
+PublicationSchema.index({ userId: 1, doi: 1 }, { unique: true, sparse: true });
+PublicationSchema.index({ userId: 1, googleScholarPublicationId: 1 }, { unique: true, sparse: true });
 PublicationSchema.index({ publicationType: 1 });
 PublicationSchema.index({ createdAt: -1 });
 PublicationSchema.index({ isDeleted: 1 });
+PublicationSchema.index({ userId: 1, isDeleted: 1, status: 1, visibility: 1 });
+PublicationSchema.index({ userId: 1, isDeleted: 1 });
 
 // Compound text index for full-text search (Phase 5 Search Engine)
 PublicationSchema.index(
@@ -327,6 +368,7 @@ PublicationSchema.index(
       institution: 2,
     },
     default_language: 'english',
+    language_override: 'none',
   }
 );
 

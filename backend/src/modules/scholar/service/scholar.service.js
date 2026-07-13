@@ -12,12 +12,14 @@ const derivedAnalyticsRepository = require('../repository/derived-analytics.repo
 const syncHistoryRepository = require('../repository/sync-history.repository');
 
 const serpApiService = require('./serpapi.service');
+const enrichmentService = require('./enrichment.service');
 const importQueueService = require('./import-queue.service');
 
 const Profile = require('../../../models/Profile');
 const User = require('../../../models/User');
 const SyncHistory = require('../../../models/SyncHistory');
 const DerivedAnalytics = require('../../../models/DerivedAnalytics');
+const Upload = require('../../../models/Upload');
 const { ValidationError, NotFoundError, AppError } = require('../../../common/errors/AppError');
 const logger = require('../../../common/logger/winston');
 
@@ -135,6 +137,11 @@ class ScholarService {
     let importedPublicationsCount = 0;
     let importedCitationsCount = 0;
     let importedCoAuthorsCount = 0;
+    let enrichedCount = 0;
+    let missingDoiCount = 0;
+    let missingAbstractCount = 0;
+    let missingPdfCount = 0;
+    const failedPublications = [];
 
     const jobRecord = await importRepository.findById(jobId);
     const syncType = jobRecord?.metadata?.syncType || 'full';
@@ -161,9 +168,76 @@ class ScholarService {
       const i10Index = data.cited_by?.table?.[2]?.i10_index?.all || 0;
       importedCitationsCount = totalCitations;
 
-      // Google Scholar profile details
+      // Check if there is an existing scholar profile for this user
+      const existingScholarProfile = await googleScholarProfileRepository.model.findOne({ userId });
+      const isDifferentProfile = existingScholarProfile && existingScholarProfile.authorId !== authorId;
+
+      if (isDifferentProfile) {
+        logger.info(`[ScholarSync] Different profile detected for user ${userId}. Old: ${existingScholarProfile.authorId}, New: ${authorId}. Cleaning up old profile data...`);
+
+        // 1. Find and delete all publications imported from Google Scholar
+        const scholarPubs = await publicationRepository.model.find({
+          userId,
+          $or: [
+            { googleScholarVerified: true },
+            { googleScholarPublicationId: { $exists: true, $ne: null } }
+          ]
+        });
+
+        const scholarPubIds = scholarPubs.map(p => p._id);
+
+        if (scholarPubIds.length > 0) {
+          // Delete publication authors associated with these publications
+          await publicationAuthorRepository.model.deleteMany({ publicationId: { $in: scholarPubIds } });
+
+          // Delete metrics associated with these publications
+          const PublicationMetric = require('../../../models/PublicationMetric');
+          await PublicationMetric.deleteMany({ publicationId: { $in: scholarPubIds } });
+
+          // Delete publications themselves
+          await publicationRepository.model.deleteMany({ _id: { $in: scholarPubIds } });
+        }
+
+        // 2. Delete scholar metrics
+        const AcademicMetrics = require('../../../models/AcademicMetrics');
+        await AcademicMetrics.deleteMany({ userId, provider: 'google_scholar' });
+
+        // 3. Delete co-authors
+        await coAuthorRepository.deleteByUserId(userId);
+
+        // 4. Delete citation graph
+        await citationGraphRepository.deleteByUserId(userId);
+
+        // 5. Delete keywords
+        const Keyword = require('../../../models/Keyword');
+        await Keyword.deleteMany({ userId });
+
+        // 6. Delete research areas
+        const ResearchArea = require('../../../models/ResearchArea');
+        await ResearchArea.deleteMany({ userId });
+
+        // 7. Delete sync history
+        const SyncHistory = require('../../../models/SyncHistory');
+        await SyncHistory.deleteMany({ userId });
+
+        // 8. Delete derived analytics
+        const DerivedAnalytics = require('../../../models/DerivedAnalytics');
+        await DerivedAnalytics.deleteMany({ userId });
+
+        // 9. Delete research metrics
+        const ResearchMetric = require('../../../models/ResearchMetric');
+        await ResearchMetric.deleteMany({ userId });
+
+        // 10. Delete old google scholar profiles
+        await googleScholarProfileRepository.model.deleteMany({ userId });
+      } else {
+        // Same profile: delete any other conflicting profiles if they somehow exist
+        await googleScholarProfileRepository.model.deleteMany({ userId, authorId: { $ne: authorId } });
+      }
+
+      // Google Scholar profile details - upsert by authorId (globally unique) instead of userId
       await googleScholarProfileRepository.model.findOneAndUpdate(
-        { userId },
+        { authorId },
         {
           userId,
           authorId,
@@ -178,10 +252,28 @@ class ScholarService {
           i10Index,
           verified: data.author.verified || false,
           lastImportedAt: new Date(),
-          syncStatus: 'completed'
+          syncStatus: 'completed',
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null
         },
         { upsert: true, new: true }
       );
+
+      // Check if the user has custom-uploaded a profile image to Cloudflare R2
+      const activeAvatarUpload = await Upload.findOne({ userId, purpose: 'profile-avatar', isDeleted: { $ne: true } });
+      let profileImageVal;
+      if (activeAvatarUpload) {
+        profileImageVal = {
+          url: activeAvatarUpload.secure_url,
+          objectKey: activeAvatarUpload.public_id || '',
+          mimeType: activeAvatarUpload.mimetype || 'image/jpeg',
+          fileSize: activeAvatarUpload.bytes || 0,
+          uploadedAt: activeAvatarUpload.createdAt || new Date()
+        };
+      } else {
+        profileImageVal = data.author.thumbnail || '';
+      }
 
       // Sync basic profile data back to main researcher profile using Data Source Tracking
       const mainProfile = await Profile.findOne({ userId });
@@ -192,12 +284,12 @@ class ScholarService {
           }
           const tracking = profile.dataSourceTracking.get(field);
           if (tracking && tracking.userModified === true) {
-            logger.info(`Preserving user-modified field '${field}' with value: ${tracking.value}`);
+            logger.info(`Preserving user-modified field '${field}' with value: ${typeof tracking.value === 'object' ? JSON.stringify(tracking.value) : tracking.value}`);
             return;
           }
           profile[field] = val;
           profile.dataSourceTracking.set(field, {
-            value: val,
+            value: typeof val === 'object' ? val.url : val,
             source: 'google_scholar',
             lastSyncedAt: new Date(),
             userModified: false
@@ -206,14 +298,13 @@ class ScholarService {
 
         syncField(mainProfile, 'institution', data.author.affiliation || '');
         syncField(mainProfile, 'displayName', data.author.name || '');
-        syncField(mainProfile, 'profileImage', data.author.thumbnail || '');
+        syncField(mainProfile, 'profileImage', profileImageVal);
         await mainProfile.save();
       }
 
-      const mainUser = await User.findById(userId);
+      const mainUser = await User.findById(userId).select('+password');
       if (mainUser) {
-        // Fallback update to user profileImage if not custom set
-        mainUser.profileImage = mainUser.profileImage || data.author.thumbnail || '';
+        mainUser.profileImage = profileImageVal;
         await mainUser.save();
       }
 
@@ -364,7 +455,29 @@ class ScholarService {
             const slug = generateSlug(article.title);
             const tempPubId = new mongoose.Types.ObjectId();
 
-            newPubsToCreate.push({
+            // ── Metadata Enrichment ──────────────────────────────────────────
+            let pubDoi = article.doi || null;
+
+            // Step 1: Lookup missing DOI
+            if (!pubDoi) {
+              pubDoi = await enrichmentService.lookupDOI(article.title, article.year, article.authors);
+              await new Promise(resolve => setTimeout(resolve, 400)); // Respect external API rate limits
+            }
+
+            // Step 2: Fetch enriched metadata from external providers
+            let enrichedMeta = {};
+            try {
+              enrichedMeta = await enrichmentService.fetchMetadata(pubDoi, article.title);
+              await new Promise(resolve => setTimeout(resolve, 400)); // Respect external API rate limits
+              if (enrichedMeta && Object.keys(enrichedMeta).length > 0) {
+                enrichedCount++;
+              }
+            } catch (enrichErr) {
+              logger.warn(`[Scholar] Enrichment failed for "${article.title}": ${enrichErr.message}`);
+            }
+            // ────────────────────────────────────────────────────────────────
+
+            let newPub = {
               _id: tempPubId,
               userId,
               ownerId: userId,
@@ -380,10 +493,30 @@ class ScholarService {
               lastSyncedAt: new Date(),
               paperURL: article.link || '',
               publisher: article.publisher || '',
-              publicationType: 'Article',
               status: 'published',
-              visibility: 'Public'
-            });
+              visibility: 'Public',
+              doi: pubDoi || undefined
+            };
+
+            // Step 3: Merge enriched metadata (never overwrites Google Scholar values)
+            newPub = enrichmentService.merge(newPub, enrichedMeta);
+
+            // Step 4: If still unresolved (no Crossref type match), guess from Scholar's own venue text
+            if (!newPub.publicationType) {
+              const venueText = `${article.publication || ''} ${newPub.journal || ''}`.toLowerCase();
+              if (venueText.includes('patent')) newPub.publicationType = 'Patent';
+              else if (venueText.includes('chapter')) newPub.publicationType = 'Book Chapter';
+              else if (/\bbook\b/.test(venueText)) newPub.publicationType = 'Book';
+              else if (/proceedings|conference|symposium|workshop/.test(venueText)) newPub.publicationType = 'Conference Paper';
+              else newPub.publicationType = 'Journal Paper';
+            }
+
+            // Track missing field counts
+            if (!newPub.doi) missingDoiCount++;
+            if (!newPub.abstract) missingAbstractCount++;
+            if (!newPub.pdfURL) missingPdfCount++;
+
+            newPubsToCreate.push(newPub);
 
             newMetricsToCreate.push({
               publicationId: tempPubId,
@@ -410,23 +543,61 @@ class ScholarService {
           }
         }
 
-        // Execute bulk database updates and insertions in parallel
-        const dbPromises = [];
-        if (bulkUpdateOps.length > 0) {
-          dbPromises.push(publicationRepository.bulkUpdate(bulkUpdateOps));
-        }
-        if (newPubsToCreate.length > 0) {
-          dbPromises.push(publicationRepository.model.insertMany(newPubsToCreate));
-        }
-        if (newAuthorsToCreate.length > 0) {
-          dbPromises.push(publicationAuthorRepository.model.insertMany(newAuthorsToCreate));
-        }
-        if (newMetricsToCreate.length > 0) {
-          const PublicationMetric = require('../../../models/PublicationMetric');
-          dbPromises.push(PublicationMetric.insertMany(newMetricsToCreate));
+        // Execute bulk database updates and inserts in a single high-performance bulkWrite call
+        const bulkOps = [...bulkUpdateOps];
+        const successfulPubIds = new Set();
+
+        for (const pubDoc of newPubsToCreate) {
+          bulkOps.push({
+            insertOne: {
+              document: pubDoc
+            }
+          });
+          successfulPubIds.add(pubDoc._id.toString());
         }
 
-        await Promise.all(dbPromises);
+        if (bulkOps.length > 0) {
+          try {
+            await publicationRepository.model.bulkWrite(bulkOps, { ordered: false });
+          } catch (bulkErr) {
+            logger.error(`[Scholar] Bulk write publications failed or returned partial errors: ${bulkErr.message}`);
+            // Check for individual write errors and populate failedPublications/importedPublicationsCount
+            if (bulkErr.writeErrors) {
+              bulkErr.writeErrors.forEach(we => {
+                const op = bulkOps[we.index];
+                if (op && op.insertOne) {
+                  const title = op.insertOne.document.title;
+                  const pubId = op.insertOne.document._id.toString();
+                  logger.error(`[Scholar] Failed to insert publication "${title}": ${we.errmsg}`);
+                  failedPublications.push({ title, error: we.errmsg });
+                  successfulPubIds.delete(pubId);
+                  importedPublicationsCount--;
+                }
+              });
+            }
+          }
+        }
+
+        // Insert publication authors only for successfully inserted pubs
+        const validAuthors = newAuthorsToCreate.filter(a => successfulPubIds.has(a.publicationId.toString()));
+        if (validAuthors.length > 0) {
+          try {
+            await publicationAuthorRepository.model.insertMany(validAuthors, { ordered: false });
+          } catch (authorErr) {
+            logger.warn(`[Scholar] Some author records failed to insert during bulk save: ${authorErr.message}`);
+          }
+        }
+
+        // Insert metrics only for successfully inserted pubs
+        const validMetrics = newMetricsToCreate.filter(m => successfulPubIds.has(m.publicationId.toString()));
+        if (validMetrics.length > 0) {
+          try {
+            const PublicationMetric = require('../../../models/PublicationMetric');
+            await PublicationMetric.insertMany(validMetrics, { ordered: false });
+          } catch (metricErr) {
+            logger.warn(`[Scholar] Some metric records failed to insert during bulk save: ${metricErr.message}`);
+          }
+        }
       }
 
       // --- STEP 3: Save Citations Graph History (60%) ---
@@ -486,6 +657,40 @@ class ScholarService {
       await updateProgress(95, 'Recalculating derived analytics and profile stats...');
       await this.calculateDerivedAnalytics(userId);
 
+      // Update AcademicMetrics (scholar_metrics)
+      try {
+        const AcademicMetrics = require('../../../models/AcademicMetrics');
+        await AcademicMetrics.findOneAndUpdate(
+          { userId, provider: 'google_scholar' },
+          {
+            userId,
+            provider: 'google_scholar',
+            publications: articles.length,
+            citations: totalCitations,
+            hIndex,
+            i10Index,
+            isDeleted: false
+          },
+          { upsert: true, new: true }
+        );
+
+        await AcademicMetrics.findOneAndUpdate(
+          { userId, provider: 'aggregate' },
+          {
+            userId,
+            provider: 'aggregate',
+            publications: articles.length,
+            citations: totalCitations,
+            hIndex,
+            i10Index,
+            isDeleted: false
+          },
+          { upsert: true, new: true }
+        );
+      } catch (metricsErr) {
+        logger.error('Error updating AcademicMetrics: ' + metricsErr.message);
+      }
+
       try {
         const profileService = require('../../profile/service/profile.service');
         await profileService.calculateAndSaveProfileCompletion(userId);
@@ -505,7 +710,7 @@ class ScholarService {
         importedCoAuthorsCount
       });
 
-      // Update background import job metadata stats
+      // Update background import job metadata stats (detailed report)
       const job = await importRepository.findById(jobId);
       if (job) {
         await importRepository.update(jobId, {
@@ -515,12 +720,46 @@ class ScholarService {
             updatedCount: updatedCount,
             duplicateCount: duplicateCount,
             skippedCount: skippedCount,
+            enrichedCount,
+            failedCount: failedPublications.length,
+            missingDoiCount,
+            missingAbstractCount,
+            missingPdfCount,
+            failedPublications,
             lastSyncTime: new Date()
           }
         });
       }
 
       await updateProgress(100, 'Academic portfolio synchronized successfully!');
+
+      // Invalidate Redis/in-memory caches to update UI immediately
+      try {
+        const { ProfileCache, FeedCache, ScholarCache, LookupCache } = require('../../../cache/cache.service');
+        await Promise.all([
+          ProfileCache.del(String(userId)),
+          ScholarCache.del(String(userId)),
+          FeedCache.flush()
+        ]);
+        if (LookupCache && LookupCache.invalidate) {
+          await LookupCache.invalidate();
+        }
+        logger.info(`[ScholarSync] Redis cache invalidated successfully for user: ${userId}`);
+      } catch (cacheErr) {
+        logger.error(`[ScholarSync] Redis cache invalidation failed: ${cacheErr.message}`);
+      }
+
+      // Emit Socket.IO events for instant UI update
+      try {
+        const socket = require('../../../socket');
+        if (socket) {
+          socket.emitToUser(String(userId), 'scholarImported', { userId: String(userId), authorId });
+          socket.emitToUser(String(userId), 'scholarSyncCompleted', { userId: String(userId), authorId });
+          socket.emitToUser(String(userId), 'profileUpdated', { userId: String(userId) });
+        }
+      } catch (sockErr) {
+        logger.warn(`[ScholarSync] Socket emit failed: ${sockErr.message}`);
+      }
     } catch (err) {
       // Record Sync History failure
       await syncHistoryRepository.create({
@@ -678,7 +917,7 @@ class ScholarService {
   async getProfile(userId) {
     const profile = await googleScholarProfileRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundError('Google Scholar profile details not found. Please sync your profile.');
+      throw new NotFoundError('Complete Your profile and link Google Scholar');
     }
     return profile;
   }

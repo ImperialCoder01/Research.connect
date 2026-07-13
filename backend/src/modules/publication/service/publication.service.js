@@ -15,7 +15,7 @@ const PublicationHistory = require('../../../models/PublicationHistory');
 const ActivityLog = require('../../../models/ActivityLog');
 const profileService = require('../../profile/service/profile.service');
 const { generateSlug } = require('../helper/slug.helper');
-const cloudinaryService = require('./cloudinary.service');
+const r2Service = require('../../upload/service/r2.service');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../../../common/errors/AppError');
 
 class PublicationService {
@@ -105,7 +105,7 @@ class PublicationService {
 
       if (existingPub && !isManualUpload) {
         // If it's a real duplicate manually uploaded that has a PDF attached, throw validation error
-        if (existingPub.status === 'published' && existingPub.cloudinaryFileUrl && !isDraft) {
+        if (existingPub.status === 'published' && existingPub.pdfUrl && !isDraft) {
           throw new ValidationError('A publication with this title, DOI, or Scholar ID already exists in your library.');
         }
 
@@ -137,7 +137,7 @@ class PublicationService {
         }
 
         if (data.fileDetails && data.fileDetails.secure_url) {
-          existingPub.cloudinaryFileUrl = data.fileDetails.secure_url;
+          existingPub.pdfUrl = data.fileDetails.secure_url;
           existingPub.pdfURL = data.fileDetails.secure_url;
           existingPub.fileDetails = {
             secure_url: data.fileDetails.secure_url || '',
@@ -294,7 +294,7 @@ class PublicationService {
         language: data.language || '',
         visibility: isDraft ? 'Draft' : (data.visibility || 'Public'),
         status: isDraft ? 'draft' : 'published',
-        cloudinaryFileUrl: data.fileDetails?.secure_url || '',
+        pdfUrl: data.fileDetails?.secure_url || '',
         pdfURL: data.fileDetails?.secure_url || '', // for compatibility
         thumbnail: data.thumbnail || '',
         readingTime,
@@ -405,6 +405,51 @@ class PublicationService {
         } catch (metricsError) {
           console.error('[METRICS RECALCULATION ERROR]:', metricsError);
         }
+
+        // Notify followers and connections in the background
+        try {
+          const Follow = require('../../../models/Follow');
+          const Connection = require('../../../models/Connection');
+          const User = require('../../../models/User');
+          const notificationService = require('../../notifications/service/notification.service');
+          
+          const actorUser = await User.findById(userId).select('firstName lastName').lean();
+          const actorName = actorUser ? `${actorUser.firstName} ${actorUser.lastName}` : 'A researcher';
+          
+          // 1. Get Followers
+          const followers = await Follow.find({ followingId: userId }).select('followerId').lean();
+          const followerIds = followers.map(f => f.followerId.toString());
+
+          // 2. Get Connections
+          const connections = await Connection.find({
+            $or: [{ researcherA: userId }, { researcherB: userId }]
+          }).lean();
+          const connectionIds = connections.map(c =>
+            c.researcherA.toString() === userId.toString() ? c.researcherB.toString() : c.researcherA.toString()
+          );
+
+          // 3. Merge and De-duplicate recipient IDs
+          const recipientIds = Array.from(new Set([...followerIds, ...connectionIds]));
+          
+          if (recipientIds.length > 0) {
+            setImmediate(() => {
+              recipientIds.forEach(async (recipientId) => {
+                await notificationService.createNotification({
+                  recipientId,
+                  actorId: userId,
+                  type: 'publication_uploaded',
+                  title: 'New Publication Uploaded',
+                  message: `${actorName} published a new research paper: "${publication.title}"`,
+                  targetType: 'Publication',
+                  targetId: publication._id,
+                  targetUrl: `/publication/${publication.slug}`
+                }).catch(err => console.error(`Failed to notify recipient [${recipientId}]: ${err.message}`));
+              });
+            });
+          }
+        } catch (notifErr) {
+          console.error('[PUBLICATION UPLOAD NOTIFICATION ERROR]:', notifErr);
+        }
       }
 
       return publication;
@@ -412,15 +457,15 @@ class PublicationService {
       await session.abortTransaction();
       session.endSession();
 
-      // Cloudinary Rollback: delete the uploaded file if MongoDB transaction failed.
-      // This prevents orphan files in Cloudinary storage.
+      // R2 Rollback: delete the uploaded file if MongoDB transaction failed.
+      // This prevents orphan files in R2 storage.
       if (data.fileDetails && data.fileDetails.public_id) {
         const resourceType = data.fileDetails.resource_type || 'raw';
         try {
-          await cloudinaryService.deleteFile(data.fileDetails.public_id, resourceType);
+          await r2Service.deleteFile(data.fileDetails.public_id, resourceType);
         } catch (rollbackErr) {
           // Log but do not rethrow — we want the original DB error to bubble up
-          console.error('[CLOUDINARY ROLLBACK FAILED]:', rollbackErr.message);
+          console.error('[R2 ROLLBACK FAILED]:', rollbackErr.message);
         }
       }
 
@@ -556,7 +601,16 @@ class PublicationService {
    */
   async getPublications(filter = {}, queryOptions = {}) {
     const { page = 1, limit = 10, sort = '-createdAt', search } = queryOptions;
-    const skip = (page - 1) * limit;
+    
+    // Safety boundaries for pagination limit and page
+    let pageNum = parseInt(page, 10) || 1;
+    if (pageNum < 1) pageNum = 1;
+    
+    let limitNum = parseInt(limit, 10) || 10;
+    if (limitNum <= 0) limitNum = 10;
+    if (limitNum > 100) limitNum = 100; // safety ceiling
+    
+    const skip = (pageNum - 1) * limitNum;
 
     const baseFilter = { ...filter };
     if (baseFilter.isDeleted === undefined) {
@@ -597,10 +651,10 @@ class PublicationService {
     }
 
     const query = Publication.find(baseFilter)
-      .populate('userId', 'firstName lastName fullName email profileImage institution department designation')
+      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug slug username')
       .sort(sortOption)
       .skip(skip)
-      .limit(Number(limit))
+      .limit(limitNum)
       .lean();
 
     const [docs, total] = await Promise.all([
@@ -611,9 +665,9 @@ class PublicationService {
     return {
       docs,
       total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages: Math.ceil(total / limit)
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum)
     };
   }
 
@@ -627,9 +681,7 @@ class PublicationService {
     }
 
     // Authorization check
-    if (publication.userId.toString() !== userId.toString()) {
-      throw new ForbiddenError('You are not authorized to update this publication.');
-    }
+    this.verifyOwnership(publication, userId);
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -677,7 +729,7 @@ class PublicationService {
       }
 
       if (updateData.fileDetails && updateData.fileDetails.secure_url) {
-        publication.cloudinaryFileUrl = updateData.fileDetails.secure_url;
+        publication.pdfUrl = updateData.fileDetails.secure_url;
         publication.pdfURL = updateData.fileDetails.secure_url;
         publication.fileDetails = {
           secure_url: updateData.fileDetails.secure_url || '',
@@ -774,6 +826,39 @@ class PublicationService {
       // Recalculate metrics
       await profileService.calculateAndSaveResearchMetrics(userId);
 
+      // Invalidate caches
+      try {
+        const { ProfileCache, FeedCache, PublicationCache } = require('../../../cache/cache.service');
+        await Promise.all([
+          ProfileCache.del(String(userId)),
+          PublicationCache.del(String(publication.slug)),
+          PublicationCache.del(String(publication._id)),
+          FeedCache.flush()
+        ]);
+      } catch (cacheErr) {
+        console.error('[Cache Invalidation Failed]:', cacheErr.message);
+      }
+
+      // Emit Socket.IO Events
+      try {
+        const socket = require('../../../socket');
+        if (socket) {
+          const publicationDTO = require('../dto/publication.dto');
+          const formatted = publicationDTO.formatPublication(publication);
+          
+          socket.emitToUser(String(userId), 'publicationEdited', formatted);
+          socket.emitToUser(String(userId), 'publicationUpdated', formatted);
+          
+          const io = socket.getIO();
+          if (io) {
+            io.emit('publicationUpdated', formatted);
+            io.emit('publicationEdited', formatted);
+          }
+        }
+      } catch (sockErr) {
+        console.error('[Socket Emission Failed]:', sockErr.message);
+      }
+
       return publication;
     } catch (error) {
       await session.abortTransaction();
@@ -791,12 +876,17 @@ class PublicationService {
       throw new NotFoundError('Publication not found.');
     }
 
-    if (publication.userId.toString() !== userId.toString()) {
-      throw new ForbiddenError('You are not authorized to delete this publication.');
-    }
+    // Verify Ownership
+    this.verifyOwnership(publication, userId);
 
     // Permanent delete if already soft deleted, or if permanent is explicitly requested
     if (publication.isDeleted || permanent) {
+      // Delete document from R2 if it exists
+      if (publication.document && publication.document.objectKey) {
+        const r2Service = require('../../upload/service/r2.service');
+        await r2Service.deleteFile(publication.document.objectKey, 'raw');
+      }
+
       await Publication.deleteOne({ _id: id });
       await PublicationFile.deleteMany({ publicationId: id });
       await PublicationAuthor.deleteMany({ publicationId: id });
@@ -842,6 +932,37 @@ class PublicationService {
 
     // Recalculate metrics
     await profileService.calculateAndSaveResearchMetrics(userId);
+
+    // Invalidate caches
+    try {
+      const { ProfileCache, FeedCache, PublicationCache } = require('../../../cache/cache.service');
+      await Promise.all([
+        ProfileCache.del(String(userId)),
+        PublicationCache.del(String(publication.slug)),
+        PublicationCache.del(String(publication._id)),
+        FeedCache.flush()
+      ]);
+    } catch (cacheErr) {
+      console.error('[Cache Invalidation Failed]:', cacheErr.message);
+    }
+
+    // Emit Socket.IO Events
+    try {
+      const socket = require('../../../socket');
+      if (socket) {
+        const publicationDTO = require('../dto/publication.dto');
+        const formatted = publicationDTO.formatPublication(publication);
+        
+        socket.emitToUser(String(userId), 'publicationUpdated', formatted);
+        
+        const io = socket.getIO();
+        if (io) {
+          io.emit('publicationUpdated', formatted);
+        }
+      }
+    } catch (sockErr) {
+      console.error('[Socket Emission Failed]:', sockErr.message);
+    }
 
     return publication;
   }
@@ -939,32 +1060,33 @@ class PublicationService {
    * Aggregates 9 key metrics for a researcher's publications dashboard
    */
   async getPublicationStats(userId) {
-    const counts = await Publication.aggregate([
-      { $match: { userId: new mongoose.Types.ObjectId(userId), isDeleted: { $ne: true } } },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          published: {
-            $sum: { $cond: [{ $eq: ['$status', 'published'] }, 1, 0] }
-          },
-          drafts: {
-            $sum: { $cond: [{ $eq: ['$status', 'draft'] }, 1, 0] }
-          },
-          privateCount: {
-            $sum: { $cond: [{ $eq: ['$visibility', 'Private'] }, 1, 0] }
-          },
-          publicCount: {
-            $sum: { $cond: [{ $eq: ['$visibility', 'Public'] }, 1, 0] }
-          },
-          views: { $sum: { $ifNull: ['$views', 0] } },
-          downloads: { $sum: { $ifNull: ['$downloads', 0] } },
-          citations: { $sum: { $ifNull: ['$citations', 0] } }
+    const [counts, bookmarksCount] = await Promise.all([
+      Publication.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId), isDeleted: { $ne: true } } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            published: {
+              $sum: { $cond: [{ $eq: ['$status', 'published'] }, 1, 0] }
+            },
+            drafts: {
+              $sum: { $cond: [{ $eq: ['$status', 'draft'] }, 1, 0] }
+            },
+            privateCount: {
+              $sum: { $cond: [{ $eq: ['$visibility', 'Private'] }, 1, 0] }
+            },
+            publicCount: {
+              $sum: { $cond: [{ $eq: ['$visibility', 'Public'] }, 1, 0] }
+            },
+            views: { $sum: { $ifNull: ['$views', 0] } },
+            downloads: { $sum: { $ifNull: ['$downloads', 0] } },
+            citations: { $sum: { $ifNull: ['$citations', 0] } }
+          }
         }
-      }
+      ]),
+      PublicationBookmark.countDocuments({ userId })
     ]);
-
-    const bookmarksCount = await PublicationBookmark.countDocuments({ userId });
 
     const stats = counts[0] || {
       total: 0,
@@ -1129,6 +1251,31 @@ class PublicationService {
         { $inc: { bookmarks: 1 } },
         { upsert: true }
       );
+
+      // Send Real-Time Notification to publication owner
+      const publication = await Publication.findById(publicationId);
+      if (publication && publication.userId.toString() !== userId.toString()) {
+        try {
+          const User = require('../../../models/User');
+          const notificationService = require('../../notifications/service/notification.service');
+          const actorUser = await User.findById(userId).select('firstName lastName').lean();
+          const actorName = actorUser ? `${actorUser.firstName} ${actorUser.lastName}` : 'A researcher';
+          
+          await notificationService.createNotification({
+            recipientId: publication.userId,
+            actorId: userId,
+            type: 'publication_bookmarked',
+            title: 'Publication Bookmarked',
+            message: `${actorName} bookmarked your publication: "${publication.title}"`,
+            targetType: 'Publication',
+            targetId: publicationId,
+            targetUrl: `/publication/${publication.slug}`
+          }).catch(err => console.error(`Failed to create bookmark notification: ${err.message}`));
+        } catch (err) {
+          console.error('Bookmark notification error:', err);
+        }
+      }
+
       return { bookmarked: true, folderName };
     }
   }
@@ -1428,7 +1575,7 @@ class PublicationService {
     }
 
     let profiles = await Profile.find(query)
-      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug username')
+      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug slug username')
       .limit(Number(limit))
       .lean();
 
@@ -1443,7 +1590,7 @@ class PublicationService {
       };
 
       const fallbackProfiles = await Profile.find(fallbackQuery)
-        .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug username')
+        .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug slug username')
         .limit(remainingLimit)
         .lean();
 
@@ -1492,8 +1639,68 @@ class PublicationService {
 
     // Populate user details for returning comment
     const populated = await PublicationComment.findById(comment._id)
-      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug username')
+      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug slug username')
       .lean();
+
+    // Send Real-Time Notification to publication owner
+    if (publication.userId.toString() !== userId.toString()) {
+      try {
+        const User = require('../../../models/User');
+        const notificationService = require('../../notifications/service/notification.service');
+        const actorUser = await User.findById(userId).select('firstName lastName').lean();
+        const actorName = actorUser ? `${actorUser.firstName} ${actorUser.lastName}` : 'A researcher';
+        
+        await notificationService.createNotification({
+          recipientId: publication.userId,
+          actorId: userId,
+          type: 'publication_commented',
+          title: 'New Comment on Publication',
+          message: `${actorName} commented on your publication: "${publication.title}"`,
+          targetType: 'Comment',
+          targetId: comment._id,
+          targetUrl: `/publication/${publication.slug}`
+        }).catch(err => console.error(`Failed to create comment notification: ${err.message}`));
+      } catch (err) {
+        console.error('Comment notification error:', err);
+      }
+    }
+
+    // Parse and handle @username mentions in comments
+    const mentionRegex = /@([a-zA-Z0-9_\-]+)/g;
+    let match;
+    const mentionedUsernames = [];
+    while ((match = mentionRegex.exec(content.trim())) !== null) {
+      mentionedUsernames.push(match[1]);
+    }
+
+    if (mentionedUsernames.length > 0) {
+      try {
+        const User = require('../../../models/User');
+        const notificationService = require('../../notifications/service/notification.service');
+        const actorUser = await User.findById(userId).select('firstName lastName').lean();
+        const actorName = actorUser ? `${actorUser.firstName} ${actorUser.lastName}` : 'A researcher';
+        
+        // Find users with matching usernames
+        const mentionedUsers = await User.find({ username: { $in: mentionedUsernames } }).select('_id').lean();
+        
+        mentionedUsers.forEach(async (mu) => {
+          if (mu._id.toString() !== userId.toString()) { // Don't notify self-mentions
+            await notificationService.createNotification({
+              recipientId: mu._id,
+              actorId: userId,
+              type: 'mention',
+              title: 'You were mentioned',
+              message: `${actorName} mentioned you in a comment on "${publication.title}"`,
+              targetType: 'Comment',
+              targetId: comment._id,
+              targetUrl: `/publication/${publication.slug}`
+            }).catch(err => console.error(`Failed to create mention notification: ${err.message}`));
+          }
+        });
+      } catch (err) {
+        console.error('Mention parsing/notification error:', err);
+      }
+    }
 
     return populated;
   }
@@ -1503,7 +1710,7 @@ class PublicationService {
    */
   async getComments(publicationId) {
     const rawComments = await PublicationComment.find({ publicationId })
-      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug username')
+      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug slug username')
       .sort({ createdAt: 1 })
       .lean();
 
@@ -1556,7 +1763,7 @@ class PublicationService {
     await comment.save();
 
     return await PublicationComment.findById(commentId)
-      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug username')
+      .populate('userId', 'firstName lastName fullName email profileImage institution department designation profileSlug slug username')
       .lean();
   }
 
@@ -1627,6 +1834,188 @@ class PublicationService {
 
     await comment.save();
     return { liked, likeCount: comment.likes.length };
+  }
+
+  /**
+   * Verify publication ownership
+   */
+  verifyOwnership(publication, userId) {
+    const isOwner = (publication.ownerId && publication.ownerId.toString() === userId.toString()) ||
+                    (publication.userId && publication.userId.toString() === userId.toString()) ||
+                    (publication.createdBy && publication.createdBy.toString() === userId.toString());
+    if (!isOwner) {
+      throw new ForbiddenError('You are not authorized to edit this publication.');
+    }
+  }
+
+  /**
+   * Upload research paper PDF to Cloudflare R2
+   */
+  async uploadPaper(publicationId, userId, file) {
+    const publication = await Publication.findById(publicationId);
+    if (!publication) {
+      throw new NotFoundError('Publication not found.');
+    }
+
+    // Verify Ownership
+    this.verifyOwnership(publication, userId);
+
+    const r2Service = require('../../upload/service/r2.service');
+    const PublicationFile = require('../../../models/PublicationFile');
+
+    // Delete old PDF from R2 if it exists to avoid orphan files
+    if (publication.document && publication.document.objectKey) {
+      await r2Service.deleteFile(publication.document.objectKey, 'raw');
+    }
+
+    // Upload new PDF to structured R2 folder
+    const r2Result = await r2Service.uploadFileBuffer(
+      file.buffer,
+      file.originalname,
+      userId,
+      'publication-pdf',
+      publication.publicationId || publication._id,
+      file.mimetype
+    );
+
+    // Save document details in MongoDB
+    publication.document = {
+      url: r2Result.secure_url,
+      objectKey: r2Result.public_id,
+      fileName: file.originalname || 'document.pdf',
+      mimeType: file.mimetype || 'application/pdf',
+      fileSize: file.size || r2Result.bytes || 0,
+      uploadedBy: userId,
+      uploadedAt: new Date(),
+      lastModified: new Date(),
+      storageProvider: 'cloudflare_r2',
+      version: (publication.document?.version || 0) + 1
+    };
+
+    // Keep legacy URL fields for backward compatibility
+    publication.pdfUrl = r2Result.secure_url;
+    publication.pdfURL = r2Result.secure_url;
+    publication.lastUpdatedBy = userId;
+
+    await publication.save();
+
+    // Keep PublicationFile synced
+    await PublicationFile.deleteMany({ publicationId: publication._id });
+    const fileDoc = new PublicationFile({
+      publicationId: publication._id,
+      secure_url: r2Result.secure_url,
+      public_id: r2Result.public_id,
+      resource_type: r2Result.resource_type || 'raw',
+      bytes: r2Result.bytes || file.size || 0,
+      format: r2Result.format || 'pdf',
+      pages: r2Result.pages || 0,
+      asset_id: r2Result.asset_id || ''
+    });
+    await fileDoc.save();
+
+    // Invalidate caches
+    try {
+      const { ProfileCache, FeedCache, PublicationCache } = require('../../../cache/cache.service');
+      await Promise.all([
+        ProfileCache.del(String(userId)),
+        PublicationCache.del(String(publication.slug)),
+        PublicationCache.del(String(publication._id)),
+        FeedCache.flush()
+      ]);
+    } catch (cacheErr) {
+      console.error('[Cache Invalidation Failed]:', cacheErr.message);
+    }
+
+    // Emit Socket.IO Events
+    try {
+      const socket = require('../../../socket');
+      if (socket) {
+        const publicationDTO = require('../dto/publication.dto');
+        const formatted = publicationDTO.formatPublication(publication);
+        const payload = { userId: String(userId), publicationId: String(publication._id), document: publication.document };
+        
+        socket.emitToUser(String(userId), 'publicationDocumentUploaded', payload);
+        socket.emitToUser(String(userId), 'publicationUpdated', formatted);
+        
+        const io = socket.getIO();
+        if (io) {
+          io.emit('publicationUpdated', formatted);
+          io.emit('publicationDocumentUploaded', payload);
+        }
+      }
+    } catch (sockErr) {
+      console.error('[Socket Emission Failed]:', sockErr.message);
+    }
+
+    return publication;
+  }
+
+  /**
+   * Delete research paper PDF from Cloudflare R2
+   */
+  async deletePaper(publicationId, userId) {
+    const publication = await Publication.findById(publicationId);
+    if (!publication) {
+      throw new NotFoundError('Publication not found.');
+    }
+
+    // Verify Ownership
+    this.verifyOwnership(publication, userId);
+
+    const r2Service = require('../../upload/service/r2.service');
+    const PublicationFile = require('../../../models/PublicationFile');
+
+    // Delete file from R2
+    if (publication.document && publication.document.objectKey) {
+      await r2Service.deleteFile(publication.document.objectKey, 'raw');
+    }
+
+    // Clear document metadata fields
+    publication.document = undefined;
+    publication.pdfUrl = '';
+    publication.pdfURL = '';
+    publication.lastUpdatedBy = userId;
+
+    await publication.save();
+
+    // Keep PublicationFile synced
+    await PublicationFile.deleteMany({ publicationId: publication._id });
+
+    // Invalidate caches
+    try {
+      const { ProfileCache, FeedCache, PublicationCache } = require('../../../cache/cache.service');
+      await Promise.all([
+        ProfileCache.del(String(userId)),
+        PublicationCache.del(String(publication.slug)),
+        PublicationCache.del(String(publication._id)),
+        FeedCache.flush()
+      ]);
+    } catch (cacheErr) {
+      console.error('[Cache Invalidation Failed]:', cacheErr.message);
+    }
+
+    // Emit Socket.IO Events
+    try {
+      const socket = require('../../../socket');
+      if (socket) {
+        const publicationDTO = require('../dto/publication.dto');
+        const formatted = publicationDTO.formatPublication(publication);
+        const payload = { userId: String(userId), publicationId: String(publication._id) };
+
+        socket.emitToUser(String(userId), 'publicationDocumentRemoved', payload);
+        socket.emitToUser(String(userId), 'publicationUpdated', formatted);
+
+        const io = socket.getIO();
+        if (io) {
+          io.emit('publicationUpdated', formatted);
+          io.emit('publicationDocumentRemoved', payload);
+        }
+      }
+    } catch (sockErr) {
+      console.error('[Socket Emission Failed]:', sockErr.message);
+    }
+
+    return publication;
   }
 }
 

@@ -37,8 +37,6 @@ router.get('/feed/latest', responseCache(20), feedController.getLatest);
 router.get('/feed/following', responseCache(10), feedController.getFollowingFeed);
 router.get('/home', responseCache(120), feedController.getHome);
 router.get('/notifications', feedController.getNotifications);
-router.get('/messages', feedController.getMessages);
-router.get('/requests', feedController.getRequests);
 router.get('/recommendations', responseCache(30), feedController.getRecommendations);
 
 // Publications CRUD
@@ -74,10 +72,22 @@ router.post('/publication/ai-summary', feedController.getAiSummary);
 router.post('/dataset', createDatasetValidator, feedController.createDataset);
 router.get('/datasets', responseCache(10), feedController.getDatasets);
 
-// Global Search
-router.get('/search', searchLimiter, searchValidator, feedController.globalSearch);
+// Global Search (Handled by searchModule routes in app.js instead of feedModule routes)
+// router.get('/search', searchLimiter, searchValidator, feedController.globalSearch);
 router.get('/questions', responseCache(10), feedController.getQuestions);
 router.get('/projects', responseCache(10), feedController.getProjects);
 router.get('/events', responseCache(30), feedController.getEvents);
+
+// ══════════════════════════════════════════════════
+// PHASE 8 — MULTI-TYPE ACTIVITY FEED ROUTES
+// ══════════════════════════════════════════════════
+// Order matters: specific paths before generic :param paths
+router.get('/feed/activity/following', responseCache(5), feedController.getActivityFeedFollowing);
+router.get('/feed/activity/trending', responseCache(15), feedController.getActivityFeedTrending);
+router.get('/feed/activity/latest', responseCache(10), feedController.getActivityFeedLatest);
+router.get('/feed/activity', responseCache(5), feedController.getActivityFeed);
+router.get('/feed/sidebar', responseCache(10), feedController.getFeedSidebar);
+router.post('/feed/event', feedController.emitFeedEvent);
+router.post('/feed/interact', feedController.recordFeedInteraction);
 
 module.exports = router;

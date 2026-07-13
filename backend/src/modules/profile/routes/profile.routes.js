@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const profileController = require('../controller/profile.controller');
-const { authMiddleware } = require('../../../common/middlewares/auth.middleware');
+const { authMiddleware, optionalAuth } = require('../../../common/middlewares/auth.middleware');
 const { updateProfileValidator } = require('../validator/profile.validator');
 const { scholarSyncLimiter } = require('../../../config/rateLimiter');
 const { upload: universalUpload, validateUpload } = require('../../upload/middleware/upload.middleware');
@@ -19,10 +19,9 @@ router.post(
 router.get('/me', authMiddleware, profileController.getProfile);
 
 // Public route to view a researcher profile by slug
-router.get('/:profileSlug', profileController.getPublicProfile);
+router.get('/:profileSlug', optionalAuth, profileController.getPublicProfile);
 
 // Public route to retrieve researcher publications portfolio by profile slug
-const { optionalAuth } = require('../../../common/middlewares/auth.middleware');
 router.get('/:profileSlug/publications', optionalAuth, profileController.getPublicationsByProfileSlug);
 
 // Secure routes below this point
@@ -43,6 +42,12 @@ router.patch(
   (req, res, next) => { if (req.file) return validateUpload(req, res, next); next(); },
   profileController.updateAvatar
 );
+
+// Delete profile photo (removes from R2 + clears MongoDB URL)
+router.delete('/photo', profileController.deletePhoto);
+
+// Delete profile banner (removes from R2 + resets to default)
+router.delete('/banner', profileController.deleteBanner);
 router.patch('/basic', updateProfileValidator, profileController.updateBasic);
 router.patch('/about', updateProfileValidator, profileController.updateAbout);
 router.patch('/skills', updateProfileValidator, profileController.updateSkills);

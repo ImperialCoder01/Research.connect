@@ -1,5 +1,4 @@
 const publicationService = require('../service/publication.service');
-const cloudinaryService = require('../service/cloudinary.service');
 const publicationDTO = require('../dto/publication.dto');
 const asyncHandler = require('../../../common/middlewares/asyncHandler.middleware');
 const { ValidationError } = require('../../../common/errors/AppError');
@@ -37,8 +36,8 @@ class PublicationController {
     );
   });
 
-  // Upload File to Cloudinary
-  // publicationId is generated HERE (before upload) so Cloudinary path is unique.
+  // Upload File to Cloudflare R2
+  // publicationId is generated HERE (before upload) so Cloudflare R2 path is unique.
   // This publicationId is returned to the client who passes it when creating the publication record.
   uploadFile = asyncHandler(async (req, res) => {
     if (!req.file) {
@@ -60,7 +59,7 @@ class PublicationController {
       purpose: 'publication-pdf'
     });
 
-    return res.success('File uploaded to Cloudinary successfully.', {
+    return res.success('File uploaded to Cloudflare R2 successfully.', {
       publicationId: result.resourceId,
       secure_url: result.secure_url,
       public_id: result.public_id,
@@ -302,9 +301,10 @@ class PublicationController {
       filter._id = { $in: bookmarkedIds };
     }
 
-    const stats = await publicationService.getPublicationStats(req.user._id);
-
-    const result = await publicationService.getPublications(filter, { page, limit, sort, search });
+    const [stats, result] = await Promise.all([
+      publicationService.getPublicationStats(req.user._id),
+      publicationService.getPublications(filter, { page, limit, sort, search })
+    ]);
 
     return res.success('My publications retrieved successfully.', {
       docs: publicationDTO.formatPublicationList(result.docs),
@@ -450,6 +450,39 @@ class PublicationController {
     return res.success('Publication deleted successfully.');
   });
 
+  // Upload research paper PDF
+  uploadPaper = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!req.file) {
+      throw new ValidationError('No file was uploaded.');
+    }
+
+    const mimeType = req.file.mimetype || '';
+    const isPDF = mimeType === 'application/pdf' || req.file.originalname?.toLowerCase().endsWith('.pdf');
+
+    if (isPDF) {
+      await validatePDFBuffer(req.file.buffer, req.file.originalname);
+    }
+
+    const pub = await publicationService.uploadPaper(id, req.user._id, req.file);
+
+    return res.success(
+      'Research paper document uploaded successfully.',
+      publicationDTO.formatPublication(pub)
+    );
+  });
+
+  // Delete research paper PDF
+  deletePaper = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const pub = await publicationService.deletePaper(id, req.user._id);
+
+    return res.success(
+      'Research paper document removed successfully.',
+      publicationDTO.formatPublication(pub)
+    );
+  });
+
   // Restore soft deleted publication
   restorePublication = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -541,10 +574,16 @@ class PublicationController {
     } = req.query;
 
     const User = require('../../../models/User');
-    // Try resolving by username first, fallback to profileSlug
-    let user = await User.findOne({ username, isDeleted: { $ne: true } });
-    if (!user) {
-      user = await User.findOne({ profileSlug: username, isDeleted: { $ne: true } });
+    let user;
+    if (!username || username === 'undefined' || username === 'me') {
+      if (req.user) {
+        user = await User.findById(req.user._id);
+      }
+    } else {
+      user = await User.findOne({ username, isDeleted: { $ne: true } });
+      if (!user) {
+        user = await User.findOne({ profileSlug: username, isDeleted: { $ne: true } });
+      }
     }
     if (!user) {
       throw new ValidationError('User profile not found.');

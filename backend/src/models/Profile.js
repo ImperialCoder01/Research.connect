@@ -1,6 +1,26 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+const ImageMetadataSchema = new Schema({
+  url: { type: String, default: '' },
+  objectKey: { type: String, default: '' },
+  mimeType: { type: String, default: '' },
+  fileSize: { type: Number, default: 0 },
+  uploadedAt: { type: Date },
+  storageProvider: { type: String, default: 'cloudflare-r2' },
+  bucket: { type: String, default: 'research-connect' },
+  fileName: { type: String, default: '' }
+}, { _id: false });
+
+const setImageMetadata = (val) => {
+  if (!val) return { url: '' };
+  if (typeof val === 'string') {
+    return { url: val };
+  }
+  return val;
+};
+
+
 const ProfileSchema = new Schema(
   {
     userId: {
@@ -26,12 +46,14 @@ const ProfileSchema = new Schema(
       default: ''
     },
     coverImage: {
-      type: String,
-      default: 'https://iili.io/C7pZ8Ss.jpg'
+      type: ImageMetadataSchema,
+      set: setImageMetadata,
+      default: () => ({ url: 'https://iili.io/C7pZ8Ss.jpg' })
     },
     profileImage: {
-      type: String,
-      default: ''
+      type: ImageMetadataSchema,
+      set: setImageMetadata,
+      default: () => ({ url: '' })
     },
     dateOfBirth: {
       type: String,
@@ -226,6 +248,49 @@ const ProfileSchema = new Schema(
       max: 100,
       default: 0
     },
+    followersCount: {
+      type: Number,
+      default: 0
+    },
+    followingCount: {
+      type: Number,
+      default: 0
+    },
+    connectionsCount: {
+      type: Number,
+      default: 0
+    },
+    pendingSentCount: {
+      type: Number,
+      default: 0
+    },
+    pendingReceivedCount: {
+      type: Number,
+      default: 0
+    },
+    notificationSettings: {
+      follow: { type: Boolean, default: true },
+      connection: { type: Boolean, default: true },
+      publication: { type: Boolean, default: true },
+      comment: { type: Boolean, default: true },
+      mention: { type: Boolean, default: true },
+      system: { type: Boolean, default: true },
+      emailAlerts: { type: Boolean, default: true },
+      weeklyDigest: { type: Boolean, default: true },
+      newMessages: { type: Boolean, default: true }
+    },
+    privacySettings: {
+      publicProfile: { type: Boolean, default: true },
+      showInstitution: { type: Boolean, default: true },
+      showFollowers: { type: Boolean, default: true },
+      searchEngineIndexing: { type: Boolean, default: true },
+      researchVisibility: { type: Boolean, default: true }
+    },
+    themePreference: {
+      type: String,
+      enum: ['light', 'dark', 'system'],
+      default: 'light'
+    },
     dataSourceTracking: {
       type: Map,
       of: new Schema({
@@ -254,10 +319,50 @@ const ProfileSchema = new Schema(
   }
 );
 
+ProfileSchema.set('toJSON', {
+  virtuals: true,
+  transform: (doc, ret) => {
+    if (ret.profileImage && typeof ret.profileImage === 'object') {
+      ret.profileImage = ret.profileImage.url || '';
+    }
+    if (ret.coverImage && typeof ret.coverImage === 'object') {
+      ret.coverImage = ret.coverImage.url || '';
+    }
+    return ret;
+  }
+});
+
+ProfileSchema.set('toObject', {
+  virtuals: true,
+  transform: (doc, ret) => {
+    if (ret.profileImage && typeof ret.profileImage === 'object') {
+      ret.profileImage = ret.profileImage.url || '';
+    }
+    if (ret.coverImage && typeof ret.coverImage === 'object') {
+      ret.coverImage = ret.coverImage.url || '';
+    }
+    return ret;
+  }
+});
+
 // Indexes for searching specialists/universities
 ProfileSchema.index({ institution: 1 });
 ProfileSchema.index({ company: 1 });
+ProfileSchema.index({ department: 1 });
+ProfileSchema.index({ researchAreas: 1 });
 ProfileSchema.index({ isDeleted: 1 });
+
+// Pre-init hook to cast legacy string URLs to structured objects
+ProfileSchema.pre('init', function(rawDoc) {
+  if (rawDoc) {
+    if (typeof rawDoc.coverImage === 'string') {
+      rawDoc.coverImage = { url: rawDoc.coverImage };
+    }
+    if (typeof rawDoc.profileImage === 'string') {
+      rawDoc.profileImage = { url: rawDoc.profileImage };
+    }
+  }
+});
 
 const Profile = mongoose.model('Profile', ProfileSchema);
 

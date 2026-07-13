@@ -1,18 +1,2 @@
-const express = require('express');
-const router = express.Router();
-const projectController = require('../controller/project.controller');
-const { authMiddleware } = require('../../../common/middlewares/auth.middleware');
-const { upload, validateUpload } = require('../../upload/middleware/upload.middleware');
-const { uploadLimiter } = require('../../../config/rateLimiter');
-
-// POST /api/v1/projects/upload
-router.post(
-  '/upload',
-  authMiddleware,
-  uploadLimiter,
-  upload.single('file'),
-  validateUpload,
-  projectController.uploadFile
-);
-
-module.exports = router;
+const router = require('express').Router(); const controller = require('../controller/project.controller'); const { authMiddleware } = require('../../../common/middlewares/auth.middleware');
+router.use(authMiddleware); router.get('/dashboard/stats', controller.stats); router.get('/', controller.list); router.post('/', controller.create); router.patch('/archive/:id', controller.archive); router.patch('/status/:id', controller.status); router.patch('/progress/:id', controller.progress); router.post('/:id/member', controller.addMember); router.delete('/:id/member/:memberId', controller.removeMember); router.post('/:id/github/sync', controller.syncGitHub); router.get('/:id', controller.detail); router.put('/:id', controller.update); router.delete('/:id', controller.remove); module.exports = router;

@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 
+/**
+ * Animate a number counting up from 0 to a target value.
+ * Supports both target/duration parameters and returning the raw count.
+ */
 export function useCountUp(target, duration = 1000) {
   const [count, setCount] = useState(0);
 
