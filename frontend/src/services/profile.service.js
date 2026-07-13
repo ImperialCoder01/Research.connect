@@ -16,31 +16,48 @@ class ProfileService {
     return await axiosInstance.patch('/v1/profile', data);
   }
 
-  // Specific PATCH routes for micro-saves / real-time updates
-  async updateBanner(coverImageOrFile) {
+  /**
+   * Update cover banner — supports upload progress tracking.
+   * @param {File|string} coverImageOrFile
+   * @param {Function} onUploadProgress - Axios progress callback: (progressEvent) => void
+   */
+  async updateBanner(coverImageOrFile, onUploadProgress) {
     if (coverImageOrFile instanceof File) {
       const formData = new FormData();
       formData.append('file', coverImageOrFile);
       return await axiosInstance.patch('/v1/profile/banner', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress
       });
     }
     return await axiosInstance.patch('/v1/profile/banner', { coverImage: coverImageOrFile });
   }
 
-  async updateAvatar(profileImageOrFile) {
+  /**
+   * Update profile avatar — supports upload progress tracking.
+   * @param {File|string} profileImageOrFile
+   * @param {Function} onUploadProgress - Axios progress callback: (progressEvent) => void
+   */
+  async updateAvatar(profileImageOrFile, onUploadProgress) {
     if (profileImageOrFile instanceof File) {
       const formData = new FormData();
       formData.append('file', profileImageOrFile);
       return await axiosInstance.patch('/v1/profile/avatar', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress
       });
     }
     return await axiosInstance.patch('/v1/profile/avatar', { profileImage: profileImageOrFile });
+  }
+
+  // Delete profile photo (removes from Cloudflare R2 + clears MongoDB)
+  async deletePhoto() {
+    return await axiosInstance.delete('/v1/profile/photo');
+  }
+
+  // Delete profile banner (removes from Cloudflare R2 + resets to default)
+  async deleteBanner() {
+    return await axiosInstance.delete('/v1/profile/banner');
   }
 
   async updateBasic(data) {
@@ -93,12 +110,11 @@ class ProfileService {
     return await axiosInstance.post('/v1/profile/google-scholar/sync');
   }
 
-  // Upload any file (avatar/banner/etc.)
-  async uploadFile(formData) {
+  // Upload any file (avatar/banner/etc.) — generic endpoint
+  async uploadFile(formData, onUploadProgress) {
     return await axiosInstance.post('/v1/profile/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress
     });
   }
 
@@ -107,7 +123,7 @@ class ProfileService {
     return await axiosInstance.delete('/v1/profile');
   }
 
-  // Backward compatibility mock activity/areas/keywords
+  // Backward compatibility
   async getPublications() {
     return await axiosInstance.get('/v1/scholar/publications');
   }

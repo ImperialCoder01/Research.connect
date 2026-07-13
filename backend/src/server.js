@@ -42,6 +42,14 @@ const startServer = async () => {
           logger.info('Database index syncing skipped (SYNC_INDEXES is not set to true).');
         }
 
+        // Run self-healing schema migrations in background
+        try {
+          const migrateLegacyToR2 = require('./config/database/migrate_legacy_to_r2');
+          await migrateLegacyToR2();
+        } catch (err) {
+          logger.error('Failed database legacy migration in background:', err);
+        }
+
         try {
           // Scholar Queue Worker
           const importQueueService = require('./modules/scholar/service/import-queue.service');

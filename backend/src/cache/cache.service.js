@@ -62,6 +62,33 @@ class CacheService {
     this.cache.clear();
     return true;
   }
+
+  async delPattern(pattern) {
+    if (this.redisClient && this.redisClient.isOpen && this.redisClient.isReady) {
+      try {
+        let cursor = '0';
+        do {
+          const reply = await this.redisClient.scan(cursor, { MATCH: pattern, COUNT: 100 });
+          cursor = reply.cursor;
+          const keys = reply.keys || [];
+          if (keys.length > 0) {
+            await this.redisClient.del(keys);
+          }
+        } while (cursor !== '0' && cursor !== 0);
+        return true;
+      } catch (err) {
+        console.error(`Redis cache delPattern error for ${pattern}:`, err);
+      }
+    }
+    // Memory fallback
+    for (const key of this.cache.keys()) {
+      const matchRegex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+      if (matchRegex.test(key)) {
+        this.cache.delete(key);
+      }
+    }
+    return true;
+  }
 }
 
 const cacheInstance = new CacheService();
@@ -83,7 +110,7 @@ const FeedCache = {
   get: async (key) => cacheInstance.get(`feed:${key}`),
   set: async (key, data, ttl = 300) => cacheInstance.set(`feed:${key}`, data, ttl),
   del: async (key) => cacheInstance.del(`feed:${key}`),
-  flush: async () => cacheInstance.flush()
+  flush: async () => cacheInstance.delPattern('feed:*')
 };
 
 const PublicationCache = {

@@ -17,6 +17,11 @@ class SearchService {
     return data?.data || data;
   }
 
+  async searchProjects(params = {}) {
+    const { data } = await axiosInstance.get('/v1/search/projects', { params });
+    return data;
+  }
+
   /**
    * Search authors only
    */

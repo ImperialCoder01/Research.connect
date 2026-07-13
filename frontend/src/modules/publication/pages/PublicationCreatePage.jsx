@@ -101,10 +101,10 @@ const PublicationCreatePage = () => {
     handleFieldChange('publicationFormat', slug);
   };
 
-  const handleUploadSuccess = ({ cloudinaryData, extractedMetadata, cacheId, originalName }) => {
+  const handleUploadSuccess = ({ r2Data, extractedMetadata, cacheId, originalName }) => {
     // 1. Save file details
     handleFieldChange('fileDetails', {
-      ...cloudinaryData,
+      ...r2Data,
       originalName
     });
 
@@ -115,7 +115,7 @@ const PublicationCreatePage = () => {
           ...prev,
           metadataCacheId: cacheId || '',
           fileDetails: {
-            ...cloudinaryData,
+            ...r2Data,
             originalName
           },
           extractionConfidences: {
@@ -224,7 +224,8 @@ const PublicationCreatePage = () => {
         queryClient.invalidateQueries({ queryKey: ['feed'] });
 
         // Redirect to profile or draft manager
-        navigate(user?.profileSlug ? `/profile/${user.profileSlug}` : '/profile');
+        const profileTarget = user?.slug || user?.profileSlug || user?.username;
+        navigate(profileTarget ? `/profile/${profileTarget}` : '/profile');
       } else {
         toast.error(response.message || 'Failed to save draft.', { id: loadingToast });
       }

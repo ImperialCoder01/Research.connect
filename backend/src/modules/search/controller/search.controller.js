@@ -12,14 +12,32 @@ class SearchController {
       return res.success('Trending data retrieved.', { trending, results: [], total: 0 });
     }
 
-    const results = await searchService.searchPublications({ q, type, sort, page, limit, ...filters });
+    const results = await searchService.combinedSearch({
+      q,
+      currentUserId: req.user?.id
+    });
 
     // Save history for authenticated users (non-blocking)
     if (req.user) {
-      searchService.saveHistory(req.user._id, q, filters, results.total, 'all').catch(() => {});
+      searchService.saveHistory(req.user._id, q, filters, 0, 'all').catch(() => {});
     }
 
-    return res.success('Search completed.', results);
+    return res.success('Search completed.', {
+      query: q,
+      data: results
+    });
+  });
+
+  // GET /api/v1/search/keywords
+  searchKeywords = asyncHandler(async (req, res) => {
+    const results = await searchService.searchKeywords(req.query);
+    return res.success('Keywords search completed.', results);
+  });
+
+  // GET /api/v1/search/institutions
+  searchInstitutions = asyncHandler(async (req, res) => {
+    const results = await searchService.searchInstitutions(req.query);
+    return res.success('Institutions search completed.', results);
   });
 
   // GET /api/v1/search/publications
@@ -104,6 +122,26 @@ class SearchController {
   toggleFavorite = asyncHandler(async (req, res) => {
     const entry = await searchService.toggleFavoriteHistory(req.user._id, req.params.id);
     return res.success('Favorite toggled.', entry);
+  });
+
+  // GET /api/v1/search/conversations
+  searchConversations = asyncHandler(async (req, res) => {
+    const { q } = req.query;
+    if (!q || !q.trim()) {
+      throw new ValidationError('Search query q is required.');
+    }
+    const results = await searchService.searchConversations(req.user.id, q.trim());
+    return res.success('Conversations search completed.', results);
+  });
+
+  // GET /api/v1/search/messages
+  searchMessages = asyncHandler(async (req, res) => {
+    const { q } = req.query;
+    if (!q || !q.trim()) {
+      throw new ValidationError('Search query q is required.');
+    }
+    const results = await searchService.searchMessages(req.user.id, q.trim());
+    return res.success('Messages search completed.', results);
   });
 }
 

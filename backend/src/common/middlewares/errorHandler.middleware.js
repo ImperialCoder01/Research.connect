@@ -7,11 +7,15 @@ const errorHandlerMiddleware = (err, req, res, next) => {
   let errorCode = err.errorCode || 'INTERNAL_ERROR';
 
   // Log error
-  logger.error(`${req.id || 'N/A'} - ${req.method} ${req.originalUrl} - Error: ${err.message}`, {
-    stack: err.stack,
-    details: err.details,
-    requestId: req.id
-  });
+  if (statusCode >= 500) {
+    logger.error(`${req.id || 'N/A'} - ${req.method} ${req.originalUrl} - Error: ${err.message}`, {
+      stack: err.stack,
+      details: err.details,
+      requestId: req.id
+    });
+  } else {
+    logger.warn(`${req.id || 'N/A'} - ${req.method} ${req.originalUrl} - Warning: ${err.message}`);
+  }
 
   // Handle Mongoose validation error
   if (err.name === 'ValidationError') {

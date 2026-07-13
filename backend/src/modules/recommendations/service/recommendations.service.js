@@ -279,7 +279,7 @@ class RecommendationsService {
         filteredDocs.push({
           userId: user._id,
           name: user.fullName || `${user.firstName} ${user.lastName}`,
-          avatar: user.profileImage || (profile ? profile.profileImage : ''),
+          avatar: user.profileImage?.url || user.profileImage || (profile ? (profile.profileImage?.url || profile.profileImage) : ''),
           institution: profile?.institution || '',
           department: profile?.department || '',
           designation: profile?.designation || '',

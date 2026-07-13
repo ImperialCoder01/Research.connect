@@ -373,11 +373,11 @@ const deleteUploadInternal = async (assetId, userId, useTransaction = true) => {
     const DEFAULT_BANNER = 'https://iili.io/C7pZ8Ss.jpg';
     if (upload.purpose === 'profile-avatar') {
       if (useTransaction && session) {
-        await Profile.findOneAndUpdate({ userId }, { profileImage: '' }, { session });
-        await User.findByIdAndUpdate(userId, { profileImage: '' }, { session });
+        await Profile.findOneAndUpdate({ userId }, { profileImage: { url: '' } }, { session });
+        await User.findByIdAndUpdate(userId, { profileImage: { url: '' } }, { session });
       } else {
-        await Profile.findOneAndUpdate({ userId }, { profileImage: '' });
-        await User.findByIdAndUpdate(userId, { profileImage: '' });
+        await Profile.findOneAndUpdate({ userId }, { profileImage: { url: '' } });
+        await User.findByIdAndUpdate(userId, { profileImage: { url: '' } });
       }
     } else if (upload.purpose === 'profile-banner') {
       if (useTransaction && session) {

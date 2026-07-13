@@ -2,6 +2,36 @@ const profileService = require('../service/profile.service');
 const asyncHandler = require('../../../common/middlewares/asyncHandler.middleware');
 const scholarService = require('../../scholar/service/scholar.service');
 const { ValidationError } = require('../../../common/errors/AppError');
+const User = require('../../../models/User');
+
+const emitProfileUpdate = async (req) => {
+  try {
+    const socketGateway = require('../../../socket/gateway/socket.gateway');
+    const userId = req.user._id.toString();
+    const user = await User.findById(req.user._id).select('profileImage').lean();
+    const profileImage = user?.profileImage?.url || user?.profileImage || '';
+    const fullName = `${req.user.firstName} ${req.user.lastName}`;
+    const payload = { userId, profileImage, fullName };
+
+    // Emit to self
+    socketGateway.emitToUser(userId, 'profile:update', payload);
+    socketGateway.emitToUser(userId, 'avatar:update', payload);
+
+    // Find all conversations of this user and notify their contacts
+    const Conversation = require('../../messaging/model/Conversation');
+    const conversations = await Conversation.find({ participants: req.user._id }).select('participants').lean();
+    conversations.forEach(c => {
+      const otherId = c.participants.find(p => p.toString() !== userId);
+      if (otherId) {
+        socketGateway.emitToUser(otherId.toString(), 'profile:update', payload);
+        socketGateway.emitToUser(otherId.toString(), 'avatar:update', payload);
+      }
+    });
+  } catch (err) {
+    const logger = require('../../../common/logger/winston');
+    logger.error(`Failed to emit profile socket updates: ${err.message}`);
+  }
+};
 
 class ProfileController {
   // Retrieve public profile of a researcher by slug
@@ -64,6 +94,7 @@ class ProfileController {
       };
     }
     const profile = await profileService.updateProfile(req.user._id, { profileImage });
+    await emitProfileUpdate(req);
     return res.success('Profile avatar photo updated successfully.', profile);
   });
 

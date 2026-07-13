@@ -594,6 +594,193 @@ class SearchService {
     await entry.save();
     return entry;
   }
+
+  /**
+   * Search conversations by participant name or group name
+   */
+  async searchConversations(userId, q) {
+    const mongoose = require('mongoose');
+    const Conversation = mongoose.model('Conversation');
+    const User = mongoose.model('User');
+    const Profile = mongoose.model('Profile');
+
+    const searchRegex = new RegExp(q, 'i');
+
+    // 1. Find users who match first name / last name
+    const matchedUsers = await User.find({
+      $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { username: searchRegex }
+      ],
+      isDeleted: { $ne: true }
+    }).select('_id').lean();
+    const matchedUserIds = matchedUsers.map(u => u._id);
+
+    // 2. Find conversations containing the user and either group name matches or participants contain matched users
+    const conversations = await Conversation.find({
+      participants: userId,
+      $or: [
+        { name: searchRegex },
+        { participants: { $in: matchedUserIds } }
+      ]
+    })
+      .populate('participants', 'firstName lastName profileImage username profileSlug slug email')
+      .populate({
+        path: 'lastMessageId',
+        populate: { path: 'attachmentId' }
+      })
+      .sort({ lastMessageTime: -1 })
+      .lean();
+
+    // 3. Process
+    const processed = await Promise.all(
+      conversations.map(async (conv) => {
+        const otherParticipant = conv.participants.find(
+          p => p._id.toString() !== userId.toString()
+        );
+
+        let detailedParticipant = null;
+        if (otherParticipant) {
+          const profile = await Profile.findOne({ userId: otherParticipant._id }).lean();
+          detailedParticipant = {
+            ...otherParticipant,
+            isOnline: false,
+            bio: profile?.bio || '',
+            institution: profile?.institution || '',
+            designation: profile?.designation || ''
+          };
+        }
+
+        const isPinned = Array.isArray(conv.isPinned) && conv.isPinned.map(id => id.toString()).includes(userId.toString());
+        const isArchived = Array.isArray(conv.isArchived) && conv.isArchived.map(id => id.toString()).includes(userId.toString());
+        const isMuted = Array.isArray(conv.isMuted) && conv.isMuted.map(id => id.toString()).includes(userId.toString());
+
+        return {
+          ...conv,
+          lastMessage: conv.lastMessageId ? {
+            ...conv.lastMessageId,
+            attachment: conv.lastMessageId.attachmentId
+          } : null,
+          otherParticipant: detailedParticipant,
+          isPinned,
+          isArchived,
+          isMuted
+        };
+      })
+    );
+
+    return processed;
+  }
+
+  /**
+   * Search message content
+   */
+  async searchMessages(userId, q) {
+    const messageService = require('../../messaging/service/message.service');
+    return await messageService.searchMessages(userId, q);
+  }
+
+  async searchKeywords(params) {
+    const { q = '', page = 1, limit = 20 } = params;
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    if (!q.trim()) return { results: [], total: 0, page: pageNum, limit: limitNum, totalPages: 0 };
+    const regex = buildRegex(q);
+
+    const keywordGroups = await PublicationKeyword.aggregate([
+      { $match: { keyword: regex } },
+      { $group: { _id: '$keyword', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      {
+        $facet: {
+          data: [{ $skip: skip }, { $limit: limitNum }],
+          count: [{ $count: 'total' }]
+        }
+      }
+    ]);
+
+    const items = keywordGroups[0]?.data || [];
+    const total = keywordGroups[0]?.count?.[0]?.total || 0;
+
+    const results = await Promise.all(items.map(async (item) => {
+      const researchersCount = await Profile.countDocuments({ 
+        researchAreas: { $regex: new RegExp('^' + sanitizeQuery(item._id) + '$', 'i') } 
+      });
+      return {
+        keyword: item._id,
+        relatedPublicationsCount: item.count,
+        relatedResearchersCount: researchersCount
+      };
+    }));
+
+    return { results, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+  }
+
+  async searchInstitutions(params) {
+    const { q = '', page = 1, limit = 20 } = params;
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const queryFilter = { isActive: true };
+    if (q.trim()) {
+      queryFilter.name = buildRegex(q);
+    }
+
+    const [items, total] = await Promise.all([
+      mongoose.model('Institution').find(queryFilter)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      mongoose.model('Institution').countDocuments(queryFilter)
+    ]);
+
+    const results = await Promise.all(items.map(async (inst) => {
+      const [researchersCount, publicationsCount] = await Promise.all([
+        Profile.countDocuments({ institution: { $regex: new RegExp('^' + sanitizeQuery(inst.name) + '$', 'i') } }),
+        Publication.countDocuments({ institution: { $regex: new RegExp('^' + sanitizeQuery(inst.name) + '$', 'i') } })
+      ]);
+      return {
+        ...inst,
+        researchersCount,
+        publicationsCount
+      };
+    }));
+
+    return { results, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+  }
+
+  async combinedSearch(params) {
+    const { q = '', currentUserId } = params;
+    if (!q || !q.trim()) {
+      return {
+        researchers: [],
+        publications: [],
+        authors: [],
+        keywords: [],
+        institutions: []
+      };
+    }
+
+    const [researchers, publications, authors, keywords, institutions] = await Promise.all([
+      this.searchResearchers({ q, currentUserId, page: 1, limit: 5 }),
+      this.searchPublications({ q, page: 1, limit: 5 }),
+      this.searchAuthors({ q, page: 1, limit: 5 }),
+      this.searchKeywords({ q, page: 1, limit: 5 }),
+      this.searchInstitutions({ q, page: 1, limit: 5 })
+    ]);
+
+    return {
+      researchers: researchers.results,
+      publications: publications.results,
+      authors: authors.results,
+      keywords: keywords.results,
+      institutions: institutions.results
+    };
+  }
 }
 
 module.exports = new SearchService();

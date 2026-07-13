@@ -58,6 +58,13 @@ const HelpCenterPage = React.lazy(() => import('../modules/helpcenter/pages/Help
 // Profile module routes nested
 import profileRoutes from '../modules/profile/routes/profile.routes';
 
+// Legal pages
+const TermsOfServicePage = React.lazy(() => import('../modules/legal/pages/TermsOfServicePage'));
+const PrivacyPolicyPage = React.lazy(() => import('../modules/legal/pages/PrivacyPolicyPage'));
+
+// Help Center Module
+const HelpCenterPage = React.lazy(() => import('../pages/HelpCenter/HelpCenterPage'));
+
 const AppRoutes = () => {
   return (
     <React.Suspense fallback={
@@ -117,7 +124,7 @@ const AppRoutes = () => {
           <Route path="publications/published" element={<PublicationsLibraryPage />} />
           <Route path="publications/trash" element={<PublicationsLibraryPage />} />
           <Route path="publications/bookmarks" element={<PublicationsLibraryPage />} />
-          <Route path="projects/create" element={<ComingSoon title="Create Project Coming Soon" />} />
+          <Route path="projects/create" element={<CreateProject />} />
           <Route path="datasets/create" element={<ComingSoon title="Share Dataset Coming Soon" />} />
           <Route path="questions/create" element={<ComingSoon title="Ask Question Coming Soon" />} />
           <Route path="collaborations/create" element={<CreateWorkspace />} />
@@ -150,7 +157,7 @@ const AppRoutes = () => {
             </MessagingProvider>
           } />
           <Route path="search" element={<SearchPage />} />
-          
+          <Route path="help" element={<HelpCenterPage />} />
           {/* Social Collaboration Module Routes */}
           <Route path="network" element={<NetworkPage />} />
           <Route path="network/connections" element={<ConnectionsPage />} />

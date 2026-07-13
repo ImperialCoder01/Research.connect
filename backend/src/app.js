@@ -19,13 +19,14 @@ const connectionsModule = require("./modules/connections");
 const scholarModule = require("./modules/scholar");
 const feedModule = require("./modules/feed");
 const publicationModule = require("./modules/publication");
-const messageModule = require("./modules/messages");
+const messageModule = require("./modules/messaging");
 const searchModule = require("./modules/search");
 const uploadModule = require("./modules/upload");
 const projectModule = require("./modules/project");
 const datasetModule = require("./modules/dataset");
 const notificationsModule = require("./modules/notifications");
 const networkModule = require("./modules/network");
+const presenceModule = require("./modules/presence");
 
 const collaborationRoutes = require("./modules/collaborations/routes/collaboration.routes");
 
@@ -58,6 +59,9 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 app.use("/uploads", express.static(uploadsDir));
+
+// Request ID tracing
+app.use(requestIdMiddleware);
 
 // Request logger
 app.use(loggerMiddleware);
@@ -108,6 +112,7 @@ app.use("/api/v1/notifications", notificationsModule.routes);
 app.use("/api/v1", feedModule.routes);
 app.use("/api/v1/publications", publicationModule.routes);
 app.use("/api/v1/messages", messageModule.routes);
+app.use("/api/v1/conversations", messageModule.conversationRoutes);
 app.use("/api/v1/search", searchModule.routes);
 app.use("/api/v1/uploads", uploadModule.routes);
 app.use("/api/v1/projects", projectModule.routes);
@@ -117,6 +122,10 @@ app.use("/api/v1/collaborations", collaborationRoutes);
 app.use("/api/v1/identity", identityRoutes);
 app.use("/api/v1/recommendations", recommendationsModule.routes);
 app.use("/api/v1/network", networkModule.routes);
+app.use("/api/v1/presence", presenceModule.routes);
+
+// Help Center Module routes
+app.use("/api/v1/help", helpModule.routes);
 
 // Default root redirect to /api
 app.get("/", (req, res) => {

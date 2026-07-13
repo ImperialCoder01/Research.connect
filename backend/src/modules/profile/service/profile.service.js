@@ -274,12 +274,14 @@ class ProfileService {
     const profile = await Profile.findOne({ userId });
     if (!user || !profile) return 0;
 
-    const educationCount = await Education.countDocuments({ userId, isDeleted: { $ne: true } });
-    const experienceCount = await Experience.countDocuments({ userId, isDeleted: { $ne: true } });
-    const skillsCount = await Skill.countDocuments({ userId, isDeleted: { $ne: true } });
-    const projectsCount = await Project.countDocuments({ userId, isDeleted: { $ne: true } });
-    const publicationsCount = await Publication.countDocuments({ userId, isDeleted: { $ne: true } });
-    const socialLink = await SocialLink.findOne({ userId, isDeleted: { $ne: true } });
+    const [educationCount, experienceCount, skillsCount, projectsCount, publicationsCount, socialLink] = await Promise.all([
+      Education.countDocuments({ userId, isDeleted: { $ne: true } }),
+      Experience.countDocuments({ userId, isDeleted: { $ne: true } }),
+      Skill.countDocuments({ userId, isDeleted: { $ne: true } }),
+      Project.countDocuments({ userId, isDeleted: { $ne: true } }),
+      Publication.countDocuments({ userId, isDeleted: { $ne: true } }),
+      SocialLink.findOne({ userId, isDeleted: { $ne: true } })
+    ]);
 
     let score = 10;
     const breakdown = {
@@ -407,11 +409,16 @@ class ProfileService {
       { $inc: { [type]: 1 } },
       { upsert: true }
     );
-    setImmediate(() => {
-      this.calculateAndSaveResearchMetrics(userId).catch(err =>
-        console.error('Background metrics calculation error:', err)
-      );
-    });
+    // Atomic update of aggregate metrics to avoid heavy recalculations and cache invalidation on read path
+    const metricField = type === 'views' ? 'viewsCount' : type === 'downloads' ? 'downloadsCount' : null;
+    if (metricField) {
+      const ResearchMetric = require('../../../models/ResearchMetric');
+      const Profile = require('../../../models/Profile');
+      await Promise.all([
+        ResearchMetric.updateOne({ userId }, { $inc: { [metricField]: 1 } }),
+        Profile.updateOne({ userId }, { $inc: { [`metrics.${metricField}`]: 1 } })
+      ]);
+    }
   }
 
   async getAnalytics(userId) {
@@ -482,39 +489,37 @@ class ProfileService {
       }
     });
 
-    await profile.save();
-
-    // 3. Update Normalized Array Collections
-    if (updateData.education !== undefined) await this._syncCollection(Education, userId, updateData.education);
-    if (updateData.experience !== undefined) await this._syncCollection(Experience, userId, updateData.experience);
-    if (updateData.skills !== undefined) await this._syncCollection(Skill, userId, updateData.skills);
-    if (updateData.projects !== undefined) await this._syncCollection(Project, userId, updateData.projects);
-    if (updateData.patents !== undefined) await this._syncCollection(Patent, userId, updateData.patents);
-    if (updateData.books !== undefined) await this._syncCollection(Book, userId, updateData.books);
-    if (updateData.datasets !== undefined) await this._syncCollection(Dataset, userId, updateData.datasets);
+    // 3. Update Normalized Array Collections & other models (in parallel)
+    const syncPromises = [];
+    if (updateData.education !== undefined) syncPromises.push(this._syncCollection(Education, userId, updateData.education));
+    if (updateData.experience !== undefined) syncPromises.push(this._syncCollection(Experience, userId, updateData.experience));
+    if (updateData.skills !== undefined) syncPromises.push(this._syncCollection(Skill, userId, updateData.skills));
+    if (updateData.projects !== undefined) syncPromises.push(this._syncCollection(Project, userId, updateData.projects));
+    if (updateData.patents !== undefined) syncPromises.push(this._syncCollection(Patent, userId, updateData.patents));
+    if (updateData.books !== undefined) syncPromises.push(this._syncCollection(Book, userId, updateData.books));
+    if (updateData.datasets !== undefined) syncPromises.push(this._syncCollection(Dataset, userId, updateData.datasets));
     
     if (updateData.awards !== undefined || updateData.achievements !== undefined) {
       const awards = updateData.awards || updateData.achievements;
-      await this._syncCollection(Award, userId, awards);
+      syncPromises.push(this._syncCollection(Award, userId, awards));
     }
     if (updateData.certificates !== undefined || updateData.certifications !== undefined) {
       const certs = updateData.certificates || updateData.certifications;
-      await this._syncCollection(Certificate, userId, certs);
+      syncPromises.push(this._syncCollection(Certificate, userId, certs));
     }
 
     // 4. Update Normalized Social Link Collection
     if (updateData.socialLinks !== undefined) {
-      await SocialLink.findOneAndUpdate({ userId }, { ...updateData.socialLinks, userId }, { upsert: true, new: true });
+      syncPromises.push(SocialLink.findOneAndUpdate({ userId }, { ...updateData.socialLinks, userId }, { upsert: true, new: true }));
       profile.socialLinks = {
         ...((profile.socialLinks && typeof profile.socialLinks.toObject === 'function') ? profile.socialLinks.toObject() : profile.socialLinks || {}),
         ...updateData.socialLinks
       };
-      await profile.save();
     }
 
     // 5. Update Metrics Override if supplied
     if (updateData.metrics !== undefined) {
-      await ResearchMetric.findOneAndUpdate({ userId }, { ...updateData.metrics, userId }, { upsert: true, new: true });
+      syncPromises.push(ResearchMetric.findOneAndUpdate({ userId }, { ...updateData.metrics, userId }, { upsert: true, new: true }));
     }
 
     // Update Research Areas if supplied

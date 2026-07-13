@@ -73,7 +73,7 @@ class FollowRepository extends BaseRepository {
           fullName: 1,
           username: 1,
           profileSlug: 1,
-          profileImage: 1
+          profileImage: '$user.profileImage.url'
         },
         profile: {
           headline: 1,
@@ -141,7 +141,7 @@ class FollowRepository extends BaseRepository {
           fullName: 1,
           username: 1,
           profileSlug: 1,
-          profileImage: 1
+          profileImage: '$user.profileImage.url'
         },
         profile: {
           headline: 1,
@@ -225,7 +225,7 @@ class FollowRepository extends BaseRepository {
             fullName: 1,
             username: 1,
             profileSlug: 1,
-            profileImage: 1
+            profileImage: '$user.profileImage.url'
           },
           profile: {
             headline: 1,

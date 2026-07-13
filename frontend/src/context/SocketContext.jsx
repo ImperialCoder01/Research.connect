@@ -27,7 +27,7 @@ export const SocketProvider = ({ children }) => {
     });
 
     newSocket.on('connect', () => {
-      console.log('🔌 Connected to Socket.io server');
+      // Socket connected successfully
     });
 
     newSocket.on('connect_error', (err) => {
@@ -77,14 +77,12 @@ export const SocketProvider = ({ children }) => {
     };
   }, [user]);
 
-  // Database se purane notifications load karo
+  // Reset notifications on logout
   useEffect(() => {
     if (!user) {
       setNotifications([]);
       return;
     }
-
-    // Backend se notifications laao (chahe toh local bhi save kar sakte hain)
   }, [user]);
 
   return (

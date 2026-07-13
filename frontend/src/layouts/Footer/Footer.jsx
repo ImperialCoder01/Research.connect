@@ -2,6 +2,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Share2, Twitter, Linkedin, Mail, Github, ArrowRight } from 'lucide-react';
 
+const legalLinks = [
+  { label: 'Privacy Policy', href: '/privacy' },
+  { label: 'Terms of Service', href: '/terms' },
+];
+
 const footerLinks = {
   Platform: [
     { label: 'Features', href: '#features' },
@@ -18,7 +23,7 @@ const footerLinks = {
     { label: 'Google Scholar Sync', href: '#' },
   ],
   Company: [
-    { label: 'About Us', href: '#about' },
+    { label: 'About Us', href: '/about', isRoute: true },
     { label: 'Blog', href: '#' },
     { label: 'Careers', href: '#' },
     { label: 'Contact', href: '#contact' },
@@ -101,14 +106,23 @@ const Footer = () => {
             <div key={section}>
               <h4 className="text-white text-xs font-bold uppercase tracking-widest mb-5">{section}</h4>
               <ul className="space-y-3">
-                {links.map(({ label, href }) => (
+                {links.map(({ label, href, isRoute }) => (
                   <li key={label}>
-                    <a
-                      href={href}
-                      className="text-slate-400 text-sm hover:text-white transition-colors hover:translate-x-0.5 inline-block"
-                    >
-                      {label}
-                    </a>
+                    {isRoute ? (
+                      <Link
+                        to={href}
+                        className="text-slate-400 text-sm hover:text-white transition-colors hover:translate-x-0.5 inline-block"
+                      >
+                        {label}
+                      </Link>
+                    ) : (
+                      <a
+                        href={href}
+                        className="text-slate-400 text-sm hover:text-white transition-colors hover:translate-x-0.5 inline-block"
+                      >
+                        {label}
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -122,10 +136,10 @@ const Footer = () => {
             © {new Date().getFullYear()} Research Connect. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
-            {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item) => (
-              <a key={item} href="#" className="text-slate-500 text-xs hover:text-slate-300 transition-colors">
-                {item}
-              </a>
+            {legalLinks.map(({ label, href }) => (
+              <Link key={label} to={href} className="text-slate-500 text-xs hover:text-slate-300 transition-colors">
+                {label}
+              </Link>
             ))}
           </div>
         </div>

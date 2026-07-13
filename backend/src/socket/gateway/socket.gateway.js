@@ -4,6 +4,7 @@ const { socketAuthMiddleware, socketRateLimiter } = require('../middleware/socke
 const presenceManager = require('../presence/presence.manager');
 const roomManager = require('../rooms/room.manager');
 const SocketSession = require('../sessions/SocketSession');
+const redisClient = require('../../config/redis');
 const env = require('../../config/environment');
 const { parseBrowser, parsePlatform, getDeviceType } = require('../../common/utils/userAgent.helper');
 
@@ -33,72 +34,85 @@ class SocketGateway {
 
     // 2. Handle connections
     this.io.on('connection', async (socket) => {
-      const userId = socket.user.userId || socket.user.id || socket.user._id;
-      const socketId = socket.id;
-
-      // Parse user-agent info if available
-      const userAgentStr = socket.handshake.headers['user-agent'] || '';
-      const ip = socket.handshake.address || '';
-      
-      const browser = parseBrowser(userAgentStr);
-      const platform = parsePlatform(userAgentStr);
-
-      logger.info(`🔌 Enterprise Socket connected: User ${userId} (${socketId}) on ${platform}/${browser}`);
-
-      // Set user online
-      await presenceManager.setUserOnline(userId, socketId, {
-        device: getDeviceType(userAgentStr),
-        platform,
-        browser,
-        ip
-      }, this.io);
-
-      // Join default namespaces rooms
-      roomManager.joinUserRooms(socket);
-
-      // Register notifications socket router
       try {
-        require('../../modules/notifications/socket/notification.socket')(this.io, socket);
+        const userId = socket.user.userId || socket.user.id || socket.user._id;
+        const socketId = socket.id;
+
+        // Parse user-agent info if available
+        const userAgentStr = socket.handshake.headers['user-agent'] || '';
+        const ip = socket.handshake.address || '';
+        
+        const browser = parseBrowser(userAgentStr);
+        const platform = parsePlatform(userAgentStr);
+
+        logger.info(`🔌 Enterprise Socket connected: User ${userId} (${socketId}) on ${platform}/${browser}`);
+
+        // Set user online
+        await presenceManager.setUserOnline(userId, socketId, {
+          device: getDeviceType(userAgentStr),
+          platform,
+          browser,
+          ip
+        }, this.io);
+
+        // Join default namespaces rooms
+        roomManager.joinUserRooms(socket);
+
+        // Register notifications socket router
+        try {
+          require('../../modules/notifications/socket/notification.socket')(this.io, socket);
+        } catch (err) {
+          logger.error(`Failed mounting notification socket listeners: ${err.message}`);
+        }
+
+        // Register messaging socket router
+        try {
+          require('../../modules/messaging/socket/message.socket')(this.io, socket);
+        } catch (err) {
+          logger.error(`Failed mounting messaging socket listeners: ${err.message}`);
+        }
+
+        // Register call socket router
+        try {
+          require('../../modules/messaging/socket/call.socket')(this.io, socket);
+        } catch (err) {
+          logger.error(`Failed mounting call socket listeners: ${err.message}`);
+        }
+
+        // Register collaborations socket router
+        try {
+          require('../../modules/collaborations/socket/collaboration.socket')(this.io, socket);
+        } catch (err) {
+          logger.error(`Failed mounting collaboration socket listeners: ${err.message}`);
+        }
+
+        // Heartbeat signal from client (received every 30s)
+        socket.on('heartbeat', async () => {
+          try {
+            await SocketSession.updateOne(
+              { socketId },
+              { $set: { lastHeartbeat: new Date() } }
+            );
+            if (redisClient && redisClient.isOpen && redisClient.isReady) {
+              await redisClient.expire(`presence:status:${userId}`, 300);
+            }
+          } catch (err) {
+            logger.error(`Socket heartbeat update failed: ${err.message}`);
+          }
+        });
+
+        // Disconnect
+        socket.on('disconnect', async (reason) => {
+          try {
+            logger.info(`🔌 Enterprise Socket disconnected: User ${userId} (${socketId}). Reason: ${reason}`);
+            await presenceManager.setUserOffline(userId, socketId, this.io);
+          } catch (err) {
+            logger.error(`Socket disconnect handler failed: ${err.message}`);
+          }
+        });
       } catch (err) {
-        logger.error(`Failed mounting notification socket listeners: ${err.message}`);
+        logger.error(`Socket connection logic failed: ${err.message}`);
       }
-
-      // Register messaging socket router
-      try {
-        require('../../modules/messages/socket/message.socket')(this.io, socket);
-      } catch (err) {
-        logger.error(`Failed mounting messaging socket listeners: ${err.message}`);
-      }
-
-      // Register call socket router
-      try {
-        require('../../modules/messages/socket/call.socket')(this.io, socket);
-      } catch (err) {
-        logger.error(`Failed mounting call socket listeners: ${err.message}`);
-      }
-
-      // Register collaborations socket router
-      try {
-        require('../../modules/collaborations/socket/collaboration.socket')(this.io, socket);
-      } catch (err) {
-        logger.error(`Failed mounting collaboration socket listeners: ${err.message}`);
-      }
-
-
-
-      // Heartbeat signal from client (received every 30s)
-      socket.on('heartbeat', async () => {
-        await SocketSession.updateOne(
-          { socketId },
-          { $set: { lastHeartbeat: new Date() } }
-        );
-      });
-
-      // Disconnect
-      socket.on('disconnect', async (reason) => {
-        logger.info(`🔌 Enterprise Socket disconnected: User ${userId} (${socketId}). Reason: ${reason}`);
-        await presenceManager.setUserOffline(userId, socketId, this.io);
-      });
     });
 
     // 3. Start Heartbeat Pruning Scheduler (runs every 30 seconds)

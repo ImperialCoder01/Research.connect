@@ -9,6 +9,7 @@ import {
   Trash2,
   Link2,
 } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { TAG_STYLES } from "../data";
 import Avatar from "./Avatar";
 import { toast } from "react-hot-toast";
@@ -61,6 +62,18 @@ export default function ProjectCard({
   // triggering the "open details drawer" click on the card itself.
   function stop(e) {
     e.stopPropagation();
+  }
+
+  async function copyProjectLink(e) {
+    stop(e);
+    const id = project.slug || project.id || project._id;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/projects/${id}`);
+      toast.success("Project link copied");
+    } catch {
+      toast.error("Could not copy the project link");
+    }
+    setMenuOpen(false);
   }
 
   return (

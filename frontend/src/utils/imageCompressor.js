@@ -1,86 +1,143 @@
 /**
- * Client-side image compression and validation utility.
- * Resizes the image to fit a maximum bounding box and outputs a compressed WebP file.
- * 
+ * Client-side image compression, resize, and validation utility.
+ * Automatically converts JPG/PNG to WebP and strips EXIF data via canvas.
+ *
+ * Presets:
+ *   avatar  — 512×512 (square crop), quality 0.85
+ *   banner  — 1920×480 (wide crop), quality 0.85
+ *   general — 800×800 (proportional), quality 0.80
+ *
  * @param {File} file - The original uploaded file.
- * @param {object} options - Bounding dimensions and target quality.
- * @returns {Promise<File>} Compressed file ready for upload.
+ * @param {'avatar'|'banner'|'general'} preset - Compression preset to use.
+ * @returns {Promise<File>} Compressed WebP file ready for upload.
  */
-export const compressImage = (file, options = { maxWidth: 800, maxHeight: 800, quality: 0.8 }) => {
+
+const PRESETS = {
+  avatar: {
+    maxWidth: 512,
+    maxHeight: 512,
+    quality: 0.85,
+    maxSizeBytes: 5 * 1024 * 1024,  // 5MB input limit
+    crop: true   // Center-crop to square
+  },
+  banner: {
+    maxWidth: 1920,
+    maxHeight: 480,
+    quality: 0.85,
+    maxSizeBytes: 10 * 1024 * 1024, // 10MB input limit
+    crop: false  // Proportional resize
+  },
+  general: {
+    maxWidth: 800,
+    maxHeight: 800,
+    quality: 0.80,
+    maxSizeBytes: 5 * 1024 * 1024,
+    crop: false
+  }
+};
+
+export const compressImage = (file, presetName = 'general') => {
   return new Promise((resolve, reject) => {
-    // 1. Validate file type
+    const preset = PRESETS[presetName] || PRESETS.general;
+
+    // Validate file type
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       return reject(new Error('Invalid image type. Only JPG, PNG, and WEBP are supported.'));
     }
 
-    // 2. Validate file size (5MB)
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      return reject(new Error('File is too large. Maximum allowed size is 5MB.'));
+    // Validate file size
+    if (file.size > preset.maxSizeBytes) {
+      const maxMB = (preset.maxSizeBytes / (1024 * 1024)).toFixed(0);
+      return reject(new Error(`File is too large. Maximum allowed size is ${maxMB}MB.`));
     }
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
+
     reader.onload = (event) => {
       const img = new Image();
       img.src = event.target.result;
+
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
+        let { width, height } = img;
 
-        // Calculate new dimensions to fit within maxWidth/maxHeight
-        if (width > height) {
-          if (width > options.maxWidth) {
-            height = Math.round((height * options.maxWidth) / width);
-            width = options.maxWidth;
+        if (preset.crop) {
+          // Center-crop to the target aspect ratio (square for avatar)
+          const targetAspect = preset.maxWidth / preset.maxHeight;
+          const sourceAspect = width / height;
+
+          let sx = 0, sy = 0, sWidth = width, sHeight = height;
+
+          if (sourceAspect > targetAspect) {
+            // Image is wider than target — crop sides
+            sWidth = Math.round(height * targetAspect);
+            sx = Math.round((width - sWidth) / 2);
+          } else if (sourceAspect < targetAspect) {
+            // Image is taller than target — crop top/bottom
+            sHeight = Math.round(width / targetAspect);
+            sy = Math.round((height - sHeight) / 2);
           }
+
+          canvas.width = preset.maxWidth;
+          canvas.height = preset.maxHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, preset.maxWidth, preset.maxHeight);
         } else {
-          if (height > options.maxHeight) {
-            width = Math.round((width * options.maxHeight) / height);
-            height = options.maxHeight;
+          // Proportional resize — fit within maxWidth × maxHeight
+          if (width > preset.maxWidth) {
+            height = Math.round((height * preset.maxWidth) / width);
+            width = preset.maxWidth;
           }
+          if (height > preset.maxHeight) {
+            width = Math.round((width * preset.maxHeight) / height);
+            height = preset.maxHeight;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
         }
 
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Always convert PNG/JPG to WEBP for better compression ratio and performance
+        // Always output as WebP — smallest size, best quality, EXIF stripped
         const outputType = 'image/webp';
         canvas.toBlob(
           (blob) => {
             if (!blob) {
-              return reject(new Error('Canvas compression failed.'));
+              return reject(new Error('Canvas compression failed. Please try a different image.'));
             }
-            
-            // Get original file name prefix
+
+            // Build output filename
             const originalName = file.name;
             const lastDotIndex = originalName.lastIndexOf('.');
-            const namePrefix = lastDotIndex !== -1 ? originalName.substring(0, lastDotIndex) : originalName;
-            
-            // Convert Blob to a File object
-            const compressedFile = new File([blob], `${namePrefix}_compressed.webp`, {
+            const namePrefix = lastDotIndex !== -1
+              ? originalName.substring(0, lastDotIndex)
+              : originalName;
+
+            const compressedFile = new File([blob], `${namePrefix}_${presetName}.webp`, {
               type: outputType,
-              lastModified: Date.now(),
+              lastModified: Date.now()
             });
-            
-            console.log(`Image compressed: original size = ${(file.size / 1024).toFixed(2)} KB, new size = ${(compressedFile.size / 1024).toFixed(2)} KB`);
+
+            console.info(
+              `[ImageCompressor] ${presetName}: ${(file.size / 1024).toFixed(1)} KB → ${(compressedFile.size / 1024).toFixed(1)} KB (${canvas.width}×${canvas.height})`
+            );
+
             resolve(compressedFile);
           },
           outputType,
-          options.quality
+          preset.quality
         );
       };
-      img.onerror = () => {
-        reject(new Error('Failed to load image for compression.'));
-      };
+
+      img.onerror = () => reject(new Error('Failed to load image. The file may be corrupted.'));
     };
-    reader.onerror = () => {
-      reject(new Error('Failed to read file.'));
-    };
+
+    reader.onerror = () => reject(new Error('Failed to read file.'));
   });
 };
+
+// Convenience exports
+export const compressAvatar = (file) => compressImage(file, 'avatar');
+export const compressBanner = (file) => compressImage(file, 'banner');

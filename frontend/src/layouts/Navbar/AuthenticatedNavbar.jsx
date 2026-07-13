@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import connectionsService from '../../modules/connections/services/connections.service';
 import NotificationBell from '../../modules/notifications/components/NotificationBell';
 
-const AuthenticatedNavbar = () => {
+const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
@@ -204,7 +204,7 @@ const AuthenticatedNavbar = () => {
           <div className="flex items-center space-x-2 sm:space-x-3">
 
             {/* Create Dropdown */}
-            <div className="relative" ref={createRef}>
+            <div className="relative shrink-0" ref={createRef}>
               <button
                 onClick={() => setCreateOpen(!createOpen)}
                 className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-3.5 py-2 rounded-lg shadow-sm active:scale-[0.98] transition-all"
@@ -321,7 +321,7 @@ const AuthenticatedNavbar = () => {
             <NotificationBell />
 
             {/* Profile Dropdown */}
-            <div className="relative" ref={profileRef}>
+            <div className="relative shrink-0" ref={profileRef}>
               <button
                 onClick={() => setProfileOpen(!profileOpen)}
                 className="flex items-center gap-2 p-1 pr-2.5 rounded-full border border-slate-200 hover:border-blue-600 hover:bg-slate-50 focus:outline-none transition-all shadow-sm duration-200 group"
@@ -334,10 +334,10 @@ const AuthenticatedNavbar = () => {
                 <span className="hidden lg:block text-xs font-bold text-slate-700 group-hover:text-blue-600 max-w-[90px] truncate transition-colors duration-150">
                   {user?.fullName?.split(' ')[0] || 'Scholar'}
                 </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-600 transition-colors duration-150" />
+                <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500 group-hover:text-blue-600 transition-colors duration-150 shrink-0" />
               </button>
               {profileOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg py-2 z-50 text-left text-sm font-semibold text-slate-700">
+                <div className="absolute right-0 mt-2 w-64 max-w-[90vw] bg-white border border-slate-200 rounded-xl shadow-lg py-2 z-50 text-left text-sm font-semibold text-slate-700">
                   <div className="px-4 py-2 border-b border-slate-150">
                     <p className="font-extrabold text-slate-900 truncate">{user?.fullName || 'Researcher'}</p>
                     <p className="text-xs text-slate-400 truncate mt-0.5">{user?.email}</p>

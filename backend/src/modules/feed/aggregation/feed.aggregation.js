@@ -25,7 +25,7 @@ const actorLookup = [
             firstName: 1,
             lastName: 1,
             username: 1,
-            profileImage: 1,
+            profileImage: '$profileImage.url',
             institution: 1,
             designation: 1,
             profileSlug: 1

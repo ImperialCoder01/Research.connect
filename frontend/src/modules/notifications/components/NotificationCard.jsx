@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Trash2, Eye, Circle, Mail, Users, FileText, Sparkles, MessageSquare } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import notificationsService from '../services/notifications.service';
+import UserAvatar from '../../../components/ui/Avatar';
 
 const formatTimeAgo = (dateStr) => {
   const date = new Date(dateStr);
