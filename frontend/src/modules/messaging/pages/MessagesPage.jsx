@@ -10,6 +10,7 @@ import ChatWindow from '../components/ChatWindow';
 import ResearcherInfo from '../components/ResearcherInfo';
 import CallOverlay from '../components/CallOverlay';
 import NewChatModal from '../components/NewChatModal';
+import Avatar from '../../../components/ui/Avatar';
 import { 
   MessageSquare, Mail, Star, Archive, Users, 
   Lightbulb, UserPlus, PhoneCall, FolderOpen, FileText, Ban, 
@@ -749,10 +750,12 @@ const MessagesPage = () => {
                 {contactFollowers.map((person) => (
                   <div key={person._id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3 hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <img src={person.profileImage || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'} alt={`${person.firstName} ${person.lastName}`} className="w-12 h-12 rounded-full object-cover border border-slate-150" />
-                        <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${person.isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                      </div>
+                      <Avatar
+                        src={person.profileImage}
+                        name={`${person.firstName} ${person.lastName}`}
+                        size="lg"
+                        isOnline={person.isOnline}
+                      />
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-black text-slate-800 truncate">{person.firstName} {person.lastName}</h4>
                         <p className="text-xs text-slate-500 font-bold truncate">{person.designation || 'Researcher'}</p>
@@ -788,10 +791,12 @@ const MessagesPage = () => {
                 {contactFollowing.map((person) => (
                   <div key={person._id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3 hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <img src={person.profileImage || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'} alt={`${person.firstName} ${person.lastName}`} className="w-12 h-12 rounded-full object-cover border border-slate-150" />
-                        <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${person.isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                      </div>
+                      <Avatar
+                        src={person.profileImage}
+                        name={`${person.firstName} ${person.lastName}`}
+                        size="lg"
+                        isOnline={person.isOnline}
+                      />
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-black text-slate-800 truncate">{person.firstName} {person.lastName}</h4>
                         <p className="text-xs text-slate-500 font-bold truncate">{person.designation || 'Researcher'}</p>
@@ -831,10 +836,10 @@ const MessagesPage = () => {
                   return (
                     <div key={_id} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4 hover:shadow-md transition-shadow">
                       <div className="flex items-start gap-4">
-                        <img 
-                          src={user.profileImage || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"} 
-                          alt={reqName} 
-                          className="w-14 h-14 rounded-full object-cover border border-slate-150"
+                        <Avatar
+                          src={user.profileImage}
+                          name={reqName}
+                          size="w-14 h-14 text-lg"
                         />
                         <div className="flex-1 min-w-0 text-left">
                           <div className="flex items-center gap-1.5">
@@ -929,10 +934,10 @@ const MessagesPage = () => {
                     const isVideo = call.type === 'video';
                     return (
                       <div key={call._id} className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex items-center gap-3">
-                        <img
-                          src={other?.profileImage || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100"}
-                          alt={contactName}
-                          className="w-10 h-10 rounded-full object-cover border shrink-0"
+                        <Avatar
+                          src={other?.profileImage}
+                          name={contactName}
+                          size="md"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
@@ -978,10 +983,10 @@ const MessagesPage = () => {
                       return (
                         <tr key={call._id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="p-4 flex items-center gap-3">
-                            <img 
-                              src={other?.profileImage || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100"} 
-                              alt={contactName} 
-                              className="w-8 h-8 rounded-full object-cover border"
+                            <Avatar
+                              src={other?.profileImage}
+                              name={contactName}
+                              size="sm"
                             />
                             <span>{contactName}</span>
                           </td>
@@ -1068,10 +1073,10 @@ const MessagesPage = () => {
 
                         <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-4">
                           <div className="flex items-center gap-1.5 text-slate-500 text-[10px] font-bold">
-                            <img 
-                              src={senderId?.profileImage || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50"} 
-                              alt="Sender" 
-                              className="w-5 h-5 rounded-full object-cover border"
+                            <Avatar
+                              src={senderId?.profileImage}
+                              name={`${senderId?.firstName || ''} ${senderId?.lastName || ''}`.trim() || 'Sender'}
+                              size="w-5 h-5 text-[8px]"
                             />
                             <span className="truncate max-w-[80px]">By {senderId?.firstName}</span>
                           </div>

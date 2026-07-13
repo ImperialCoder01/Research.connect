@@ -4,6 +4,7 @@ const { socketAuthMiddleware, socketRateLimiter } = require('../middleware/socke
 const presenceManager = require('../presence/presence.manager');
 const roomManager = require('../rooms/room.manager');
 const SocketSession = require('../sessions/SocketSession');
+const redisClient = require('../../config/redis');
 const env = require('../../config/environment');
 const { parseBrowser, parsePlatform, getDeviceType } = require('../../common/utils/userAgent.helper');
 
@@ -92,6 +93,9 @@ class SocketGateway {
               { socketId },
               { $set: { lastHeartbeat: new Date() } }
             );
+            if (redisClient && redisClient.isOpen && redisClient.isReady) {
+              await redisClient.expire(`presence:status:${userId}`, 300);
+            }
           } catch (err) {
             logger.error(`Socket heartbeat update failed: ${err.message}`);
           }

@@ -3,6 +3,8 @@ import { Phone, Video, Info, Loader2, ArrowDown, BadgeCheck, ArrowLeft, MessageC
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
 import TypingIndicator from './TypingIndicator';
+import Avatar from '../../../components/ui/Avatar';
+import { formatLastSeen, getGroupDateString } from '../../../utils/date';
 
 // Custom Intersection Observer Hook for Virtualization
 const useIntersectionObserver = ({ root = null, rootMargin = '0px', threshold = 0 } = {}) => {
@@ -137,26 +139,6 @@ const ChatWindow = ({
     }
   };
 
-  // Helper for date formatting (Requirement 14)
-  const getGroupDateString = (dateString) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString(undefined, { 
-        day: 'numeric',
-        month: 'long', 
-        year: 'numeric' 
-      });
-    }
-  };
-
   // Spacing & Avatars processing (Requirement 5, 6, 14)
   const getSenderIdStr = (m) => {
     if (!m) return '';
@@ -232,16 +214,12 @@ const ChatWindow = ({
             </button>
           )}
 
-          <div className="relative flex-shrink-0">
-            <img
-              src={otherImage || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"}
-              alt={otherName}
-              className="w-11 h-11 rounded-2xl object-cover ring-2 ring-white shadow"
-            />
-            {otherParticipant?.isOnline && (
-              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" />
-            )}
-          </div>
+          <Avatar
+            src={otherImage}
+            name={otherName}
+            size="lg"
+            isOnline={otherParticipant?.isOnline}
+          />
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -249,8 +227,10 @@ const ChatWindow = ({
               {!conversation.isGroup && <BadgeCheck className="w-4 h-4 text-blue-500 fill-blue-500" />}
             </div>
             <p className="text-xs text-slate-500 truncate">
-              {otherParticipant?.designation ? `${otherParticipant.designation} • ` : ''}
-              {otherParticipant?.institution || (otherParticipant?.isOnline ? 'Online now' : 'Offline')}
+              {otherParticipant?.isOnline ? 'Online now' : formatLastSeen(otherParticipant?.lastSeen)}
+              {(otherParticipant?.designation || otherParticipant?.institution) && (
+                ` • ${otherParticipant?.designation || 'Researcher'}${otherParticipant?.institution ? ` at ${otherParticipant.institution}` : ''}`
+              )}
             </p>
           </div>
         </div>

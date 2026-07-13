@@ -5,6 +5,7 @@ import { Check, CheckCheck, Edit2, Trash2, Reply, Copy, FileText, ExternalLink, 
 import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import messagesService from '../services/messages.service';
+import Avatar from '../../../components/ui/Avatar';
 
 const EMOJIS = ['👍', '❤️', '👏', '💡', '😮', '❓'];
 
@@ -75,10 +76,10 @@ const MessageBubble = memo(({ message, onReply, onEditInit, otherParticipant, sh
         {!isSender && (
           <div className="w-8 h-8 flex-shrink-0 mb-1">
             {showAvatar ? (
-              <img
-                src={avatarUrl}
-                alt={senderName}
-                className="w-8 h-8 rounded-full object-cover shadow-sm ring-1 ring-slate-100"
+              <Avatar
+                src={otherParticipant?.profileImage}
+                name={senderName}
+                size="sm"
               />
             ) : (
               <div className="w-8 h-8" />

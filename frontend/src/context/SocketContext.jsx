@@ -124,8 +124,53 @@ export const SocketProvider = ({ children }) => {
 
     // Listen for user presence changes
     newSocket.on('presence:update', ({ userId, status, lastSeen }) => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.setQueryData(['conversations'], (old) => {
+        if (!old) return old;
+        return old.map(c => {
+          if (c.otherParticipant && (c.otherParticipant._id === userId || c.otherParticipant._id?.toString() === userId?.toString())) {
+            return {
+              ...c,
+              otherParticipant: {
+                ...c.otherParticipant,
+                isOnline: status === 'online',
+                lastSeen: lastSeen || c.otherParticipant.lastSeen
+              }
+            };
+          }
+          return c;
+        });
+      });
       window.dispatchEvent(new CustomEvent('presence:update', { detail: { userId, status, lastSeen } }));
+    });
+
+    // Listen for avatar / profile updates
+    newSocket.on('avatar:update', ({ userId, profileImage }) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['profile', userId] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      queryClient.invalidateQueries({ queryKey: ['followers'] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
+    });
+
+    newSocket.on('profile:update', ({ userId, profileImage, fullName }) => {
+      queryClient.setQueryData(['conversations'], (old) => {
+        if (!old) return old;
+        return old.map(c => {
+          if (c.otherParticipant && (c.otherParticipant._id === userId || c.otherParticipant._id?.toString() === userId?.toString())) {
+            return {
+              ...c,
+              otherParticipant: {
+                ...c.otherParticipant,
+                profileImage: profileImage || c.otherParticipant.profileImage,
+                fullName: fullName || c.otherParticipant.fullName
+              }
+            };
+          }
+          return c;
+        });
+      });
+      queryClient.invalidateQueries({ queryKey: ['profile', userId] });
     });
 
     // Listen for conversation sidebar lists updates
