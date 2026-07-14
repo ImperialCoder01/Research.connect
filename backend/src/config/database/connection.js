@@ -11,6 +11,7 @@ if (!MONGO_URI) {
 }
 
 const options = {
+  dbName: 'research_connect',
   maxPoolSize: parseInt(process.env.MONGO_MAX_POOL_SIZE, 10) || 100,
   minPoolSize: parseInt(process.env.MONGO_MIN_POOL_SIZE, 10) || 10,
   socketTimeoutMS: 45000,
