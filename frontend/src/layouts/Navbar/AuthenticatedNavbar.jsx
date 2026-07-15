@@ -16,6 +16,7 @@ import {
   Share2, Users, Bookmark, Menu
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import UserAvatar from '../../components/ui/Avatar';
 
 const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
   const navigate = useNavigate();
@@ -32,6 +33,10 @@ const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
     },
     enabled: !!user
   });
+
+  // Same source HomeFeed's "Welcome back, {name}" uses: state.auth.user
+  // firstName/lastName. user.fullName is a separate, stale field — don't use it.
+  const displayName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim();
 
   const acceptRequestMutation = useMutation({
     mutationFn: async (requestId) => {
@@ -435,14 +440,14 @@ const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
                 onClick={() => setProfileOpen(!profileOpen)}
                 className="flex items-center gap-0.5 sm:gap-1.5 p-0.5 sm:p-1 pr-1 sm:pr-2.5 rounded-full border border-slate-200 hover:border-blue-600 hover:bg-slate-50 focus:outline-none transition-all shadow-sm duration-200 group"
               >
-                <img
-                  src={profile?.profileImage || user?.profileImage || "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"}
-                  alt="Avatar"
-                  onError={(e) => { e.target.src = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"; }}
-                  className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover ring-2 ring-transparent group-hover:ring-blue-100 transition-all shrink-0"
+                <UserAvatar
+                  user={user}
+                  src={profile?.profileImage}
+                  size="sm"
+                  className="ring-2 ring-transparent group-hover:ring-blue-100 transition-all shrink-0"
                 />
                 <span className="hidden lg:block text-xs font-bold text-slate-700 group-hover:text-blue-600 max-w-[90px] truncate transition-colors duration-150">
-                  {user?.fullName?.split(' ')[0] || user?.firstName || ''}
+                  {displayName.split(' ')[0] || ''}
                 </span>
                 <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500 group-hover:text-blue-600 transition-colors duration-150 shrink-0" />
               </button>
@@ -450,7 +455,7 @@ const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
               {profileOpen && (
                 <div className="absolute right-0 mt-2 w-64 max-w-[90vw] bg-white border border-slate-200 rounded-xl shadow-lg py-2 z-50 text-left text-sm font-semibold text-slate-700">
                   <div className="px-4 py-2 border-b border-slate-150">
-                    <p className="font-extrabold text-slate-900 truncate">{user?.fullName || 'Researcher'}</p>
+                    <p className="font-extrabold text-slate-900 truncate">{displayName || 'Researcher'}</p>
                     <p className="text-xs text-slate-400 truncate mt-0.5">{user?.email}</p>
                   </div>
                   <div className="py-1 grid grid-cols-1 gap-0.5">
