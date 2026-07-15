@@ -110,6 +110,12 @@ class MessageRepository extends BaseRepository {
       const isArchived = Array.isArray(conv.isArchived) && conv.isArchived.map(id => id.toString()).includes(userIdStr);
       const isMuted = Array.isArray(conv.isMuted) && conv.isMuted.map(id => id.toString()).includes(userIdStr);
 
+      // Normalize profileImage in participants array as well since frontend uses it directly
+      const normalizedParticipants = conv.participants ? conv.participants.map(p => ({
+        ...p,
+        profileImage: p.profileImage?.url || p.profileImage || ''
+      })) : [];
+
       // Map lastMessageId to lastMessage for backward compatibility
       const legacyLastMessage = conv.lastMessageId ? {
         ...conv.lastMessageId,
@@ -118,6 +124,7 @@ class MessageRepository extends BaseRepository {
 
       return {
         ...conv,
+        participants: normalizedParticipants,
         lastMessage: legacyLastMessage,
         otherParticipant: detailedParticipant,
         unreadCount,
@@ -171,8 +178,18 @@ class MessageRepository extends BaseRepository {
       );
       // Map attachmentId to attachment if attachment is missing
       const resolvedAttachment = m.attachment || m.attachmentId;
+      // Normalize sender profileImage
+      let normalizedSenderId = m.senderId;
+      if (normalizedSenderId && normalizedSenderId.profileImage) {
+        normalizedSenderId = {
+          ...normalizedSenderId,
+          profileImage: normalizedSenderId.profileImage.url || normalizedSenderId.profileImage || ''
+        };
+      }
+
       return {
         ...m,
+        senderId: normalizedSenderId,
         attachment: resolvedAttachment,
         reactions: msgReactions
       };
@@ -206,6 +223,20 @@ class MessageRepository extends BaseRepository {
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();
+
+    return results.map(m => {
+      let normalizedSenderId = m.senderId;
+      if (normalizedSenderId && normalizedSenderId.profileImage) {
+        normalizedSenderId = {
+          ...normalizedSenderId,
+          profileImage: normalizedSenderId.profileImage.url || normalizedSenderId.profileImage || ''
+        };
+      }
+      return {
+        ...m,
+        senderId: normalizedSenderId
+      };
+    });
   }
 
   /**
@@ -224,6 +255,20 @@ class MessageRepository extends BaseRepository {
       .populate('senderId', 'firstName lastName profileImage profileSlug slug username')
       .sort({ createdAt: -1 })
       .lean();
+
+    return results.map(m => {
+      let normalizedSenderId = m.senderId;
+      if (normalizedSenderId && normalizedSenderId.profileImage) {
+        normalizedSenderId = {
+          ...normalizedSenderId,
+          profileImage: normalizedSenderId.profileImage.url || normalizedSenderId.profileImage || ''
+        };
+      }
+      return {
+        ...m,
+        senderId: normalizedSenderId
+      };
+    });
   }
 }
 

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMessaging } from '../../context/MessagingContext';
-import { messagingApi } from '../../services/messagingApi';
+import profileService from '../../services/profile.service';
 import feedService from '../../services/feed.service';
 import { ResearcherSkeleton } from './Skeletons';
 import { useCountUp } from '../../hooks/useCountUp';
 import { Beaker, Cloud, Globe } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import Avatar from '../ui/Avatar';
 
 function IconByName({ name, className, style }) {
   if (name === 'beaker') return <Beaker size={16} className={className} style={style} />;
@@ -21,7 +22,7 @@ export default function ResearcherInfoPanel() {
   const [isLoading, setIsLoading] = useState(false);
 
   const otherParticipant = getOtherParticipant(activeConversationId);
-  const userId = otherParticipant?.profileSlug || otherParticipant?.backendId || otherParticipant?.id;
+  const userId = otherParticipant?.profileSlug || otherParticipant?.backendId || otherParticipant?._id;
 
   useEffect(() => {
     if (!userId) {
@@ -32,12 +33,15 @@ export default function ResearcherInfoPanel() {
     let isMounted = true;
     setIsLoading(true);
 
-    messagingApi.getUserProfile(userId)
-      .then(data => {
-        if (isMounted) setProfile(data);
+    profileService.getPublicProfile(userId)
+      .then(res => {
+        if (isMounted) setProfile(res.data || res);
       })
       .catch(err => {
-        if (isMounted) toast.error("Failed to load profile");
+        if (isMounted) {
+          // toast.error("Failed to load profile"); // Silent fail or log
+          console.error("Failed to load profile:", err);
+        }
       })
       .finally(() => {
         if (isMounted) setIsLoading(false);
@@ -46,8 +50,8 @@ export default function ResearcherInfoPanel() {
     return () => { isMounted = false; };
   }, [userId]);
 
-  const citations = useCountUp(profile?.citationsCount, 1500);
-  const hIndex = useCountUp(profile?.hIndex, 1000);
+  const citations = useCountUp(profile?.metrics?.citationsCount || profile?.metrics?.totalCitations || 0, 1500);
+  const hIndex = useCountUp(profile?.metrics?.hIndex || 0, 1000);
 
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
@@ -92,11 +96,13 @@ export default function ResearcherInfoPanel() {
         <>
           {/* Profile Top */}
           <div className="p-6 flex flex-col items-center text-center border-b border-[#E2E8F0] group">
-            <div
-              className="profile-avatar w-24 h-24 rounded-full overflow-hidden border-2 shadow-lg mb-4 cursor-pointer anim-breathe group-hover:border-[#2563EB] transition-colors duration-300"
-              style={{ borderColor: '#BFDBFE' }}
-            >
-              <img src={profile.avatarUrlLg || profile.avatarUrl} alt={profile.fullName} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+            <div className="profile-avatar-wrapper mb-4 cursor-pointer anim-breathe group hover:scale-105 transition-transform duration-300">
+              <Avatar
+                src={profile.profileImage || profile.avatarUrlLg || profile.avatarUrl}
+                name={profile.fullName}
+                size="3xl"
+                showBorder
+              />
             </div>
             <h2 className="font-bold text-lg text-[#0F172A] group-hover:text-[#2563EB] transition-colors">{profile.fullName}</h2>
             <p className="text-sm text-[#475569] mt-0.5">
@@ -126,6 +132,41 @@ export default function ResearcherInfoPanel() {
 
           {/* Body sections */}
           <div className="p-6 space-y-7">
+            {/* About Section */}
+            {(profile.bio || profile.about) && (
+              <div className="anim-fade-up" style={{ animationDelay: '100ms' }}>
+                <h4 className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-widest mb-3">
+                  About
+                </h4>
+                <p className="text-xs text-[#475569] leading-relaxed">
+                  {profile.bio || profile.about}
+                </p>
+              </div>
+            )}
+
+            {/* Research Areas */}
+            {profile.skills?.length > 0 && (
+              <div className="anim-fade-up" style={{ animationDelay: '150ms' }}>
+                <h4 className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-widest mb-3">
+                  Research Areas
+                </h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.skills.map((skill, idx) => {
+                    const tag = typeof skill === 'string' ? skill : skill.name;
+                    if (!tag) return null;
+                    return (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1.5 bg-blue-50/60 text-[#2563EB] rounded-lg text-[10px] font-bold"
+                      >
+                        {tag}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Research Impact */}
             <div className="anim-fade-up" style={{ animationDelay: '200ms' }}>
               <h4 className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-widest mb-3">

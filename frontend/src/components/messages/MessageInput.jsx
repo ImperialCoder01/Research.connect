@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Paperclip, PlusCircle, Smile, Send, X, Image, Cloud } from 'lucide-react';
 import { useMessaging } from '../../context/MessagingContext';
-import { messagingApi } from '../../services/messagingApi';
+import messagesService from '../../modules/messaging/services/messages.service';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -39,7 +39,9 @@ export default function MessageInput() {
   const handleSend = () => {
     const trimmed = inputVal.trim();
     if (!trimmed && attachments.length === 0) return;
-    if (isUploading) { toast.error('Please wait for uploads to finish'); return; }
+    // For the real backend, we must pass `attachmentId` in the sendMessage payload, 
+    // but the legacy MessagingContext's sendMessage takes (convId, content, attachmentsArray) 
+    // where it maps attachments[0] to attachment. So we can just pass the populated attachment object.
     sendMessage(activeConversationId, trimmed, attachments);
     setInputVal('');
     setAttachments([]);
@@ -64,8 +66,18 @@ export default function MessageInput() {
     setIsUploading(true);
     setUploadProgress(0);
     try {
-      const att = await messagingApi.uploadFile(file, (p) => setUploadProgress(p));
-      setAttachments(prev => [...prev, att]);
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await messagesService.uploadAttachment(formData);
+      if (res.success) {
+        // Mock progress for now since axios upload is quick
+        setUploadProgress(100);
+        // We pass the returned attachment object to state
+        setAttachments(prev => [...prev, res.data]);
+      } else {
+        throw new Error('Upload failed');
+      }
     } catch {
       toast.error(`Failed to upload ${file.name}`);
     } finally {
@@ -74,7 +86,7 @@ export default function MessageInput() {
     }
   };
 
-  const removeAttachment = (id) => setAttachments(prev => prev.filter(a => a.id !== id));
+  const removeAttachment = (id) => setAttachments(prev => prev.filter(a => (a._id || a.id) !== id));
 
   const canSend = (inputVal.trim() || attachments.length > 0) && !isUploading;
 
@@ -115,19 +127,24 @@ export default function MessageInput() {
         <AnimatePresence>
           {attachments.map((att, idx) => (
             <motion.div
-              key={att.id}
+              key={att._id || att.id || idx}
               initial={{ opacity: 0, scale: 0.8, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
               transition={{ type: "spring", stiffness: 300, damping: 20, delay: idx * 0.05 }}
-              className="flex items-center gap-1.5 bg-[#EEF2FF] border border-[#C7D2FE] px-3 py-1.5 rounded-full text-xs font-semibold text-[#4F46E5]"
+              className="flex items-center gap-1.5 bg-[#EEF2FF] border border-[#C7D2FE] pl-1 pr-2 py-1 rounded-full text-xs font-semibold text-[#4F46E5]"
             >
-              <span className="truncate max-w-[150px]">{att.fileName}</span>
+              {att.secure_url && (att.resource_type === 'image' || (att.format && ['jpg','jpeg','png','gif','webp'].includes(att.format))) ? (
+                <img src={att.secure_url} alt="preview" className="w-5 h-5 rounded-full object-cover" />
+              ) : (
+                <span className="pl-2"></span>
+              )}
+              <span className="truncate max-w-[150px]">{att.filename || att.original_filename || att.fileName || 'Attachment'}</span>
               <motion.button
                 whileHover={{ scale: 1.2 }}
                 whileTap={{ scale: 0.9 }}
-                onClick={() => removeAttachment(att.id)}
-                className="p-0.5 hover:bg-[#C7D2FE] rounded-full transition-colors text-[#6366F1] hover:text-[#0F172A]"
+                onClick={() => removeAttachment(att._id || att.id)}
+                className="p-0.5 ml-1 hover:bg-[#C7D2FE] rounded-full transition-colors text-[#6366F1] hover:text-[#0F172A]"
               >
                 <X size={11} />
               </motion.button>

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
-import { messagingApi } from '../services/messagingApi';
+import messagesService from '../modules/messaging/services/messages.service';
 import { eventBus } from '../services/eventBus';
 import { toast } from 'react-hot-toast';
 import { useAuth } from './AuthContext';
@@ -33,8 +33,11 @@ export function MessagingProvider({ children }) {
   const loadConversations = useCallback(async () => {
     setIsLoadingConversations(true);
     try {
-      const convs = await messagingApi.getConversations();
-      setConversations(convs);
+      const res = await messagesService.getConversations();
+      // res is { success, message, data, error } because of our interceptor, wait...
+      // the axios interceptor returns response.data directly.
+      // So res = { success: true, data: [...] }
+      setConversations(res.data || []);
     } catch {
       toast.error('Failed to load conversations');
     } finally {
@@ -48,21 +51,22 @@ export function MessagingProvider({ children }) {
   }, [loadConversations]);
 
   const createConversation = useCallback(async (participantId) => {
-    const conversation = await messagingApi.createConversation(participantId);
+    const res = await messagesService.createConversation(participantId);
+    const conversation = res.data;
     setConversations((prev) => [
       conversation,
-      ...prev.filter((item) => item.id !== conversation.id),
+      ...prev.filter((item) => item._id !== conversation._id),
     ]);
-    setActiveConversationId(conversation.id);
+    setActiveConversationId(conversation._id);
     setMessages((prev) => {
       const next = new Map(prev);
-      if (!next.has(conversation.id)) next.set(conversation.id, []);
+      if (!next.has(conversation._id)) next.set(conversation._id, []);
       return next;
     });
     setMessagesMeta((prev) => {
       const next = new Map(prev);
-      if (!next.has(conversation.id)) {
-        next.set(conversation.id, { page: 0, hasMore: false, isLoadingMore: false, isLoading: false });
+      if (!next.has(conversation._id)) {
+        next.set(conversation._id, { cursor: null, hasMore: false, isLoadingMore: false, isLoading: false });
       }
       return next;
     });
@@ -77,19 +81,20 @@ export function MessagingProvider({ children }) {
 
     // Unread count zero (0) kar do
     setConversations((prev) =>
-      prev.map((c) => (c.id === convId ? { ...c, unreadCount: 0 } : c))
+      prev.map((c) => (c._id === convId ? { ...c, unreadCount: 0 } : c))
     );
-    messagingApi.markConversationRead?.(convId).catch(() => { });
+    messagesService.markAsRead(convId).catch(() => { });
 
     // Agar pehle se load nahi hain toh messages laao
     if (!messages.has(convId)) {
       setMessagesMeta((prev) => {
         const next = new Map(prev);
-        next.set(convId, { page: 0, hasMore: false, isLoadingMore: false, isLoading: true });
+        next.set(convId, { cursor: null, hasMore: false, isLoadingMore: false, isLoading: true });
         return next;
       });
       try {
-        const { messages: msgs, hasMore } = await messagingApi.getMessages(convId, 0);
+        const res = await messagesService.getMessages(convId, { limit: 20 });
+        const { docs: msgs, hasNextPage, nextCursor } = res.data;
         setMessages((prev) => {
           const next = new Map(prev);
           next.set(convId, [...msgs]); // chronological order from backend
@@ -97,14 +102,14 @@ export function MessagingProvider({ children }) {
         });
         setMessagesMeta((prev) => {
           const next = new Map(prev);
-          next.set(convId, { page: 0, hasMore, isLoadingMore: false, isLoading: false });
+          next.set(convId, { cursor: nextCursor, hasMore: hasNextPage, isLoadingMore: false, isLoading: false });
           return next;
         });
       } catch {
         toast.error('Failed to load messages');
         setMessagesMeta((prev) => {
           const next = new Map(prev);
-          next.set(convId, { page: 0, hasMore: false, isLoadingMore: false, isLoading: false });
+          next.set(convId, { cursor: null, hasMore: false, isLoadingMore: false, isLoading: false });
           return next;
         });
       }
@@ -116,7 +121,6 @@ export function MessagingProvider({ children }) {
     const meta = messagesMeta.get(convId);
     if (!meta || !meta.hasMore || meta.isLoadingMore) return;
 
-    const nextPage = meta.page + 1;
     setMessagesMeta((prev) => {
       const next = new Map(prev);
       next.set(convId, { ...meta, isLoadingMore: true });
@@ -124,7 +128,8 @@ export function MessagingProvider({ children }) {
     });
 
     try {
-      const { messages: olderMsgs, hasMore } = await messagingApi.getMessages(convId, nextPage);
+      const res = await messagesService.getMessages(convId, { limit: 20, cursor: meta.cursor });
+      const { docs: olderMsgs, hasNextPage, nextCursor } = res.data;
       setMessages((prev) => {
         const next = new Map(prev);
         next.set(convId, [...olderMsgs, ...(prev.get(convId) || [])]);
@@ -132,7 +137,7 @@ export function MessagingProvider({ children }) {
       });
       setMessagesMeta((prev) => {
         const next = new Map(prev);
-        next.set(convId, { page: nextPage, hasMore, isLoadingMore: false, isLoading: false });
+        next.set(convId, { cursor: nextCursor, hasMore: hasNextPage, isLoadingMore: false, isLoading: false });
         return next;
       });
     } catch {
@@ -149,16 +154,16 @@ export function MessagingProvider({ children }) {
   const sendMessage = useCallback(async (convId, content, attachments = []) => {
     const tempId = `temp-${Date.now()}`;
     const tempMsg = {
-      id: tempId,
+      _id: tempId,
       tempId,
-      content,
-      messageType: 'text',
+      text: content,
+      type: 'text',
       senderId: currentUserId,
       senderName: currentUserName,
       senderAvatarUrl: currentUserAvatar,
       createdAt: new Date().toISOString(),
       readAt: null,
-      attachments,
+      attachment: attachments[0] || null,
       pending: true,
     };
 
@@ -170,7 +175,16 @@ export function MessagingProvider({ children }) {
     });
 
     try {
-      const realMsg = await messagingApi.sendMessage(convId, content, attachments);
+      const payload = {
+        conversationId: convId,
+        text: content
+      };
+      if (attachments?.[0]?._id) {
+        payload.attachmentId = attachments[0]._id;
+      }
+
+      const res = await messagesService.sendMessage(payload);
+      const realMsg = res.data;
 
       // 2. Server se confirm hone pe purana temp message asli wale se badal do
       setMessages((prev) => {
@@ -185,24 +199,26 @@ export function MessagingProvider({ children }) {
       // 3. Bahar chat list me aakhri message update karke list ko sort kar do
       setConversations((prev) =>
         [...prev.map((c) => {
-          if (c.id !== convId) return c;
+          if (c._id !== convId) return c;
           return {
             ...c,
             lastMessage: {
-              content: realMsg.content,
-              timestamp: realMsg.createdAt,
-              senderName: 'You',
+              text: realMsg.text,
+              type: realMsg.type,
+              createdAt: realMsg.createdAt,
+              senderId: realMsg.senderId,
             },
+            lastMessageAt: realMsg.createdAt,
             unreadCount: 0,
           };
         })].sort(
           (a, b) =>
-            new Date(b.lastMessage?.timestamp || 0) - new Date(a.lastMessage?.timestamp || 0)
+            new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
         )
       );
 
       // 4. SocketContext ko batao ki auto-reply (bot wala message) shuru kare
-      eventBus.emit('message:sent', { messageId: realMsg.id, convId });
+      eventBus.emit('message:sent', { messageId: realMsg._id, convId });
     } catch (err) {
       // Send fail hone par temp message hata do
       setMessages((prev) => {
@@ -212,8 +228,8 @@ export function MessagingProvider({ children }) {
       });
 
       toast.error('Message failed to send. Retry?', {
-        retry: () => sendMessage(convId, content, attachments),
-        persist: true,
+        id: tempId,
+        duration: 4000
       });
     }
   }, []);
@@ -227,20 +243,22 @@ export function MessagingProvider({ children }) {
     });
     setConversations((prev) =>
       [...prev.map((c) => {
-        if (c.id !== convId) return c;
+        if (c._id !== convId) return c;
         const isActive = convId === activeConvIdRef.current;
         return {
           ...c,
           lastMessage: {
-            content: message.content,
-            timestamp: message.createdAt,
-            senderName: message.senderName,
+            text: message.text,
+            type: message.type,
+            createdAt: message.createdAt,
+            senderId: message.senderId,
           },
+          lastMessageAt: message.createdAt,
           unreadCount: isActive ? 0 : c.unreadCount + 1,
         };
       })].sort(
         (a, b) =>
-          new Date(b.lastMessage?.timestamp || 0) - new Date(a.lastMessage?.timestamp || 0)
+          new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
       )
     );
   }, []);
@@ -252,7 +270,7 @@ export function MessagingProvider({ children }) {
       next.set(
         convId,
         (prev.get(convId) || []).map((m) =>
-          m.id === messageId ? { ...m, readAt } : m
+          m._id === messageId ? { ...m, status: 'seen' } : m
         )
       );
       return next;
@@ -299,18 +317,18 @@ export function MessagingProvider({ children }) {
       return next;
     });
     setConversations((prev) =>
-      prev.map((c) => ({
-        ...c,
-        participants: c.participants.map((p) =>
-          p.id === userId ? { ...p, isOnline } : p
-        ),
-      }))
+      prev.map((c) => {
+        if (c.otherParticipant && c.otherParticipant._id === userId) {
+           return { ...c, otherParticipant: { ...c.otherParticipant, isOnline } };
+        }
+        return c;
+      })
     );
   }, []);
 
   // ── Chat delete karo (Sirf local state se) ─────────────────────────────────────
   const deleteConversation = useCallback((convId) => {
-    setConversations((prev) => prev.filter((c) => c.id !== convId));
+    setConversations((prev) => prev.filter((c) => c._id !== convId));
     setMessages((prev) => {
       const next = new Map(prev);
       next.delete(convId);
@@ -333,13 +351,13 @@ export function MessagingProvider({ children }) {
 
   // ── Derived helpers ───────────────────────────────────────────────────────
   const activeConversation =
-    conversations.find((c) => c.id === activeConversationId) ?? null;
+    conversations.find((c) => c._id === activeConversationId) ?? null;
 
   const getOtherParticipant = useCallback(
     (convId) => {
-      const conv = conversations.find((c) => c.id === convId);
+      const conv = conversations.find((c) => c._id === convId);
       if (!conv) return null;
-      return conv.participants.find((p) => p.id !== currentUserId) ?? null;
+      return conv.otherParticipant ?? null;
     },
     [conversations]
   );

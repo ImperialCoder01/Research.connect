@@ -32,10 +32,10 @@ export default function ChatHeader() {
 
   if (!activeConversation) return null;
 
-  const otherParticipant = getOtherParticipant(activeConversation.id);
-  const typingUserIds = Array.from(typingUsers.get(activeConversation.id) || []);
+  const otherParticipant = getOtherParticipant(activeConversation._id);
+  const typingUserIds = Array.from(typingUsers.get(activeConversation._id) || []);
   const isTyping = typingUserIds.some(id => id !== 'user-me' && id !== currentUserId);
-  const isBlocked = otherParticipant ? blockedUsers.has(otherParticipant.id) : false;
+  const isBlocked = otherParticipant ? blockedUsers.has(otherParticipant._id) : false;
 
   let title = '', avatarUrl = '', statusText = '', showOnlineDot = false;
 
@@ -44,9 +44,9 @@ export default function ChatHeader() {
     avatarUrl = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=64&h=64&fit=crop&q=80';
     statusText = isTyping ? 'Someone is typing…' : `${activeConversation.participants.length} members`;
   } else if (otherParticipant) {
-    title = otherParticipant.fullName;
-    avatarUrl = otherParticipant.avatarUrl;
-    const isOnline = onlineUsers.has(otherParticipant.id);
+    title = otherParticipant.fullName || `${otherParticipant.firstName} ${otherParticipant.lastName}`.trim() || 'Unknown';
+    avatarUrl = otherParticipant.avatarUrl || otherParticipant.profileImage;
+    const isOnline = onlineUsers.has(otherParticipant._id);
     if (isTyping) {
       statusText = 'Typing…';
     } else if (isOnline) {
@@ -99,7 +99,7 @@ export default function ChatHeader() {
           {/* Avatar */}
           <div
             className="relative flex-shrink-0 group cursor-pointer"
-            onClick={() => !activeConversation.isGroup && otherParticipant && navigate(`/profile/${otherParticipant.username || otherParticipant.id}`)}
+            onClick={() => !activeConversation.isGroup && otherParticipant && navigate(`/profile/${otherParticipant.username || otherParticipant._id}`)}
           >
             <div className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-[#DBEAFE] shadow-sm group-hover:ring-[#2563EB] transition-colors duration-300">
               {avatarUrl && <img src={avatarUrl} alt={title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />}
@@ -148,7 +148,7 @@ export default function ChatHeader() {
             ) : (
               <div
                 className="cursor-pointer group"
-                onClick={() => !activeConversation.isGroup && otherParticipant && navigate(`/profile/${otherParticipant.username || otherParticipant.id}`)}
+                onClick={() => !activeConversation.isGroup && otherParticipant && navigate(`/profile/${otherParticipant.username || otherParticipant._id}`)}
               >
                 <h3 className="text-sm font-bold text-[#0F172A] leading-tight group-hover:text-[#2563EB] transition-colors duration-300">{title}</h3>
                 <p className={`text-xs font-medium flex items-center gap-1.5 mt-0.5
@@ -204,7 +204,7 @@ export default function ChatHeader() {
                 <button
                   onClick={() => {
                     setIsMenuOpen(false);
-                    if (otherParticipant?.id) navigate(`/profile/user/${otherParticipant.id}`);
+                    if (otherParticipant?._id) navigate(`/profile/user/${otherParticipant._id}`);
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-[#F8FAFC] flex items-center gap-3 transition-colors"
                 >
@@ -235,7 +235,7 @@ export default function ChatHeader() {
                   onClick={() => {
                     setIsMenuOpen(false);
                     if (otherParticipant) {
-                      toggleBlockUser(otherParticipant.id);
+                      toggleBlockUser(otherParticipant._id);
                       toast.success(isBlocked ? 'User unblocked' : 'User blocked');
                     }
                   }}
@@ -248,7 +248,7 @@ export default function ChatHeader() {
                 <button
                   onClick={() => {
                     setIsMenuOpen(false);
-                    deleteConversation(activeConversation.id);
+                    deleteConversation(activeConversation._id);
                     toast.success('Chat deleted');
                   }}
                   className="w-full px-4 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"

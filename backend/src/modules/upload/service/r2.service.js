@@ -80,7 +80,7 @@ const getAccessUrl = async (key, purpose) => {
     return `${serverUrl}/uploads/${key}`;
   }
 
-  const publicPurposes = ['profile-avatar', 'profile-banner', 'publication-cover', 'project-image', 'institution-logo', 'book-cover'];
+  const publicPurposes = ['profile-avatar', 'profile-banner', 'publication-cover', 'project-image', 'institution-logo', 'book-cover', 'message-attachment'];
 
   if (publicPurposes.includes(purpose)) {
     if (env.r2.publicUrl) {

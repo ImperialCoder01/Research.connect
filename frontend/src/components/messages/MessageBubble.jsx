@@ -1,10 +1,15 @@
 import { useMessaging } from '../../context/MessagingContext';
 import { CURRENT_USER, formatMsgTime } from '../../data/mockData';
 import FileAttachmentCard from './FileAttachmentCard';
+import Avatar from '../ui/Avatar';
 
 export default function MessageBubble({ message, animDelay = 0 }) {
   const { activeConversationId, currentUserId } = useMessaging();
-  const isMine = message.senderId === currentUserId || message.senderId === CURRENT_USER.id;
+  const isMine = 
+    message.senderId === currentUserId || 
+    message.senderId?._id === currentUserId ||
+    message.senderId === CURRENT_USER.id ||
+    message.senderId?._id === CURRENT_USER.id;
   const time = formatMsgTime(message.createdAt);
 
   return (
@@ -14,34 +19,46 @@ export default function MessageBubble({ message, animDelay = 0 }) {
     >
       {/* Dusre user ki DP (Avatar) */}
       {!isMine && (
-        <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[#E2E8F0] shadow-sm">
-          <img src={message.senderAvatarUrl} alt={message.senderName} className="w-full h-full object-cover" />
-        </div>
+        <Avatar
+          user={message.senderId}
+          src={message.senderAvatarUrl || message.senderId?.profileImage}
+          name={message.senderName || message.senderId?.fullName || message.senderId?.firstName}
+          size="sm"
+          className="shadow-sm"
+        />
       )}
 
       <div className={isMine ? 'flex flex-col items-end gap-1 min-w-0 max-w-full' : 'min-w-0 max-w-full'}>
         {/* Message ka dabba (Bubble) */}
         <div
-          className={`px-4 pt-3.5 pb-3 shadow-sm transition-all duration-250 max-w-full
+          className={`px-3 py-2 shadow-[0_1px_1px_rgba(0,0,0,0.1)] max-w-full relative
             ${isMine
-              ? 'bubble-outbound bubble-outbound-bg text-white'
-              : 'bubble-inbound bg-white border border-[#E8EDF5] text-[#0F172A] hover:border-[#C7D2FE]'
+              ? 'bg-[#2563EB] text-white rounded-2xl rounded-tr-none'
+              : 'bg-white border border-[#E8EDF5] text-[#111b21] rounded-2xl rounded-tl-none'
             }`}
         >
-          {message.content && (
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+          {(message.content || message.text || message.message) && (
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content || message.text || message.message}</p>
           )}
 
-          {message.attachments?.length > 0 && (
+          {(message.attachments?.length > 0 || message.attachment || message.attachmentId) && (
             <div className="mt-3 space-y-2 min-w-0 max-w-full">
-              {message.attachments.map((a) => (
-                <FileAttachmentCard key={a.id} attachment={a} />
+              {(message.attachment || message.attachmentId) && (
+                <FileAttachmentCard 
+                  key={(message.attachment || message.attachmentId)._id || (message.attachment || message.attachmentId).id || 'att'} 
+                  attachment={message.attachment || message.attachmentId} 
+                />
+              )}
+              {message.attachments?.map((a) => (
+                <FileAttachmentCard key={a._id || a.id} attachment={a} />
               ))}
             </div>
           )}
 
           {!isMine && (
-            <span className="text-[10px] text-[#94A3B8] mt-2 block">{time}</span>
+            <div className="flex justify-end mt-1">
+              <span className="text-[10px] text-[#667781] leading-none">{time}</span>
+            </div>
           )}
         </div>
 
@@ -52,9 +69,9 @@ export default function MessageBubble({ message, animDelay = 0 }) {
               <span className="text-[10px] text-[#94A3B8] italic anim-gentle-pulse">Sending…</span>
             ) : (
               <>
-                <span className="text-[10px] text-[#94A3B8]">{time}</span>
+                <span className="text-[10px] text-[#94A3B8] leading-none">{time}</span>
                 {message.readAt && (
-                  <span className="text-[10px] text-[#4F46E5] font-semibold anim-read-text">· Read</span>
+                  <span className="text-[10px] text-[#2563EB] font-bold leading-none ml-1">✓✓</span>
                 )}
               </>
             )}

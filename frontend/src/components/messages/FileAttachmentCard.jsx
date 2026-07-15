@@ -23,26 +23,25 @@ const FILE_CONFIG = {
 };
 
 function getConfig(fileType) {
-  if (fileType === 'application/pdf') return FILE_CONFIG['application/pdf'];
-  if (fileType?.includes('spreadsheet') || fileType?.includes('excel') || fileType?.includes('csv'))
+  const normalizedType = fileType?.toLowerCase() || '';
+  if (normalizedType === 'application/pdf' || normalizedType === 'pdf') return FILE_CONFIG['application/pdf'];
+  if (normalizedType.includes('spreadsheet') || normalizedType.includes('excel') || normalizedType.includes('csv'))
     return FILE_CONFIG['default_sheet'];
-  if (fileType === 'application/zip') return FILE_CONFIG['application/zip'];
+  if (normalizedType === 'application/zip' || normalizedType === 'zip') return FILE_CONFIG['application/zip'];
   return { bg: '#F1F5F9', Icon: File, iconColor: '#475569', label: 'File' };
 }
 
 export default function FileAttachmentCard({ attachment }) {
-  const { fileName, fileSizeBytes, fileType, cdnUrl } = attachment;
+  const fileName = attachment.fileName || attachment.filename || attachment.original_filename || 'Attached File';
+  const fileSizeBytes = attachment.fileSizeBytes || attachment.fileSize || attachment.size || attachment.bytes || 0;
+  const fileType = attachment.fileType || attachment.mimeType || attachment.format || '';
+  const cdnUrl = attachment.cdnUrl || attachment.url || attachment.fileUrl || attachment.secure_url || '#';
   const { bg, Icon, iconColor, label } = getConfig(fileType);
 
   const handleDownload = (e) => {
     e.stopPropagation();
     if (cdnUrl && cdnUrl !== '#') {
-      const a = document.createElement('a');
-      a.href = cdnUrl;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      window.open(cdnUrl, '_blank');
     }
   };
 

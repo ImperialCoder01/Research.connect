@@ -133,6 +133,7 @@ const ChatWindow = ({
         text: payload.text,
         type: payload.type,
         attachmentId: payload.attachmentId,
+        attachmentPreview: payload.attachmentPreview || null,
         replyTo: payload.replyTo
       });
       setReplyContext(null);

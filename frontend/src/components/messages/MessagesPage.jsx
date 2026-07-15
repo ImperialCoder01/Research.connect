@@ -26,7 +26,7 @@ function MessagesLayout() {
   }, []);
 
   useEffect(() => {
-    const participantId = searchParams.get('participantId');
+    const participantId = searchParams.get('user');
     if (!participantId || handledParticipantRef.current === participantId) return;
 
     handledParticipantRef.current = participantId;
@@ -35,7 +35,7 @@ function MessagesLayout() {
         // Trigger fetching historical messages
         selectConversation(conversation.id);
         const nextParams = new URLSearchParams(searchParams);
-        nextParams.delete('participantId');
+        nextParams.delete('user');
         setSearchParams(nextParams, { replace: true });
       })
       .catch(() => {

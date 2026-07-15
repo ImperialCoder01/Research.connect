@@ -29,7 +29,7 @@ export default function ChatWindow() {
   
   if (searchQuery.trim()) {
     currentMessages = currentMessages.filter(m => 
-      (m.content || '').toLowerCase().includes((searchQuery || '').toLowerCase())
+      (m.content || m.text || m.message || '').toLowerCase().includes((searchQuery || '').toLowerCase())
     );
   }
 
@@ -224,10 +224,8 @@ export default function ChatWindow() {
         ) : (
           <>
             {/* Date Separator (Aaj ka din) */}
-            <div className="flex items-center gap-4 py-2 anim-date-line" style={{ animationDelay: '200ms' }}>
-              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#CBD5E1] to-transparent" />
-              <span className="text-[10px] font-bold text-[#94A3B8] tracking-[0.15em] uppercase bg-[#F1F5F9] px-3 py-1 rounded-full border border-[#E2E8F0]">Today</span>
-              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#CBD5E1] to-transparent" />
+            <div className="flex justify-center py-2 anim-date-line" style={{ animationDelay: '200ms' }}>
+              <span className="text-[11px] font-medium text-[#54656f] uppercase bg-white/70 shadow-sm backdrop-blur-sm px-3 py-1 rounded-lg">Today</span>
             </div>
 
             {currentMessages.length === 0 && searchQuery.trim() ? (
@@ -237,7 +235,7 @@ export default function ChatWindow() {
             ) : (
               currentMessages.map((msg, i) => (
                 <MessageBubble
-                  key={msg.tempId || msg.id}
+                  key={msg.tempId || msg._id}
                   message={msg}
                   animDelay={Math.min(300 + (i * 50), 800)}
                 />
