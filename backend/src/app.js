@@ -27,6 +27,7 @@ const datasetModule = require("./modules/dataset");
 const notificationsModule = require("./modules/notifications");
 const networkModule = require("./modules/network");
 const presenceModule = require("./modules/presence");
+const helpModule = require("./modules/help");
 
 const collaborationRoutes = require("./modules/collaborations/routes/collaboration.routes");
 
@@ -34,9 +35,6 @@ const identityRoutes = require("./modules/identity/routes/identity.routes");
 const recommendationsModule = require("./modules/recommendations");
 
 const gatewayRouter = require("./gateway");
-
-// Help Center Module import
-const helpModule = require("./modules/help");
 
 const app = express();
 

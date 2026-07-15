@@ -432,9 +432,9 @@ const deleteUploadInternal = async (assetId, userId, useTransaction = true) => {
       }
     } else if (upload.purpose === 'profile-banner') {
       if (useTransaction && session) {
-        await Profile.findOneAndUpdate({ userId }, { coverImage: { url: DEFAULT_BANNER } }, { session });
+        await Profile.findOneAndUpdate({ userId }, { coverImage: DEFAULT_BANNER }, { session });
       } else {
-        await Profile.findOneAndUpdate({ userId }, { coverImage: { url: DEFAULT_BANNER } });
+        await Profile.findOneAndUpdate({ userId }, { coverImage: DEFAULT_BANNER });
       }
     } else if (upload.purpose === 'publication-pdf') {
       const update = { pdfUrl: '', 'document.url': '' };
@@ -511,8 +511,8 @@ const deleteProfilePhoto = async (userId) => {
   const upload = await Upload.findOne({ userId, purpose: 'profile-avatar', isDeleted: { $ne: true } });
   if (!upload) {
     // No upload record but still clear the MongoDB field
-    await Profile.findOneAndUpdate({ userId }, { profileImage: { url: '' } });
-    await User.findByIdAndUpdate(userId, { profileImage: { url: '' } });
+    await Profile.findOneAndUpdate({ userId }, { profileImage: '' });
+    await User.findByIdAndUpdate(userId, { profileImage: '' });
     await invalidateProfileCache(userId);
     const payload = { userId: String(userId), profileImage: '' };
     emitProfileImageUpdate(userId, 'profile:imageUpdated', payload);
@@ -529,7 +529,7 @@ const deleteProfileBanner = async (userId) => {
   const DEFAULT_BANNER = 'https://iili.io/C7pZ8Ss.jpg';
   const upload = await Upload.findOne({ userId, purpose: 'profile-banner', isDeleted: { $ne: true } });
   if (!upload) {
-    await Profile.findOneAndUpdate({ userId }, { coverImage: { url: DEFAULT_BANNER } });
+    await Profile.findOneAndUpdate({ userId }, { coverImage: DEFAULT_BANNER });
     await invalidateProfileCache(userId);
     const payload = { userId: String(userId), coverImage: DEFAULT_BANNER };
     emitProfileImageUpdate(userId, 'profile:bannerUpdated', payload);

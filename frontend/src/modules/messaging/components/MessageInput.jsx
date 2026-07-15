@@ -89,8 +89,9 @@ const MessageInput = ({ conversationId, onSend, replyContext, onClearReply, edit
         action: 'send',
         text: text.trim(),
         attachmentId: attachedFile?._id,
+        attachmentPreview: attachedFile || null, // for optimistic UI rendering
         replyTo: replyContext?._id,
-        type: attachedFile ? (attachedFile.fileType.startsWith('image/') ? 'image' : 'pdf') : 'text'
+        type: attachedFile ? (attachedFile.fileType?.startsWith('image/') ? 'image' : 'pdf') : 'text'
       });
     }
     setText('');

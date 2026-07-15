@@ -527,13 +527,11 @@ class ProfileService {
 
     // Update Research Areas if supplied
     if (updateData.researchAreas !== undefined) {
-      syncPromises.push((async () => {
-        await ResearchArea.deleteMany({ userId });
-        if (updateData.researchAreas && updateData.researchAreas.length > 0) {
-          const formatted = updateData.researchAreas.map(name => ({ userId, name }));
-          await ResearchArea.insertMany(formatted);
-        }
-      })());
+      await ResearchArea.deleteMany({ userId });
+      if (updateData.researchAreas && updateData.researchAreas.length > 0) {
+        const formatted = updateData.researchAreas.map(name => ({ userId, name }));
+        await ResearchArea.insertMany(formatted);
+      }
     }
 
     // Update Privacy Settings if supplied
@@ -542,13 +540,8 @@ class ProfileService {
         ...((profile.privacySettings && typeof profile.privacySettings.toObject === 'function') ? profile.privacySettings.toObject() : profile.privacySettings || {}),
         ...updateData.privacySettings
       };
+      await profile.save();
     }
-
-    // Await all independent updates concurrently
-    await Promise.all(syncPromises);
-
-    // Save profile document changes exactly once
-    await profile.save();
 
     // 6. Recalculate and Sync
     if (options.runBackground) {

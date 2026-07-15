@@ -32,12 +32,12 @@ const isRedisConnError = (err) => {
 const redisClient = createClient({
   url: REDIS_URI,
   socket: {
-    // Required for secure connection to Upstash Redis
-    tls: true,
-    rejectUnauthorized: false,
     reconnectStrategy: (retries) => {
-      const delay = Math.min(retries * 100, 3000);
-      return delay;
+      // Stop retrying after 3 attempts
+      if (retries > 3) {
+        return false;
+      }
+      return 1000;
     }
   }
 });

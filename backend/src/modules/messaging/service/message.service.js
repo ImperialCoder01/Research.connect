@@ -192,9 +192,13 @@ class MessageService {
       populateFields.push({ path: 'replyTo' });
     }
 
-    const populated = await Message.findById(message._id)
+    let populated = await Message.findById(message._id)
       .populate(populateFields)
       .lean();
+
+    if (populated && populated.senderId && populated.senderId.profileImage) {
+      populated.senderId.profileImage = populated.senderId.profileImage.url || populated.senderId.profileImage || '';
+    }
 
     // Emit live events to both users
     // Emit new message event to the conversation room using both event names
@@ -371,12 +375,16 @@ class MessageService {
     msg.edited = true;
     await msg.save();
 
-    const populated = await Message.findById(messageId)
+    let populated = await Message.findById(messageId)
       .populate('senderId', 'firstName lastName profileImage username profileSlug slug')
       .populate('attachment')
       .populate('attachmentId')
       .populate('replyTo')
       .lean();
+
+    if (populated && populated.senderId && populated.senderId.profileImage) {
+      populated.senderId.profileImage = populated.senderId.profileImage.url || populated.senderId.profileImage || '';
+    }
 
     emitToRoom(`conversation:${msg.conversationId}`, 'message:update', populated);
     emitToRoom(`conversation:${msg.conversationId}`, 'messageEdited', populated);
@@ -404,12 +412,16 @@ class MessageService {
       msg.attachmentId = null;
       await msg.save();
 
-      const populated = await Message.findById(messageId)
+      let populated = await Message.findById(messageId)
         .populate('senderId', 'firstName lastName profileImage username profileSlug slug')
         .populate('attachment')
         .populate('attachmentId')
         .populate('replyTo')
         .lean();
+
+      if (populated && populated.senderId && populated.senderId.profileImage) {
+        populated.senderId.profileImage = populated.senderId.profileImage.url || populated.senderId.profileImage || '';
+      }
 
       emitToRoom(`conversation:${msg.conversationId}`, 'message:update', populated);
       emitToRoom(`conversation:${msg.conversationId}`, 'messageDeleted', { messageId, conversationId: msg.conversationId });

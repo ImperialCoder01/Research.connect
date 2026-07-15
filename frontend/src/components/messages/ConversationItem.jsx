@@ -4,27 +4,28 @@ import Avatar from '../ui/Avatar';
 
 export default function ConversationItem({ conversation, isActive, currentUserId, onClick, animDelay }) {
   const { onlineUsers } = useMessaging();
-  
+
   let displayName, avatarUrl;
   let otherParticipant = null;
 
   if (conversation.isGroup) {
     displayName = conversation.groupName;
-    otherParticipant = conversation.participants.find((p) => p.id !== currentUserId) || conversation.participants[0];
+    otherParticipant = conversation.participants.find((p) => p._id !== currentUserId) || conversation.participants[0];
     avatarUrl = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=64&h=64&fit=crop&q=80';
   } else {
-    otherParticipant = conversation.participants.find((p) => p.id !== currentUserId);
+    otherParticipant = conversation.participants.find((p) => p._id !== currentUserId);
     if (!otherParticipant) return null;
-    displayName = otherParticipant.fullName;
-    avatarUrl = otherParticipant.avatarUrl;
+    displayName = otherParticipant.fullName || `${otherParticipant.firstName} ${otherParticipant.lastName}`.trim() || 'Unknown';
+    avatarUrl = otherParticipant.avatarUrl || otherParticipant.profileImage || 'https://ui-avatars.com/api/?name=U';
   }
 
-  const isOnline = otherParticipant ? onlineUsers.has(otherParticipant.id) : false;
-  const timeStr = conversation.lastMessage ? formatConvTime(conversation.lastMessage.timestamp) : '';
+  const isOnline = otherParticipant ? onlineUsers.has(otherParticipant._id) : false;
+  const lastTime = conversation.lastMessageAt || conversation.lastMessage?.createdAt || conversation.lastMessage?.timestamp;
+  const timeStr = lastTime ? formatConvTime(lastTime) : '';
 
   return (
     <div
-      onClick={() => onClick(conversation.id)}
+      onClick={() => onClick(conversation._id)}
       className={`anim-conv-item conv-row flex items-center px-5 py-3.5 cursor-pointer relative overflow-hidden transition-all duration-200
         ${isActive ? 'conv-active-ribbon' : ''}`}
       style={{ animationDelay: `${animDelay}ms` }}
@@ -56,7 +57,7 @@ export default function ConversationItem({ conversation, isActive, currentUserId
         </div>
         <p className={`text-xs truncate mt-0.5 transition-colors
           ${conversation.unreadCount > 0 ? 'text-[#2563EB] font-medium' : 'text-[#64748B]'}`}>
-          {conversation.lastMessage ? conversation.lastMessage.content : 'No messages yet'}
+          {conversation.lastMessage ? (conversation.lastMessage.content || conversation.lastMessage.text || conversation.lastMessage.message) : 'No messages yet'}
         </p>
       </div>
 

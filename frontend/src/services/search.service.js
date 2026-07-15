@@ -14,7 +14,7 @@ class SearchService {
    */
   async searchPublications(params = {}) {
     const { data } = await axiosInstance.get('/v1/search/publications', { params });
-    return data;
+    return data?.data || data;
   }
 
   async searchProjects(params = {}) {
@@ -31,27 +31,11 @@ class SearchService {
   }
 
   /**
-   * Search researchers only
+   * Search researchers (profiles/users)
    */
   async searchResearchers(params = {}) {
     const { data } = await axiosInstance.get('/v1/search/researchers', { params });
-    return data;
-  }
-
-  /**
-   * Search keywords only
-   */
-  async searchKeywords(params = {}) {
-    const { data } = await axiosInstance.get('/v1/search/keywords', { params });
-    return data;
-  }
-
-  /**
-   * Search institutions only
-   */
-  async searchInstitutions(params = {}) {
-    const { data } = await axiosInstance.get('/v1/search/institutions', { params });
-    return data;
+    return data?.data || data;
   }
 
   /**
@@ -59,7 +43,7 @@ class SearchService {
    */
   async searchJournals(params = {}) {
     const { data } = await axiosInstance.get('/v1/search/journals', { params });
-    return data;
+    return data?.data || data;
   }
 
   /**
@@ -67,7 +51,7 @@ class SearchService {
    */
   async searchConferences(params = {}) {
     const { data } = await axiosInstance.get('/v1/search/conferences', { params });
-    return data;
+    return data?.data || data;
   }
 
   /**
