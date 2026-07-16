@@ -1,37 +1,46 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
-export const useCountUp = (end, duration = 2000) => {
+/**
+ * Animate a number counting up from 0 to a target value.
+ * @param {number} end - The target value
+ * @param {object} options
+ * @param {number} options.duration - Animation duration in ms (default: 2000)
+ * @param {number} options.startOnMount - Start immediately (default: true)
+ * @returns {{ count: number, start: () => void }}
+ */
+export const useCountUp = (end, { duration = 2000, startOnMount = true } = {}) => {
   const [count, setCount] = useState(0);
+  const frameRef = useRef(null);
+  const startTimeRef = useRef(null);
 
-  useEffect(() => {
-    if (!end && end !== 0) return;
-    const target = parseInt(end, 10);
-    if (isNaN(target)) return;
+  const start = () => {
+    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    startTimeRef.current = null;
+    setCount(0);
 
-    let start = 0;
-    const increment = Math.ceil(target / (duration / 16)); // assuming 60fps (~16ms per frame)
-    const stepTime = Math.max(16, Math.floor(duration / target)); 
-    let timer;
+    const animate = (timestamp) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const progress = Math.min((timestamp - startTimeRef.current) / duration, 1);
+      // easeOutQuart for smooth deceleration
+      const eased = 1 - Math.pow(1 - progress, 4);
+      setCount(Math.round(eased * end));
 
-    if (target === 0) {
-      setCount(0);
-      return;
-    }
-
-    const run = () => {
-      start += increment;
-      if (start >= target) {
-        setCount(target);
-      } else {
-        setCount(start);
-        timer = requestAnimationFrame(run);
+      if (progress < 1) {
+        frameRef.current = requestAnimationFrame(animate);
       }
     };
 
-    timer = requestAnimationFrame(run);
+    frameRef.current = requestAnimationFrame(animate);
+  };
 
-    return () => cancelAnimationFrame(timer);
-  }, [end, duration]);
+  useEffect(() => {
+    if (startOnMount && end > 0) {
+      start();
+    }
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
+  }, [end, startOnMount]);
 
-  return count;
+  return { count, start };
 };

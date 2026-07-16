@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paperclip, PlusCircle, Smile, Send, X, Image, Cloud } from 'lucide-react';
+import { Paperclip, PlusCircle, Smile, Send, X, Image } from 'lucide-react';
+import { SiGoogledrive } from 'react-icons/si';
 import { useMessaging } from '../../context/MessagingContext';
-import messagesService from '../../modules/messaging/services/messages.service';
-import { toast } from 'react-hot-toast';
-import { motion, AnimatePresence } from 'framer-motion';
+import { messagingApi } from '../../services/messagingApi';
+import { toast } from '../ui/Toaster';
 
 export default function MessageInput() {
   const { activeConversationId, sendMessage, setUserTyping, getOtherParticipant, blockedUsers, toggleBlockUser } = useMessaging();
@@ -39,9 +39,7 @@ export default function MessageInput() {
   const handleSend = () => {
     const trimmed = inputVal.trim();
     if (!trimmed && attachments.length === 0) return;
-    // For the real backend, we must pass `attachmentId` in the sendMessage payload, 
-    // but the legacy MessagingContext's sendMessage takes (convId, content, attachmentsArray) 
-    // where it maps attachments[0] to attachment. So we can just pass the populated attachment object.
+    if (isUploading) { toast.error('Please wait for uploads to finish'); return; }
     sendMessage(activeConversationId, trimmed, attachments);
     setInputVal('');
     setAttachments([]);
@@ -66,18 +64,8 @@ export default function MessageInput() {
     setIsUploading(true);
     setUploadProgress(0);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const res = await messagesService.uploadAttachment(formData);
-      if (res.success) {
-        // Mock progress for now since axios upload is quick
-        setUploadProgress(100);
-        // We pass the returned attachment object to state
-        setAttachments(prev => [...prev, res.data]);
-      } else {
-        throw new Error('Upload failed');
-      }
+      const att = await messagingApi.uploadFile(file, (p) => setUploadProgress(p));
+      setAttachments(prev => [...prev, att]);
     } catch {
       toast.error(`Failed to upload ${file.name}`);
     } finally {
@@ -86,7 +74,7 @@ export default function MessageInput() {
     }
   };
 
-  const removeAttachment = (id) => setAttachments(prev => prev.filter(a => (a._id || a.id) !== id));
+  const removeAttachment = (id) => setAttachments(prev => prev.filter(a => a.id !== id));
 
   const canSend = (inputVal.trim() || attachments.length > 0) && !isUploading;
 
@@ -108,7 +96,7 @@ export default function MessageInput() {
   }
 
   return (
-    <footer className="anim-footer bg-white/80 backdrop-blur-xl border-t border-slate-200/60 px-4 pt-3 pb-5 flex-shrink-0 flex flex-col gap-2 relative z-20 shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.04)]">
+    <footer className="anim-footer bg-white border-t border-[#E2E8F0] px-4 pt-3 pb-4 flex-shrink-0 flex flex-col gap-2">
       {/* Upload Progress */}
       {isUploading && (
         <div className="h-1 bg-[#E2E8F0] rounded-full overflow-hidden mx-1">
@@ -123,83 +111,55 @@ export default function MessageInput() {
       )}
 
       {/* Attachment Chips */}
-      <div className="flex flex-wrap gap-2 px-1">
-        <AnimatePresence>
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 px-1">
           {attachments.map((att, idx) => (
-            <motion.div
-              key={att._id || att.id || idx}
-              initial={{ opacity: 0, scale: 0.8, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
-              transition={{ type: "spring", stiffness: 300, damping: 20, delay: idx * 0.05 }}
-              className="flex items-center gap-1.5 bg-[#EEF2FF] border border-[#C7D2FE] pl-1 pr-2 py-1 rounded-full text-xs font-semibold text-[#4F46E5]"
+            <div
+              key={att.id}
+              className="anim-chip-scale flex items-center gap-1.5 bg-[#EEF2FF] border border-[#C7D2FE] px-3 py-1.5 rounded-full text-xs font-semibold text-[#4F46E5]"
+              style={{ animationDelay: `${idx * 60}ms` }}
             >
-              {att.secure_url && (att.resource_type === 'image' || (att.format && ['jpg','jpeg','png','gif','webp'].includes(att.format))) ? (
-                <img src={att.secure_url} alt="preview" className="w-5 h-5 rounded-full object-cover" />
-              ) : (
-                <span className="pl-2"></span>
-              )}
-              <span className="truncate max-w-[150px]">{att.filename || att.original_filename || att.fileName || 'Attachment'}</span>
-              <motion.button
-                whileHover={{ scale: 1.2 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => removeAttachment(att._id || att.id)}
-                className="p-0.5 ml-1 hover:bg-[#C7D2FE] rounded-full transition-colors text-[#6366F1] hover:text-[#0F172A]"
+              <span className="truncate max-w-[150px]">{att.fileName}</span>
+              <button
+                onClick={() => removeAttachment(att.id)}
+                className="p-0.5 hover:bg-[#C7D2FE] rounded-full transition-colors text-[#6366F1] hover:text-[#0F172A]"
               >
                 <X size={11} />
-              </motion.button>
-            </motion.div>
+              </button>
+            </div>
           ))}
-        </AnimatePresence>
-      </div>
+        </div>
+      )}
 
       {/* Input Row */}
-      <motion.div
-        animate={isFocused ? { scale: 1.01, y: -2 } : { scale: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        className={`relative flex items-center gap-2 px-3 py-2.5 rounded-2xl transition-all duration-300
-          ${isFocused 
-            ? 'bg-white shadow-[0_8px_30px_-4px_rgba(37,99,235,0.15)] ring-2 ring-blue-500/20' 
-            : 'bg-slate-50/80 hover:bg-slate-100 border border-slate-200/80 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]'}`}
+      <div
+        className={`input-focus-glow flex items-center gap-2 px-3 py-2.5 bg-[#F8FAFC] rounded-2xl border-2 transition-all duration-300
+          ${isFocused ? 'border-[#2563EB] bg-white' : 'border-[#E2E8F0]'}`}
       >
         <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
 
         {/* Attachment */}
-        <motion.button
-          whileHover={{ scale: 1.15, rotate: [0, -15, 15, -15, 0] }}
-          transition={{ duration: 0.4, ease: "easeInOut" }}
-          whileTap={{ scale: 0.85 }}
+        <button
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex-shrink-0"
+          className="btn-icon-ripple w-8 h-8 rounded-full flex items-center justify-center text-[#94A3B8] hover:text-[#2563EB] hover:bg-[#EEF2FF] transition-colors flex-shrink-0"
           aria-label="Attach file"
         >
           <Paperclip size={17} />
-        </motion.button>
+        </button>
 
         {/* Plus */}
         <div className="relative">
-          <motion.button
-            whileHover={{ scale: 1.15, rotate: 180 }}
-            whileTap={{ scale: 0.85, rotate: 90 }}
-            transition={{ type: "spring", stiffness: 260, damping: 20 }}
+          <button
             onClick={() => setShowPlusMenu(!showPlusMenu)}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors flex-shrink-0 
-              ${showPlusMenu ? 'text-blue-600 bg-blue-50 rotate-90' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+            className="btn-icon-ripple w-8 h-8 rounded-full flex items-center justify-center text-[#94A3B8] hover:text-[#2563EB] hover:bg-[#EEF2FF] transition-colors flex-shrink-0"
             aria-label="Add attachment"
           >
             <PlusCircle size={17} />
-          </motion.button>
+          </button>
           
-          <AnimatePresence>
           {showPlusMenu && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="absolute bottom-full left-0 mb-2 w-48 bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-[#E2E8F0] overflow-hidden z-50"
-            >
+            <div className="absolute bottom-full left-0 mb-2 w-48 bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-[#E2E8F0] overflow-hidden z-50">
               <button 
                 onClick={() => { fileInputRef.current?.click(); setShowPlusMenu(false); }}
                 className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-medium text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors border-b border-[#F1F5F9]"
@@ -215,12 +175,11 @@ export default function MessageInput() {
                 }}
                 className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-medium text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors"
               >
-                <Cloud size={18} className="text-[#16A34A]" />
+                <SiGoogledrive size={18} className="text-[#16A34A]" />
                 Google Drive
               </button>
-            </motion.div>
+            </div>
           )}
-          </AnimatePresence>
         </div>
 
         {/* Text Input */}
@@ -230,7 +189,7 @@ export default function MessageInput() {
           onKeyDown={handleKeyDown}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium text-slate-700 placeholder:text-slate-400 placeholder:font-normal py-1.5 px-2 tracking-wide"
+          className="flex-1 bg-transparent border-none outline-none text-sm text-[#0F172A] placeholder-[#CBD5E1] py-1"
           placeholder="Type a message or share a link…"
           type="text"
           disabled={isUploading}
@@ -238,27 +197,16 @@ export default function MessageInput() {
 
         {/* Emoji */}
         <div className="relative">
-          <motion.button
-            whileHover={{ scale: 1.15, y: -2, rotate: [0, -20, 20, -20, 0] }}
-            transition={{ duration: 0.4, ease: "easeInOut" }}
-            whileTap={{ scale: 0.85, y: 2 }}
+          <button
             onClick={() => setShowEmojiMenu(!showEmojiMenu)}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors flex-shrink-0
-              ${showEmojiMenu ? 'text-amber-500 bg-amber-50' : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50'}`}
+            className="btn-icon-ripple w-8 h-8 rounded-full flex items-center justify-center text-[#94A3B8] hover:text-[#F59E0B] hover:bg-[#FEF3C7] transition-colors flex-shrink-0"
             aria-label="Add emoji"
           >
             <Smile size={17} />
-          </motion.button>
+          </button>
 
-          <AnimatePresence>
           {showEmojiMenu && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="absolute bottom-full right-0 mb-2 p-3 w-48 bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-[#E2E8F0] grid grid-cols-4 gap-2 z-50"
-            >
+            <div className="absolute bottom-full right-0 mb-2 p-3 w-48 bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-[#E2E8F0] grid grid-cols-4 gap-2 z-50">
               {['😀', '😂', '❤️', '👍', '🙌', '🔥', '🎉', '💡'].map(emoji => (
                 <button
                   key={emoji}
@@ -268,33 +216,21 @@ export default function MessageInput() {
                   {emoji}
                 </button>
               ))}
-            </motion.div>
+            </div>
           )}
-          </AnimatePresence>
         </div>
 
         {/* Send Button */}
-        <motion.button
-          whileHover={canSend ? { scale: 1.1, y: -2 } : { rotate: [0, -5, 5, -5, 0], transition: { duration: 0.2 } }}
-          whileTap={canSend ? { scale: 0.9, y: 2 } : { scale: 1 }}
+        <button
           onClick={handleSend}
           disabled={!canSend}
-          className={`w-10 h-10 rounded-[14px] flex items-center justify-center text-white flex-shrink-0 transition-all duration-300
-            ${canSend 
-              ? 'bg-gradient-to-tr from-blue-600 to-indigo-500 shadow-[0_8px_20px_-6px_rgba(79,70,229,0.5)] hover:shadow-[0_12px_25px_-6px_rgba(79,70,229,0.6)]' 
-              : 'bg-slate-200/70 cursor-not-allowed text-slate-400'}`}
+          className={`send-btn w-9 h-9 rounded-xl flex items-center justify-center text-white flex-shrink-0
+            ${canSend ? 'send-btn-active' : 'cursor-not-allowed'}`}
           aria-label="Send message"
         >
-          <motion.div
-            initial={false}
-            animate={canSend ? { x: 0, y: 0, rotate: 0 } : { x: -2, y: 2, rotate: -10 }}
-            whileHover={canSend ? { x: 2, y: -2 } : {}}
-            transition={{ type: "spring", stiffness: 400, damping: 25 }}
-          >
-            <Send size={15} />
-          </motion.div>
-        </motion.button>
-      </motion.div>
+          <Send size={15} />
+        </button>
+      </div>
     </footer>
   );
 }

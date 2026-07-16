@@ -514,12 +514,12 @@ class SearchService {
 
   // ─── Autocomplete ────────────────────────────────────────────────────────────
   async getAutocomplete(query) {
-    if (!query || query.trim().length < 2) return { publications: [], authors: [], journals: [], conferences: [], keywords: [], projects: [] };
+    if (!query || query.trim().length < 2) return { publications: [], authors: [], journals: [], conferences: [], keywords: [], projects: [], researchers: [] };
 
     const regex = buildRegex(query);
     const baseFilter = { isDeleted: { $ne: true }, status: 'published', visibility: 'Public' };
 
-    const [publications, authors, journalDocs, conferenceDocs, keywordDocs, projects] = await Promise.all([
+    const [publications, authors, journalDocs, conferenceDocs, keywordDocs, projects, researchers] = await Promise.all([
       Publication.find(
         { ...baseFilter, title: regex },
         { title: 1, slug: 1, publicationType: 1, authors: 1, year: 1 }
@@ -540,7 +540,17 @@ class SearchService {
         { $sort: { count: -1 } },
         { $limit: 5 }
       ]),
-      Project.find({ isArchived: false, visibility: 'Public', $text: { $search: query } }, { title: 1, slug: 1, researchDomain: 1, status: 1 }).limit(5).lean()
+      Project.find({ isArchived: false, visibility: 'Public', $text: { $search: query } }, { title: 1, slug: 1, researchDomain: 1, status: 1 }).limit(5).lean(),
+      User.find(
+        {
+          $or: [
+            { firstName: regex },
+            { lastName: regex },
+            { fullName: regex }
+          ]
+        },
+        { firstName: 1, lastName: 1, fullName: 1, profileSlug: 1, avatar: 1 }
+      ).limit(5).lean()
     ]);
 
     return {
@@ -550,6 +560,12 @@ class SearchService {
       conferences: conferenceDocs.filter(Boolean),
       keywords: keywordDocs.map(k => k._id),
       projects: projects.map(p => ({ id: p._id, title: p.title, slug: p.slug, domain: p.researchDomain, status: p.status })),
+      researchers: researchers.map(r => ({
+        id: r._id,
+        fullName: r.fullName || `${r.firstName} ${r.lastName}`,
+        profileSlug: r.profileSlug,
+        avatar: r.avatar
+      }))
     };
   }
 
