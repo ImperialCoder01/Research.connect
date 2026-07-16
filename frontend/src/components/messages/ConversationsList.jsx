@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useMessaging } from '../../context/MessagingContext';
 import { ConversationSkeleton } from './Skeletons';
 import ConversationItem from './ConversationItem';
+import { CURRENT_USER } from '../../data/mockData';
 import { MessageSquare } from 'lucide-react';
 
 export default function ConversationsList() {
@@ -10,8 +11,7 @@ export default function ConversationsList() {
     activeConversationId,
     selectConversation,
     isLoadingConversations,
-    loadConversations,
-    currentUserId
+    loadConversations
   } = useMessaging();
 
   useEffect(() => {
@@ -55,10 +55,10 @@ export default function ConversationsList() {
         ) : (
           conversations.map((conv, i) => (
             <ConversationItem
-              key={conv._id}
+              key={conv.id}
               conversation={conv}
-              isActive={activeConversationId === conv._id}
-              currentUserId={currentUserId}
+              isActive={activeConversationId === conv.id}
+              currentUserId={CURRENT_USER.id}
               onClick={selectConversation}
               animDelay={i * 70}
             />

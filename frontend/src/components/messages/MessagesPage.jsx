@@ -6,42 +6,34 @@ import ChatWindow from './ChatWindow';
 import ChatHeader from './ChatHeader';
 import MessageInput from './MessageInput';
 import ResearcherInfoPanel from './ResearcherInfoPanel';
+import { Toaster } from '../ui/Toaster';
 
 function MessagesLayout() {
-  const { activeConversationId, createConversation, selectConversation } = useMessaging();
+  const { activeConversationId, createConversation } = useMessaging();
   const [searchParams, setSearchParams] = useSearchParams();
   const handledParticipantRef = useRef(null);
   const [convsListWidth, setConvsListWidth] = useState(320);
   const [profilePanelWidth, setProfilePanelWidth] = useState(288);
   const [isResizingConvs, setIsResizingConvs] = useState(false);
   const [isResizingProfile, setIsResizingProfile] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const convsResizeRef = useRef(null);
   const profileResizeRef = useRef(null);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    const participantId = searchParams.get('user');
+    const participantId = searchParams.get('participantId');
     if (!participantId || handledParticipantRef.current === participantId) return;
 
     handledParticipantRef.current = participantId;
     createConversation(participantId)
-      .then((conversation) => {
-        // Trigger fetching historical messages
-        selectConversation(conversation.id);
+      .then(() => {
         const nextParams = new URLSearchParams(searchParams);
-        nextParams.delete('user');
+        nextParams.delete('participantId');
         setSearchParams(nextParams, { replace: true });
       })
       .catch(() => {
         handledParticipantRef.current = null;
       });
-  }, [createConversation, selectConversation, searchParams, setSearchParams]);
+  }, [createConversation, searchParams, setSearchParams]);
 
   const handleConvsMouseDown = (e) => {
     setIsResizingConvs(true);
@@ -89,10 +81,12 @@ function MessagesLayout() {
 
   return (
     <div className="h-[calc(100vh-8rem)] w-full flex overflow-hidden bg-white border border-slate-200 rounded-2xl shadow-sm relative">
+      <Toaster />
+
       {/* Conversations List — resizable */}
       <div
-        className={`flex-shrink-0 h-full bg-white border-r border-[#E8EDF5] transition-colors duration-300 ${activeConversationId ? 'hidden md:flex flex-col' : 'flex flex-col w-full md:w-auto'}`}
-        style={{ width: isMobile ? '100%' : `${convsListWidth}px` }}
+        className={`flex-shrink-0 h-full bg-white border-r border-[#E8EDF5] transition-colors duration-300 ${activeConversationId ? 'hidden md:flex flex-col' : 'flex flex-col'}`}
+        style={{ width: `${convsListWidth}px` }}
       >
         <ConversationsList />
       </div>
@@ -111,7 +105,7 @@ function MessagesLayout() {
       <main className={`flex-1 flex flex-col bg-[#F8FAFC] overflow-hidden min-w-0 ${!activeConversationId ? 'hidden md:flex' : 'flex'}`}>
         <ChatHeader />
         <ChatWindow />
-        {activeConversationId && <MessageInput />}
+        <MessageInput />
       </main>
 
       {/* Profile panel resize handle — xl screens only */}

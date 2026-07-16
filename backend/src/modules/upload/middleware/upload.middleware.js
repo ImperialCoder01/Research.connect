@@ -70,12 +70,6 @@ const validateUpload = (req, res, next) => {
     return next(new ValidationError('Image files cannot exceed 10MB.'));
   }
 
-  // Cap all message attachments to 10MB
-  const isMessageAttachment = purpose === 'message-attachment' || req.originalUrl?.includes('/messages/upload') || req.baseUrl?.includes('/messages');
-  if (isMessageAttachment && req.file.size > 10 * 1024 * 1024) {
-    return next(new ValidationError('Message attachments cannot exceed 10MB.'));
-  }
-
   if (req.file.size > 100 * 1024 * 1024) {
     return next(new ValidationError('Uploaded files cannot exceed 100MB.'));
   }

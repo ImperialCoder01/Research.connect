@@ -364,39 +364,31 @@ const MessagesPage = () => {
   // or the other participant has received it.
   const sendMessageMutation = useMutation({
     mutationFn: async (payload) => {
-      // Strip frontend-only fields before sending to the backend
-      const { tempId: _tempId, attachmentPreview: _preview, ...apiPayload } = payload;
       return await messagesService.sendMessage({
         conversationId: activeId,
-        ...apiPayload
+        ...payload
       });
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (data) => {
       const savedMsg = data?.data || data;
       if (savedMsg) {
         setLocalMessages(prev => {
-          // Match by tempId first (reliable), fallback to text match
-          const tempId = variables?.tempId;
-          const index = tempId
-            ? prev.findIndex(m => m._id === tempId)
-            : prev.findLastIndex(m => m.isTemp && (m.text === (savedMsg.text || savedMsg.message) || m.message === (savedMsg.text || savedMsg.message)));
+          const textToMatch = savedMsg.text || savedMsg.message;
+          const index = prev.findLastIndex(m => m.isTemp && (m.text === textToMatch || m.message === textToMatch));
           if (index !== -1) {
             const updated = [...prev];
             updated[index] = savedMsg;
             return updated;
           }
-          // Fallback: replace any remaining temp message
           return prev.map(m => m.isTemp ? savedMsg : m);
         });
       }
       queryClient.invalidateQueries({ queryKey: ['messages', activeId] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
-    onError: (_, variables) => {
+    onError: () => {
       toast.error('Failed to send message');
-      // Remove only the specific temp message that failed
-      const tempId = variables?.tempId;
-      setLocalMessages(prev => tempId ? prev.filter(m => m._id !== tempId) : prev.filter(m => !m.isTemp));
+      setLocalMessages(prev => prev.filter(m => !m.isTemp));
     }
   });
 
@@ -425,10 +417,8 @@ const MessagesPage = () => {
         message: payload.text,
         type: payload.type || 'text',
         messageType: payload.type || 'text',
-        // For file attachments: show a pending preview with file info from attachedFile
-        attachment: payload.attachmentPreview || null,
         createdAt: new Date().toISOString(),
-        status: 'sent',
+        status: 'sent', // Immediately append sender message on right. Status: sent.
         isTemp: true
       };
       setLocalMessages(prev => [...prev, tempMessage]);
@@ -437,8 +427,7 @@ const MessagesPage = () => {
         text: payload.text,
         type: payload.type,
         attachmentId: payload.attachmentId,
-        replyTo: payload.replyTo,
-        tempId // Pass tempId so onSuccess can match this exact temp message
+        replyTo: payload.replyTo
       });
     }
   };
