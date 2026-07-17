@@ -1,12 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { Sparkles, Compass, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Sparkles, Compass, AlertCircle, ArrowLeft } from 'lucide-react';
 import followService from '../services/follow.service';
 import SuggestedResearcherCard from '../components/SuggestedResearcherCard';
 
 const DiscoverResearchersPage = () => {
   const currentUser = useSelector((state) => state.auth.user);
+  const navigate = useNavigate();
+
+  // Entry point is always "View All" from the Network page, so going back
+  // should return there — falling back to /network if there's no history
+  // (e.g. page was opened directly via URL).
+  const handleBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/network');
+    }
+  };
   const [suggestions, setSuggestions] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -40,6 +53,15 @@ const DiscoverResearchersPage = () => {
   return (
     <div className="space-y-6">
       
+      {/* Back navigation — sits above the banner, not inside it */}
+      <button
+        onClick={handleBack}
+        className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        Back to Network Dashboard
+      </button>
+
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-3xl p-6 md:p-8 text-left relative overflow-hidden shadow-lg shadow-blue-500/10">
         <div className="absolute right-0 bottom-0 translate-y-6 translate-x-6 opacity-10 pointer-events-none">
@@ -48,7 +70,7 @@ const DiscoverResearchersPage = () => {
         <div className="space-y-2 relative z-10 max-w-xl">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5 fill-white/10" />
-            <span>AI Recommendations</span>
+            <span>Recommendations</span>
           </span>
           <h2 className="text-xl md:text-2xl font-black tracking-tight leading-none">Discover Suggested Researchers</h2>
           <p className="text-xs text-blue-100 leading-relaxed font-semibold">

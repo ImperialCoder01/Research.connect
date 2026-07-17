@@ -14,6 +14,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import publicationService from '../../../services/publication.service';
 import profileService from '../../../services/profile.service';
+import scholarService from '../../../services/scholar.service';
+import { useSocket } from '../../../context/SocketContext';
 import PDFReader from '../components/PDFReader';
 
 const PublicationsLibraryPage = () => {
@@ -31,6 +33,13 @@ const PublicationsLibraryPage = () => {
   const [viewMode, setViewMode] = useState('grid'); // grid | card | table
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [filterYear, setFilterYear] = useState('all');
+  const [filterVisibility, setFilterVisibility] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all'); // all | published | draft | trash | bookmarks
+  const [sortBy, setSortBy] = useState('-createdAt');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(1000);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -43,14 +52,6 @@ const PublicationsLibraryPage = () => {
 
     return () => clearTimeout(handler);
   }, [searchInput]);
-
-  const [filterType, setFilterType] = useState('all');
-  const [filterYear, setFilterYear] = useState('all');
-  const [filterVisibility, setFilterVisibility] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all'); // all | published | draft | trash | bookmarks
-  const [sortBy, setSortBy] = useState('-createdAt');
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(1000);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Bulk Selection States
@@ -65,6 +66,9 @@ const PublicationsLibraryPage = () => {
   const [activeScholarNotePub, setActiveScholarNotePub] = useState(null);
   const [scholarNoteText, setScholarNoteText] = useState('');
   const [isSavingNote, setIsSavingNote] = useState(false);
+
+  // Socket instance (listener attached further below, after `refetch` is defined)
+  const { socket } = useSocket();
 
   // Sync tab state with URL path for /publications sub-routes
   useEffect(() => {
@@ -102,7 +106,9 @@ const PublicationsLibraryPage = () => {
   const { data: profileRes, isLoading: isProfileLoading } = useQuery({
     queryKey: ['profile', profileSlug],
     queryFn: () => profileService.getPublicProfile(profileSlug),
-    enabled: !!profileSlug
+    enabled: !!profileSlug,
+    staleTime: 1000 * 30, // 30 seconds — keeps profile fresh after scholar sync
+    refetchOnWindowFocus: true
   });
 
   const profile = profileRes?.success ? profileRes.data : null;
@@ -152,6 +158,28 @@ const PublicationsLibraryPage = () => {
     enabled: !!profileSlug
   });
 
+  // Listen for Google Scholar sync completion via Socket.IO for real-time updates.
+  // Placed here (after the `refetch` above is declared) — it previously sat near the
+  // top of the component and referenced `refetch` before its `const` declaration,
+  // which threw "Cannot access 'refetch' before initialization" on every render.
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleScholarSyncComplete = () => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['publications-portfolio'] });
+    };
+
+    socket.on('scholarSyncCompleted', handleScholarSyncComplete);
+    socket.on('profileUpdated', handleScholarSyncComplete);
+
+    return () => {
+      socket.off('scholarSyncCompleted', handleScholarSyncComplete);
+      socket.off('profileUpdated', handleScholarSyncComplete);
+    };
+  }, [socket, refetch, queryClient]);
+
   const rawPublications = pubsRes?.success ? pubsRes.data.docs : [];
   const totalPubs = pubsRes?.success ? pubsRes.data.total : 0;
   const totalPages = pubsRes?.success ? pubsRes.data.totalPages : 1;
@@ -182,16 +210,75 @@ const PublicationsLibraryPage = () => {
   // Sync Google Scholar Profile Handler
   const handleScholarSync = async () => {
     setIsSyncing(true);
-    const syncToast = toast.loading('Synchronizing Google Scholar profile...');
+    const syncToast = toast.loading('Starting Google Scholar sync...');
     try {
       const res = await profileService.syncGoogleScholar();
-      if (res.success) {
+      if (!res.success) {
+        toast.error('Sync failed. Please check your Scholar ID configuration.', { id: syncToast });
+        setIsSyncing(false);
+        return;
+      }
+
+      const jobId = res.data?.data?._id || res.data?._id;
+      if (!jobId) {
+        // No job ID returned — treat as inline sync
         toast.success('Google Scholar sync successful!', { id: syncToast });
         refetch();
         queryClient.invalidateQueries({ queryKey: ['profile'] });
-      } else {
-        toast.error('Sync failed. Please check your Scholar ID configuration.', { id: syncToast });
+        setIsSyncing(false);
+        return;
       }
+
+      // Poll for job completion
+      toast.loading('Syncing publications from Google Scholar...', { id: syncToast });
+      let attempts = 0;
+      const maxAttempts = 150; // 5 minutes max (2s intervals)
+      const pollInterval = 2000;
+
+      const pollForCompletion = async () => {
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+          attempts++;
+
+          try {
+            const statusRes = await scholarService.getImportStatusById(jobId);
+            const resData = statusRes?.data?.data || statusRes?.data || statusRes;
+            const job = resData?.job || resData;
+
+            if (job?.status === 'completed') {
+              toast.success('Google Scholar sync completed! Refreshing data...', { id: syncToast });
+              // Invalidate all relevant caches
+              await queryClient.invalidateQueries({ queryKey: ['profile'] });
+              await queryClient.invalidateQueries({ queryKey: ['publications-portfolio'] });
+              await queryClient.invalidateQueries({ queryKey: ['scholarProfile'] });
+              refetch();
+              return;
+            }
+
+            if (job?.status === 'failed') {
+              toast.error('Sync failed: ' + (job?.error?.message || 'Unknown error'), { id: syncToast });
+              return;
+            }
+
+            // Update progress in toast
+            const progress = job?.progress || 0;
+            if (progress > 0) {
+              toast.loading(`Syncing... ${progress}% complete`, { id: syncToast });
+            }
+          } catch (pollErr) {
+            // Continue polling on transient errors
+            console.warn('Poll error, retrying...', pollErr);
+          }
+        }
+
+        // Timeout — still refresh data in case it completed
+        toast.success('Sync timed out. Refreshing data...', { id: syncToast });
+        await queryClient.invalidateQueries({ queryKey: ['profile'] });
+        await queryClient.invalidateQueries({ queryKey: ['publications-portfolio'] });
+        refetch();
+      };
+
+      await pollForCompletion();
     } catch (err) {
       console.error(err);
       toast.error('Sync failed: ' + (err.message || 'Server error'), { id: syncToast });

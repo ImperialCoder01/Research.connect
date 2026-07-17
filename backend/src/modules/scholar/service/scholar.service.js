@@ -75,13 +75,11 @@ class ScholarService {
    * Force reimport of scholar profile
    */
   async reImportScholar(userId) {
-    const activeJob = await importQueueService.enqueue(userId, 'google_scholar');
-    if (activeJob && activeJob.status === 'running') {
-      throw new AppError('An import job is already running.', 400, 'JOB_RUNNING');
-    }
-
-    // Force create a new job by modifying/deleting previous status
-    await importRepository.model.deleteMany({ userId, provider: 'google_scholar' });
+    // Force-clear any stale jobs (pending or running) so a fresh sync can start
+    await importRepository.model.updateMany(
+      { userId, provider: 'google_scholar', status: { $in: ['pending', 'running'] } },
+      { $set: { status: 'failed', error: { message: 'Force-cleared by reimport request' } } }
+    );
     return await this.syncScholar(userId);
   }
 
@@ -155,7 +153,8 @@ class ScholarService {
       // --- STEP 1: Fetch Author Profile Details (10%) ---
       await updateProgress(10, 'Fetching author profile metadata from SerpAPI...');
       const data = await serpApiService.fetchAuthorDetails(authorId);
-      
+      const isMockData = data?._isMock === true; // Check if SerpAPI fell back to mock data
+
       if (!data || !data.author) {
         throw new Error('Author details not found in SerpAPI response.');
       }
@@ -443,25 +442,34 @@ class ScholarService {
             const slug = generateSlug(article.title);
             const tempPubId = new mongoose.Types.ObjectId();
 
-            // ── Metadata Enrichment ──────────────────────────────────────────
+            // ── Metadata Enrichment (skip for mock data, timeout for real) ──
             let pubDoi = article.doi || null;
+            let enrichedMeta = {};
+            const ENRICH_TIMEOUT_MS = isMockData ? 1 : 10000; // skip enrichment if mock data
 
-            // Step 1: Lookup missing DOI
-            if (!pubDoi) {
-              pubDoi = await enrichmentService.lookupDOI(article.title, article.year, article.authors);
-              await new Promise(resolve => setTimeout(resolve, 800)); // Respect external API rate limits (increased from 400ms)
+            if (!pubDoi && !isMockData) {
+              try {
+                pubDoi = await Promise.race([
+                  enrichmentService.lookupDOI(article.title, article.year, article.authors),
+                  new Promise(resolve => setTimeout(() => resolve(null), ENRICH_TIMEOUT_MS))
+                ]);
+              } catch (e) {
+                pubDoi = null;
+              }
             }
 
-            // Step 2: Fetch enriched metadata from external providers
-            let enrichedMeta = {};
-            try {
-              enrichedMeta = await enrichmentService.fetchMetadata(pubDoi, article.title);
-              await new Promise(resolve => setTimeout(resolve, 800)); // Respect external API rate limits (increased from 400ms)
-              if (enrichedMeta && Object.keys(enrichedMeta).length > 0) {
-                enrichedCount++;
+            if (!isMockData && (pubDoi || article.title)) {
+              try {
+                enrichedMeta = await Promise.race([
+                  enrichmentService.fetchMetadata(pubDoi, article.title),
+                  new Promise(resolve => setTimeout(() => resolve({}), ENRICH_TIMEOUT_MS))
+                ]);
+                if (enrichedMeta && Object.keys(enrichedMeta).length > 0) {
+                  enrichedCount++;
+                }
+              } catch (enrichErr) {
+                enrichedMeta = {};
               }
-            } catch (enrichErr) {
-              logger.warn(`[Scholar] Enrichment failed for "${article.title}": ${enrichErr.message}`);
             }
             // ────────────────────────────────────────────────────────────────
 
@@ -685,6 +693,28 @@ class ScholarService {
         await profileService.calculateAndSaveResearchMetrics(userId);
       } catch (err) {
         logger.error('Error in post-sync metric calculations: ' + err.message);
+        // Fallback: directly update Profile.metrics from GoogleScholarProfile data
+        // so the user sees correct h-index/i10-index even if full recalculation fails
+        try {
+          const GoogleScholarProfile = require('../../../models/GoogleScholarProfile');
+          const Profile = require('../../../models/Profile');
+          const scholarProfile = await GoogleScholarProfile.findOne({ userId }).lean();
+          if (scholarProfile) {
+            await Profile.findOneAndUpdate(
+              { userId },
+              {
+                $set: {
+                  'metrics.totalCitations': scholarProfile.totalCitations || 0,
+                  'metrics.hIndex': scholarProfile.hIndex || 0,
+                  'metrics.i10Index': scholarProfile.i10Index || 0
+                }
+              }
+            );
+            logger.info(`[ScholarSync] Fallback metrics update succeeded for user ${userId}`);
+          }
+        } catch (fallbackErr) {
+          logger.error('Fallback metrics update also failed: ' + fallbackErr.message);
+        }
       }
 
       // Record Sync History
