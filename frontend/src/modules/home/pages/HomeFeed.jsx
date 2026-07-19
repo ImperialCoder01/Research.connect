@@ -149,6 +149,10 @@ const HomeFeed = () => {
           setHasMore(false);
         }
       } catch (err) {
+        if (err?.isCanceled) {
+          // A newer identical request superseded this one — not a real failure.
+          return;
+        }
         console.error('Error fetching feed:', err);
         if (isSubscribed) setHasMore(false);
       } finally {
