@@ -28,7 +28,7 @@ const GlobalSearch = () => {
   const minCitations = searchParams.get('minCitations') || '';
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('Publications'); // Defaulting since we're searching publications
+  const [activeTab, setActiveTab] = useState('All');
 
   const { data, isLoading } = useQuery({
     queryKey: ['search', activeTab, { query, page, sort, type, filter, year, minCitations }],
@@ -85,6 +85,17 @@ const GlobalSearch = () => {
       if (!newParams[k]) delete newParams[k];
     });
     setSearchParams(newParams);
+
+    if (drawerOpen) {
+      setDrawerOpen(false);
+    }
+    
+    setTimeout(() => {
+      const resultsArea = document.getElementById('results-scroll-area');
+      if (resultsArea) {
+        resultsArea.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 50);
   };
 
   const handleFilterChange = (key, value) => {
@@ -122,12 +133,12 @@ const GlobalSearch = () => {
         </div>
 
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-20 mt-2 mb-4">
-          <GlassPanel className="px-6 py-4 rounded-2xl w-full flex items-center justify-between">
+          <GlassPanel className="px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl w-full flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
                 {query ? `Search results for "${query}"` : (activeTab === 'All' ? 'Explore Everything' : `Explore ${activeTab}`)}
               </h2>
-              <p className="text-slate-500 text-sm mt-1 font-medium">
+              <p className="text-slate-500 text-[11px] sm:text-sm mt-0.5 sm:mt-1 font-medium">
                 {activeTab === 'Researchers' && 'Find top researchers and authors around the world.'}
                 {activeTab === 'Publications' && 'Discover peer-reviewed papers, articles, and datasets.'}
                 {activeTab === 'Projects' && 'Explore innovative research projects and collaborations.'}
@@ -172,7 +183,7 @@ const GlobalSearch = () => {
             />
 
             {/* Results Area */}
-            <div className="lg:col-span-9 xl:col-span-9 h-full overflow-y-auto pb-8 pr-2">
+            <div id="results-scroll-area" className="lg:col-span-9 xl:col-span-9 h-full overflow-y-auto pb-8 pr-2">
               {isLoading ? (
                 <ResultsSkeletonList count={5} />
               ) : results.length === 0 ? (
@@ -187,7 +198,7 @@ const GlobalSearch = () => {
                 />
               ) : (
                 <>
-                  <div className="space-y-5">
+                  <div className="space-y-3 sm:space-y-5">
                     {results.map((item, index) => {
                       const key = item._id || index;
                       const cardType = item.resultType || activeTab;
@@ -197,13 +208,13 @@ const GlobalSearch = () => {
                       if (cardType === 'Organization' || cardType === 'Organizations') return <InstitutionResultCard key={key} institution={item} index={index} />;
                       if (cardType === 'Project' || cardType === 'Projects') {
                         return (
-                          <div key={key} className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                          <div key={key} className="p-4 sm:p-6 bg-white border border-slate-200 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
                             <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
                             {item.resultType && (
-                               <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full mb-3 inline-block">Project</span>
+                               <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full mb-2 sm:mb-3 inline-block">Project</span>
                             )}
-                            <h3 className="font-bold text-lg text-slate-900 group-hover:text-indigo-600 transition-colors">{item.title || 'Project'}</h3>
-                            <p className="text-sm text-slate-500 mt-2 leading-relaxed">{item.description || 'Project details coming soon'}</p>
+                            <h3 className="font-bold text-base sm:text-lg text-slate-900 group-hover:text-indigo-600 transition-colors">{item.title || 'Project'}</h3>
+                            <p className="text-[11px] sm:text-sm text-slate-500 mt-1.5 sm:mt-2 leading-relaxed">{item.description || 'Project details coming soon'}</p>
                           </div>
                         );
                       }
@@ -212,7 +223,7 @@ const GlobalSearch = () => {
                         <div key={key} className="relative">
                            {item.resultType === 'Publication' && (
                               <div className="absolute -top-3 left-6 z-10 hidden sm:block">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-blue-700 bg-blue-100 border border-blue-200 px-3 py-1 rounded-full shadow-sm">Publication</span>
+                                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-blue-700 bg-blue-100 border border-blue-200 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full shadow-sm">Publication</span>
                               </div>
                            )}
                            <PublicationResultCard publication={item} index={index} />
@@ -223,23 +234,23 @@ const GlobalSearch = () => {
 
                   {/* Pagination */}
                   {totalPages > 1 && (
-                    <div className="flex items-center justify-between pt-6 pb-2 border-t border-gray-200 mt-6">
+                    <div className="flex items-center justify-between pt-4 sm:pt-6 pb-2 border-t border-gray-200 mt-4 sm:mt-6">
                       <button
                         onClick={() => handleFilterChange('page', Math.max(1, parseInt(page) - 1))}
                         disabled={parseInt(page) <= 1}
-                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-[11px] sm:text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        <ChevronLeft className="w-4 h-4" /> Previous
+                        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Previous
                       </button>
-                      <span className="text-sm text-gray-600 font-medium">
-                        Page {page} of {totalPages}
+                      <span className="text-[11px] sm:text-sm text-gray-600 font-medium px-2 text-center leading-tight">
+                        Page {page} <br className="sm:hidden" /> of {totalPages}
                       </span>
                       <button
                         onClick={() => handleFilterChange('page', Math.min(totalPages, parseInt(page) + 1))}
                         disabled={parseInt(page) >= totalPages}
-                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-[11px] sm:text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        Next <ChevronRight className="w-4 h-4" />
+                        Next <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </button>
                     </div>
                   )}

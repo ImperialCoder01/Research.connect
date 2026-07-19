@@ -7,9 +7,9 @@ export const FilterDrawerTrigger = ({ onClick, activeCount = 0 }) => (
   <button
     type="button"
     onClick={onClick}
-    className="lg:hidden flex items-center gap-2 bg-white border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-sm font-semibold text-[#475569] shadow-sm"
+    className="lg:hidden flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100 transition-colors"
   >
-    <SlidersHorizontal className="w-4 h-4" style={{ color: '#2563EB' }} />
+    <SlidersHorizontal className="w-4 h-4" />
     Filters
     {activeCount > 0 && (
       <span className="bg-[#2563EB] text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
