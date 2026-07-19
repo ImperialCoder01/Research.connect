@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { logoutSuccess } from '../../redux/slices/authSlice';
@@ -20,6 +20,7 @@ import UserAvatar from '../../components/ui/Avatar';
 
 const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
   const { user, profile } = useSelector((state) => state.auth);
@@ -110,6 +111,35 @@ const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
     return () => clearTimeout(delayDebounceFn);
   }, [searchState.query]);
 
+  // Clear search box when navigating away from the search page
+  useEffect(() => {
+    if (location.pathname !== '/search' && searchState.query) {
+      dispatch(setQuery(''));
+    }
+  }, [location.pathname]); // Only run when pathname changes
+
+  // Auto-search as you type (only on /search page)
+  useEffect(() => {
+    if (location.pathname === '/search') {
+      const delayDebounceFn = setTimeout(() => {
+        const trimmed = searchState.query.trim();
+        const currentParams = new URLSearchParams(location.search);
+        
+        if (trimmed) {
+          if (currentParams.get('q') !== trimmed) {
+            navigate(`/search?q=${encodeURIComponent(trimmed)}`, { replace: true });
+          }
+        } else {
+          if (currentParams.has('q')) {
+            navigate('/search', { replace: true });
+          }
+        }
+      }, 500); // 500ms debounce
+      
+      return () => clearTimeout(delayDebounceFn);
+    }
+  }, [searchState.query, location.pathname, location.search, navigate]);
+
   const handleLogout = async () => {
     try {
       await authService.logout();
@@ -128,9 +158,14 @@ const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    if (searchState.query.trim()) {
-      setShowSuggestions(false);
-      navigate(`/search?q=${encodeURIComponent(searchState.query)}`);
+    setShowSuggestions(false);
+    
+    const trimmedQuery = searchState.query.trim();
+    if (trimmedQuery) {
+      navigate(`/search?q=${encodeURIComponent(trimmedQuery)}`);
+    } else if (window.location.pathname === '/search') {
+      // Reset search if the input is cleared and submitted on the search page
+      navigate('/search');
     }
   };
 
@@ -213,16 +248,14 @@ const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
               </button>
             </form>
 
-            {showSuggestions && (searchState.query.trim().length >= 2) && (
+            {showSuggestions && (searchState.query.trim().length >= 2) && (isSearchingSuggestions || (suggestions && Object.values(suggestions).some(arr => Array.isArray(arr) && arr.length > 0))) && (
               <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden max-h-[420px] overflow-y-auto">
                 {isSearchingSuggestions ? (
                   <div className="flex items-center justify-center py-6 gap-2 text-xs font-semibold text-slate-400">
                     <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                     Searching...
                   </div>
-                ) : suggestions && (
-                  Object.values(suggestions).some(arr => Array.isArray(arr) && arr.length > 0)
-                ) ? (
+                ) : (
                   <div className="py-2.5 divide-y divide-slate-100">
                     {suggestions.authors && suggestions.authors.length > 0 && (
                       <div className="py-2">
@@ -311,10 +344,6 @@ const AuthenticatedNavbar = ({ onMenuClick, isMobileMenuOpen }) => {
                         Search all results for "{searchState.query}"
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="py-6 px-4 text-center text-xs font-semibold text-slate-400 italic">
-                    No suggestions found. Press Enter to search.
                   </div>
                 )}
               </div>
