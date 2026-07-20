@@ -115,6 +115,13 @@ const GlobalSearch = () => {
     setSearchParams(newParams);
   };
 
+  React.useEffect(() => {
+    const resultsArea = document.getElementById('results-scroll-area');
+    if (resultsArea) {
+      resultsArea.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [page]);
+
   const results = data?.results || [];
   const totalPages = data?.totalPages || 1;
 
